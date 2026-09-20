@@ -286,7 +286,21 @@ async function calculateSummaryFromLedger(dbUrl, bulan, apiKey) {
     updatedAt: Date.now()
   };
 
-  return summary;
+  // ✅ Field tambahan untuk dashboard (versi simplified, tanpa acc111)
+  const totalAset = saldoKas + saldoBank + persediaanAkhir;
+  const totalKewajiban = 0;  // Update manual kalau ada hutang
+  const totalEkuitas = totalAset - totalKewajiban;
+  
+  summary.totalAset = totalAset;
+  summary.totalKewajiban = totalKewajiban;
+  summary.totalEkuitas = totalEkuitas;
+  summary.kas = saldoKas;
+  summary.bank = saldoBank;
+  summary.piutang = 0;
+  summary.hutang = totalKewajiban;
+  summary.labaBulanIni = labaBersih;
+
+   return summary;
 }
 
 /**
