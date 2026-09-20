@@ -473,18 +473,19 @@ export async function onRequest(context) {
         const entryMonth = dateStr.substring(0, 7);
         const journalId = `JRN-${dateStr.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
 
-        const newEntry = {
-          noEntry,
-          date: dateStr,
-          timestamp: body.timestamp || Date.now(),
-          category,
-          desc,
-          lines: sanitizedLines,
-          total: totalDebit,
-          status: body.status || 'draft', // 'draft' | 'approved' | 'rejected'
-          ref: body.ref || noEntry,
-          createdAt: Date.now()
-        };
+  const newEntry = {
+  noEntry,
+  date: dateStr,
+  timestamp: body.timestamp || Date.now(),
+  category,
+  desc,
+  lines: sanitizedLines,
+  total: totalDebit,
+  status: body.status || 'pending',
+  ref: body.ref || noEntry,
+  createdBy: body.createdBy || 'kasir',       // ← TAMBAH INI
+  createdAt: Date.now()
+};
 
         // Simpan ke Firebase
         await fetch(`${dbUrl}/accounting/journal/${encodeURIComponent(entryMonth)}/${encodeURIComponent(journalId)}.json${authParam}`, {
