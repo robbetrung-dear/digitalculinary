@@ -1,14 +1,15 @@
 // firebase-config.js (client-side loader)
-// Kredensial Firebase untuk auto-connect semua device (normal + incognito)
+// Firebase config untuk project digitalculinary-app
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyDeoYQ0qdi7RwE3opAhYkbuBnYqqKDQA6s",
-  authDomain: "dapurkulinerviral.firebaseapp.com",
-  databaseURL: "https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "dapurkulinerviral",
-  storageBucket: "dapurkulinerviral.firebasestorage.app",
-  messagingSenderId: "321264279924",
-  appId: "1:321264279924:web:90291c9fecb93de1aacc21"
+  apiKey: "AIzaSyB08og0350ZhwX9LYqxwyFuEppbdKEXAEg",
+  authDomain: "digitalculinary-app.firebaseapp.com",
+  databaseURL: "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "digitalculinary-app",
+  storageBucket: "digitalculinary-app.firebasestorage.app",
+  messagingSenderId: "650221083781",
+  appId: "1:650221083781:web:e44211db213b81ae19ddec",
+  measurementId: "G-H4LQP2ZPW4"
 };
 
 export const IS_DEMO_MODE = false;
