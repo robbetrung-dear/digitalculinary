@@ -660,6 +660,79 @@ export async function onRequest(context) {
       }, 200);
     }
 
+    
+    // =========================================================================
+    // ENDPOINT 5: /accounting/approvals — List jurnal yang butuh approval
+    // =========================================================================
+    if (parts[0] === 'approvals') {
+      if (method === 'GET') {
+        const statusFilter = url.searchParams.get('status') || 'all';
+        
+        try {
+          // Fetch semua journal (nested per bulan)
+          const res = await fetch(`${dbUrl}/accounting/journal.json${authParam}`);
+          const allMonths = await res.json();
+          
+          const allEntries = [];
+          
+          if (allMonths && typeof allMonths === 'object') {
+            for (const [bulan, monthData] of Object.entries(allMonths)) {
+              if (monthData && typeof monthData === 'object') {
+                for (const [entryId, entryData] of Object.entries(monthData)) {
+                  if (entryData && typeof entryData === 'object') {
+                    allEntries.push({
+                      entryId,
+                      bulan,
+                      noEntry: entryData.noEntry || entryId,
+                      desc: entryData.desc || '',
+                      category: entryData.category || 'operasional',
+                      date: entryData.date || '',
+                      lines: entryData.lines || [],
+                      total: Number(entryData.total) || 0,
+                      status: entryData.status || 'draft',
+                      createdBy: entryData.createdBy || '-',
+                      createdAt: Number(entryData.createdAt) || 0,
+                      approvedBy: entryData.approvedBy || null,
+                      approvedAt: entryData.approvedAt || null,
+                      rejectedReason: entryData.rejectedReason || null
+                    });
+                  }
+                }
+              }
+            }
+          }
+          
+          // Filter by status (kalau bukan 'all')
+          let filtered = allEntries;
+          if (statusFilter !== 'all') {
+            filtered = allEntries.filter(e => e.status === statusFilter);
+          }
+          
+          // Sort by createdAt DESC (terbaru dulu)
+          filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          
+          return jsonResponse({ 
+            success: true, 
+            total: filtered.length,
+            status: statusFilter,
+            data: filtered 
+          }, 200);
+          
+        } catch (err) {
+          console.error('[ACCOUNTING-API] Load approvals error:', err);
+          return jsonResponse({ 
+            success: false, 
+            error: 'Gagal memuat daftar jurnal: ' + err.message 
+          }, 500);
+        }
+      }
+      
+      return jsonResponse({ 
+        success: false, 
+        error: "Metode tidak didukung pada /accounting/approvals" 
+      }, 405);
+    }
+
     // Route tidak dikenali
     return jsonResponse({
       success: false,
