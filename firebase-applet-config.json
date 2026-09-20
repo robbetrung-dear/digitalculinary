@@ -1,9 +1,10 @@
 {
-  "apiKey": "YOUR_FIREBASE_API_KEY_HERE",
-  "authDomain": "YOUR_PROJECT_ID.firebaseapp.com",
-  "databaseURL": "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
-  "projectId": "YOUR_PROJECT_ID",
-  "storageBucket": "YOUR_PROJECT_ID.appspot.com",
-  "messagingSenderId": "123456789012",
-  "appId": "1:123456789012:web:abcdef1234567890"
+  "apiKey": "AIzaSyB08og0350ZhwX9LYqxwyFuEppbdKEXAEg",
+  "authDomain": "digitalculinary-app.firebaseapp.com",
+  "databaseURL": "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "projectId": "digitalculinary-app",
+  "storageBucket": "digitalculinary-app.firebasestorage.app",
+  "messagingSenderId": "650221083781",
+  "appId": "1:650221083781:web:e44211db213b81ae19ddec",
+  "measurementId": "G-H4LQP2ZPW4"
 }
