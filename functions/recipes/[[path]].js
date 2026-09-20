@@ -24,6 +24,11 @@ export async function onRequest(context) {
 
   const fullPath = url.pathname.replace(/^\/recipes\/?/, '');
   const parts = fullPath.split('/').filter(Boolean);
+  
+  // ✅ Fix: kalau path kosong, serve static HTML
+  if (parts.length === 0) {
+    return context.next();
+  }
 
   try {
     // 1. GET /recipes — Ambil semua resep menu
