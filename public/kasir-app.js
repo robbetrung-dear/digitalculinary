@@ -5004,18 +5004,18 @@ window.kasirApp = () => ({
     // Prepare payload
     const bulan = this.journalForm.date.slice(0, 7); // YYYY-MM
     const payload = {
-      category: this.journalForm.category,
-      date: this.journalForm.date,
-      desc: desc,
-      ref: this.journalForm.ref || '',
-      lampiran: this.journalForm.lampiran || '',
-      lines: validLines.map(l => ({
-        acc: l.acc,
-        debit: Number(l.debit) || 0,
-        credit: Number(l.credit) || 0
-      })),
-      createdBy: this.kasirInfo?.name || 'kasir'
-    };
+  category: this.journalForm.category,
+  date: this.journalForm.date,
+  desc: desc,
+  ref: this.journalForm.ref || '',
+  lampiran: this.journalForm.lampiran || '',
+  lines: validLines.map(l => ({
+    acc: l.acc,
+    debit: Number(l.debit) || 0,
+    credit: Number(l.credit) || 0
+  })),
+  createdBy: this.kasirInfo?.username || this.kasirInfo?.name || 'kasir'  // ← TAMBAH
+};
     
     try {
       this.isLoading = true;
