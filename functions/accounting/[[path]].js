@@ -191,7 +191,7 @@ async function fetchLedgerAccount(dbUrl, accCode, bulan, apiKey) {
  */
 async function calculateSummaryFromLedger(dbUrl, bulan, apiKey) {
   const [
-    acc101, acc102, acc103, acc105,
+    acc101, acc102, acc103, acc105, acc111,
     acc201, acc301, acc302,
     acc401, acc402,
     acc501,
@@ -201,6 +201,7 @@ async function calculateSummaryFromLedger(dbUrl, bulan, apiKey) {
     fetchLedgerAccount(dbUrl, '102', bulan, apiKey),
     fetchLedgerAccount(dbUrl, '103', bulan, apiKey),
     fetchLedgerAccount(dbUrl, '105', bulan, apiKey),
+    fetchLedgerAccount(dbUrl, '111', bulan, apiKey),   // ← tambah ini
     fetchLedgerAccount(dbUrl, '201', bulan, apiKey),
     fetchLedgerAccount(dbUrl, '301', bulan, apiKey),
     fetchLedgerAccount(dbUrl, '302', bulan, apiKey),
@@ -300,6 +301,35 @@ async function updateSummaryAfterApprove(dbUrl, bulan, apiKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(summary)
     });
+    
+  // ✅ Hitung Total Aset, Kewajiban, Ekuitas (untuk dashboard)
+  // Aset = 101 (Kas) + 102 (Bank) + 103 (Piutang) + 105 (Persediaan) - 111 (Akum. Penyusutan)
+  const totalAset = 
+    (Number(acc101.closing) || 0) + 
+    (Number(acc102.closing) || 0) + 
+    (Number(acc103.closing) || 0) + 
+    (Number(acc105.closing) || 0) - 
+    Math.abs(Number(acc111?.closing) || 0);
+  
+  // Kewajiban = 201 (Hutang Supplier) — bisa ditambah akun 2xx lain
+  const totalKewajiban = Math.abs(Number(acc201.closing) || 0);
+  
+  // Ekuitas = 301 (Modal) + 302 (Prive, kontra) + Laba Ditahan (Laba Bersih)
+  const modal = Number(acc301.closing) || 0;
+  const prive = Math.abs(Number(acc302.closing) || 0);
+  const labaDitahan = labaBersih;  // Simplified: laba periode ini
+  const totalEkuitas = modal - prive + labaDitahan;
+  
+  // Field tambahan untuk UI dashboard
+  summary.totalAset = totalAset;
+  summary.totalKewajiban = totalKewajiban;
+  summary.totalEkuitas = totalEkuitas;
+  summary.kas = Number(acc101.closing) || 0;
+  summary.bank = Number(acc102.closing) || 0;
+  summary.piutang = Number(acc103.closing) || 0;
+  summary.hutang = totalKewajiban;
+  summary.labaBulanIni = labaBersih;
+
     return summary;
   } catch (e) {
     console.error('[ACCOUNTING-API] Gagal update summary:', e);
