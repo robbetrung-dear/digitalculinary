@@ -546,6 +546,98 @@ export async function onRequest(context) {
         }, 200);
       }
 
+      
+      // =========================================================================
+      // PATCH /accounting/journal/{bulan}/{entryId} — Approve/Reject/Edit
+      // Body: { action: 'approve' | 'reject' | 'edit', approvedBy, rejectedReason, newData }
+      // =========================================================================
+      if (method === 'PATCH' && parts[1] && parts[1].length === 7) {
+        // parts[1] = "2026-09", parts[2] = entryId
+        const bulan = parts[1];
+        const entryIdentifier = parts[2];
+        
+        if (!entryIdentifier) {
+          return jsonResponse({ success: false, error: "Entry ID tidak ditemukan di URL" }, 400);
+        }
+        
+        const body = await request.json().catch(() => ({}));
+        const action = String(body.action || '').toLowerCase();
+        const approvedBy = String(body.approvedBy || 'kasir').trim();
+        
+        if (!['approve', 'reject', 'edit'].includes(action)) {
+          return jsonResponse({ 
+            success: false, 
+            error: `Action '${action}' tidak valid. Gunakan: approve | reject | edit` 
+          }, 400);
+        }
+        
+        // Cari entry dengan 3 strategi fallback
+        const found = await findJournalEntry(dbUrl, bulan, entryIdentifier, apiKey);
+        
+        if (!found) {
+          return jsonResponse({ 
+            success: false, 
+            error: `Jurnal '${entryIdentifier}' tidak ditemukan di bulan ${bulan}` 
+          }, 404);
+        }
+        
+        const currentData = found.data;
+        let updatedData = { ...currentData };
+        
+        if (action === 'approve') {
+          if (currentData.status === 'approved') {
+            return jsonResponse({ 
+              success: true, 
+              message: "Jurnal sudah berstatus approved sebelumnya", 
+              data: currentData 
+            }, 200);
+          }
+          
+          updatedData.status = 'approved';
+          updatedData.approvedBy = approvedBy;
+          updatedData.approvedAt = Date.now();
+          
+        } else if (action === 'reject') {
+          updatedData.status = 'rejected';
+          updatedData.rejectedReason = body.rejectedReason || 'Tidak ada alasan';
+          updatedData.rejectedBy = approvedBy;
+          updatedData.rejectedAt = Date.now();
+          
+        } else if (action === 'edit') {
+          // Edit hanya field yang diizinkan
+          if (body.newData && typeof body.newData === 'object') {
+            const allowedFields = ['desc', 'lines', 'category', 'ref', 'date'];
+            for (const field of allowedFields) {
+              if (body.newData[field] !== undefined) {
+                updatedData[field] = body.newData[field];
+              }
+            }
+            updatedData.editedAt = Date.now();
+            updatedData.editedBy = approvedBy;
+          }
+        }
+        
+        // Simpan ke Firebase
+        await fetch(`${dbUrl}/accounting/journal/${encodeURIComponent(found.bulan)}/${encodeURIComponent(found.firebaseKey)}.json${authParam}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedData)
+        });
+        
+        // Kalau approve → update ledger + summary
+        if (action === 'approve') {
+          await updateLedgerAfterApprove(dbUrl, found.bulan, currentData.lines, apiKey, found.firebaseKey);
+          await updateSummaryAfterApprove(dbUrl, found.bulan, apiKey);
+        }
+        
+        return jsonResponse({
+          success: true,
+          message: `Jurnal ${currentData.noEntry || found.firebaseKey} berhasil di-${action}`,
+          data: updatedData,
+          action: action
+        }, 200);
+      }
+
       // DELETE /accounting/journal/{identifier}
       if (method === 'DELETE' && parts[1]) {
         const found = await findJournalEntry(dbUrl, targetBulan, parts[1], apiKey);
