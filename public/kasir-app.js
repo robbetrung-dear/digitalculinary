@@ -1,6 +1,6 @@
 /**
  * /public/kasir-app.js — BAGIAN 1 dari 3 (Transaksi & Pembayaran)
- * Sistem Kasir Pintar POS - Dapur Kuliner Viral & Catering Rumahan
+ * Sistem Kasir Pintar POS - Digital Culinary & Catering Rumahan
  * 
  * FUNGSI UTAMA:
  * 1. initKasir(): Validasi sesi, jam realtime, sinkronisasi menu, inventory & pending reconcile
@@ -518,13 +518,13 @@ window.kasirApp = () => ({
 
       if (!cfg || !cfg.apiKey) {
         cfg = {
-          apiKey: "AIzaSyDeoY0Qqdi7RwE3opAhYkbuBnYqqKDQA6s",
-          authDomain: "dapurkulinerviral.firebaseapp.com",
-          databaseURL: "https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app",
-          projectId: "dapurkulinerviral",
-          storageBucket: "dapurkulinerviral.firebasestorage.app",
-          messagingSenderId: "321264279924",
-          appId: "1:321264279924:web:90291c9fecb93de1aacc21"
+          apiKey: "AIzaSyB08og0350ZhwX9LYqxwyFuEppbdKEXAEg",
+          authDomain: "digitalculinary-app.firebaseapp.com",
+          databaseURL: "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+          projectId: "digitalculinary-app",
+          storageBucket: "digitalculinary-app.firebasestorage.app",
+          messagingSenderId: "650221083781",
+          appId: "1:650221083781:web:e44211db213b81ae19ddec"
         };
         console.log('[FB-INIT] Menggunakan fallback config hardcoded');
       }
@@ -1759,7 +1759,7 @@ window.kasirApp = () => ({
 
       doc.setFont('courier', 'bold');
       doc.setFontSize(11);
-      doc.text('DAPUR KULINER VIRAL', 40, 9, { align: 'center' });
+      doc.text('Digital Culinary', 40, 9, { align: 'center' });
       doc.setFont('courier', 'normal');
       doc.setFontSize(7.5);
       doc.text('Jl. Kuliner Viral No. 88, Jaksel', 40, 13, { align: 'center' });
@@ -1836,7 +1836,7 @@ window.kasirApp = () => ({
 
         doc.setFont('courier', 'bold');
         doc.setFontSize(11);
-        doc.text('DAPUR KULINER VIRAL', 40, 9, { align: 'center' });
+        doc.text('Digital Culinary', 40, 9, { align: 'center' });
         doc.setFont('courier', 'normal');
         doc.setFontSize(7.5);
         doc.text('Jl. Kuliner Viral No. 88, Jaksel', 40, 13, { align: 'center' });
@@ -1904,7 +1904,7 @@ window.kasirApp = () => ({
     if (tax > 0) details += `Pajak (11%): ${this.formatRupiah(tax)}\n`;
     if (disc > 0) details += `Diskon: -${this.formatRupiah(disc)}\n`;
 
-    const text = `*DAPUR KULINER VIRAL - STRUK TRANSAKSI*\n\n` +
+    const text = `*Digital Culinary - STRUK TRANSAKSI*\n\n` +
       `No. Order: *${order.id}*\n` +
       `Tanggal: ${order.date || this.formatDate(Date.now())}\n` +
       `Kasir: ${this.kasirInfo.name}\n` +
@@ -1914,7 +1914,7 @@ window.kasirApp = () => ({
       `--------------------------------\n` +
       details +
       `*TOTAL: ${this.formatRupiah(order.total || order.tot || this.getCartGrandTotal())}*\n\n` +
-      `Terima kasih telah berbelanja di Dapur Kuliner Viral!`;
+      `Terima kasih telah berbelanja di Digital Culinary!`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   },
@@ -4073,7 +4073,7 @@ window.kasirApp = () => ({
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(26, 26, 26);
-      doc.text('DAPUR KULINER VIRAL & CATERING RUMAHAN', 14, y);
+      doc.text('Digital Culinary & CATERING RUMAHAN', 14, y);
       y += 6;
 
       doc.setFont('helvetica', 'normal');
