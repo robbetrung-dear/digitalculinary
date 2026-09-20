@@ -27,6 +27,11 @@ export async function onRequest(context) {
   // Ekstrak path setelah /menu/
   const fullPath = url.pathname.replace(/^\/menu\/?/, '');
   const parts = fullPath.split('/').filter(Boolean);
+  
+  // ✅ Fix: kalau path kosong, serve static HTML
+  if (parts.length === 0) {
+    return context.next();
+  }
 
   try {
     // 1. GET /menu/categories — Ambil daftar kategori menu
