@@ -130,7 +130,6 @@ window.kasirApp = () => ({
   pendingReconcile: 0,
   reconciliationList: [],
   reconciliationFilter: 'all',
-      reconcileDateRange: 'today',
   reconcileFilter: 'semua',
   selectedOrders: [],
   selectedReconcileIds: [],
@@ -3054,22 +3053,11 @@ window.kasirApp = () => ({
         }
       }
 
-            try {
-        const res = await fetch('/inventory');
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          if (ct.includes('application/json')) {
-            const json = await res.json();
-            if (Array.isArray(json.data) && json.data.length > 0) {
-              this.inventoryList = json.data;
-            }
-          } else {
-            console.warn('[INV] Response bukan JSON, skip');
-          }
-        }
-      } catch (fetchErr) {
-        console.warn('[INV] Fetch error:', fetchErr.message);
-      }
+      const res = await fetch('/inventory');
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.data) && json.data.length > 0) {
+          this.inventoryList = json.data;
         }
       }
 
@@ -4739,6 +4727,12 @@ window.kasirApp = () => ({
   getAccountingSummary() {
     const d = this.accountingSummaryData;
     
+    // Debug log
+    if (d) {
+      console.log('[ACCT-GETTER] Cache OK, keys:', Object.keys(d));
+    } else {
+      console.log('[ACCT-GETTER] No cache, using fallback');
+    }
     
     // Check lebih fleksibel
     const hasValidData = d && typeof d === 'object' && 
@@ -4773,7 +4767,7 @@ window.kasirApp = () => ({
       };
     }
 
-    
+    console.log('[ACCT-GETTER] Using fallback local calc');
     // FALLBACK: kalkulasi lama (existing, hardcoded)
     const totalRev = Number(this.todayTotalRevenue) || 0;
     
