@@ -131,6 +131,7 @@ window.kasirApp = () => ({
   reconciliationList: [],
   reconciliationFilter: 'all',
   reconcileFilter: 'semua',
+  reconcileDateRange: 'today',
   selectedOrders: [],
   selectedReconcileIds: [],
   showRekonsiliasiModal: false,
@@ -311,7 +312,7 @@ window.kasirApp = () => ({
 
   // Inventory Modals & Recipe State
   editStockModal: false,
-  selectedStockItem: null,
+  selectedStockItem: { id: '', name: '', stock: 0, minStock: 0, unit: '', purchasePrice: 0, isCountable: true },
   newStockValue: 0,
   stockChangeReason: '',
   addInventoryModal: false,
@@ -592,10 +593,10 @@ window.kasirApp = () => ({
       { id: 'm10', name: 'Es Cincau Gula Aren Susu', category: 'minuman', price: 12000, desc: 'Cincau hitam kenyal dengan susu aren legit', image: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=400' }
     ];
 
-    // Timeout safety 5 detik: jangan sampai loading spinner stuck selamanya
+    // Timeout safety 10 detik: jangan sampai loading spinner stuck selamanya
     const menuTimeout = setTimeout(() => {
       if (this.isLoadingMenu) {
-        console.warn('Firebase menu listener timeout 10s, using fallback menu');
+        console.info('[MENU] Firebase menu listener timeout, using fallback menu');
         if (!this.menuList || this.menuList.length === 0) {
           this.menuList = fallbackMenu;
         }
@@ -615,12 +616,18 @@ window.kasirApp = () => ({
             this.menuList = Array.isArray(val) ? JSON.parse(JSON.stringify(val)) : Object.values(val);
           } else {
             this.menuList = fallbackMenu;
+            // Auto-seed ke Firebase jika masih kosong
+            if (this._fbSet) {
+              try {
+                this._fbSet(menuRef, fallbackMenu);
+              } catch (e) {}
+            }
           }
           this.syncCategoriesWithMainStore();
           this.isLoadingMenu = false;
         }, (err) => {
           clearTimeout(menuTimeout);
-          console.warn('Firebase menu listener error:', err);
+          console.info('Firebase menu listener note:', err);
           if (!this.menuList || this.menuList.length === 0) {
             this.menuList = fallbackMenu;
           }
@@ -3021,10 +3028,9 @@ window.kasirApp = () => ({
   async loadInventory() {
     this.loadingStates.inventory = true;
 
-    // Timeout safety 5 detik agar state loading tidak gantung
+    // Timeout safety 10 detik agar state loading tidak gantung
     const invTimeout = setTimeout(() => {
       if (this.loadingStates && this.loadingStates.inventory) {
-        console.warn('Inventory loading timeout 10s, unlocking loading state');
         this.loadingStates.inventory = false;
       }
     }, 10000);
@@ -3045,20 +3051,26 @@ window.kasirApp = () => ({
             this.loadingStates.inventory = false;
           }, (err) => {
             clearTimeout(invTimeout);
-            console.warn('Firebase inventory listener error:', err);
             this.loadingStates.inventory = false;
           });
         } catch (e) {
-          console.warn('Firebase inventory listener warning:', e);
+          console.info('Firebase inventory listener notice:', e);
         }
       }
 
-      const res = await fetch('/inventory');
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json.data) && json.data.length > 0) {
-          this.inventoryList = json.data;
+      try {
+        const res = await fetch('/inventory');
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const json = await res.json();
+            if (Array.isArray(json.data) && json.data.length > 0) {
+              this.inventoryList = json.data;
+            }
+          }
         }
+      } catch (fetchErr) {
+        // Fallback gracefully jika fetch API belum tersedia
       }
 
       // Restore dari localStorage jika kosong
@@ -5004,18 +5016,18 @@ window.kasirApp = () => ({
     // Prepare payload
     const bulan = this.journalForm.date.slice(0, 7); // YYYY-MM
     const payload = {
-  category: this.journalForm.category,
-  date: this.journalForm.date,
-  desc: desc,
-  ref: this.journalForm.ref || '',
-  lampiran: this.journalForm.lampiran || '',
-  lines: validLines.map(l => ({
-    acc: l.acc,
-    debit: Number(l.debit) || 0,
-    credit: Number(l.credit) || 0
-  })),
-  createdBy: this.kasirInfo?.username || this.kasirInfo?.name || 'kasir'  // ← TAMBAH
-};
+      category: this.journalForm.category,
+      date: this.journalForm.date,
+      desc: desc,
+      ref: this.journalForm.ref || '',
+      lampiran: this.journalForm.lampiran || '',
+      lines: validLines.map(l => ({
+        acc: l.acc,
+        debit: Number(l.debit) || 0,
+        credit: Number(l.credit) || 0
+      })),
+      createdBy: this.kasirInfo?.name || 'kasir'
+    };
     
     try {
       this.isLoading = true;

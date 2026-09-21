@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sistem Akuntansi & Keuangan - Digital Culinary</title>
+  <title>Sistem Akuntansi & Keuangan - Dapur Kuliner Viral</title>
   
   <!-- Global safety shield: handle cross-origin Script error and prevent uncaught runtime stops -->
   <script>
@@ -172,56 +172,60 @@
       format: 'pdf'
     },
 
-    // 14 Akun COA Predefined
+    // 18 Akun COA Predefined (Default 0)
     coaList: [
-      { code: '1001', name: 'Kas di Tangan (Cash on Hand)', type: 'Aset', initialBalance: 3500000, currentBalance: 4850000 },
-      { code: '1002', name: 'Kas di Bank (BCA Operasional)', type: 'Aset', initialBalance: 25000000, currentBalance: 38450000 },
-      { code: '1003', name: 'Piutang Usaha / Catering', type: 'Aset', initialBalance: 1200000, currentBalance: 1850000 },
-      { code: '1004', name: 'Persediaan Bahan Baku (Stok)', type: 'Aset', initialBalance: 6500000, currentBalance: 5200000 },
-      { code: '1005', name: 'Peralatan & Mesin Dapur', type: 'Aset', initialBalance: 15000000, currentBalance: 15000000 },
-      { code: '2001', name: 'Hutang Dagang / Supplier', type: 'Kewajiban', initialBalance: 4500000, currentBalance: 3200000 },
-      { code: '2002', name: 'Hutang Beban & Operasional', type: 'Kewajiban', initialBalance: 850000, currentBalance: 650000 },
-      { code: '3001', name: 'Modal Pemilik', type: 'Ekuitas', initialBalance: 45000000, currentBalance: 45000000 },
-      { code: '3002', name: 'Laba Ditahan', type: 'Ekuitas', initialBalance: 850000, currentBalance: 850000 },
-      { code: '3003', name: 'Prive Pemilik', type: 'Ekuitas', initialBalance: 0, currentBalance: 2500000 },
-      { code: '4001', name: 'Pendapatan Penjualan POS', type: 'Pendapatan', initialBalance: 0, currentBalance: 28400000 },
-      { code: '4002', name: 'Pendapatan Pesanan Catering', type: 'Pendapatan', initialBalance: 0, currentBalance: 7800000 },
-      { code: '5001', name: 'Harga Pokok Penjualan (HPP)', type: 'Beban', initialBalance: 0, currentBalance: 14200000 },
-      { code: '6001', name: 'Beban Gaji Karyawan', type: 'Beban', initialBalance: 0, currentBalance: 5500000 },
-      { code: '6002', name: 'Beban Sewa Tempat & Outlet', type: 'Beban', initialBalance: 0, currentBalance: 2500000 },
-      { code: '6003', name: 'Beban Listrik, Air & Gas', type: 'Beban', initialBalance: 0, currentBalance: 1350000 },
-      { code: '6004', name: 'Beban Marketing & Iklan', type: 'Beban', initialBalance: 0, currentBalance: 850000 },
-      { code: '6005', name: 'Beban Operasional & Kurir', type: 'Beban', initialBalance: 0, currentBalance: 650000 }
+      { code: '1001', name: 'Kas di Tangan (Cash on Hand)', type: 'Aset', initialBalance: 0, currentBalance: 0 },
+      { code: '1002', name: 'Kas di Bank (BCA Operasional)', type: 'Aset', initialBalance: 0, currentBalance: 0 },
+      { code: '1003', name: 'Piutang Usaha / Catering', type: 'Aset', initialBalance: 0, currentBalance: 0 },
+      { code: '1004', name: 'Persediaan Bahan Baku (Stok)', type: 'Aset', initialBalance: 0, currentBalance: 0 },
+      { code: '1005', name: 'Peralatan & Mesin Dapur', type: 'Aset', initialBalance: 0, currentBalance: 0 },
+      { code: '2001', name: 'Hutang Dagang / Supplier', type: 'Kewajiban', initialBalance: 0, currentBalance: 0 },
+      { code: '2002', name: 'Hutang Beban & Operasional', type: 'Kewajiban', initialBalance: 0, currentBalance: 0 },
+      { code: '3001', name: 'Modal Pemilik', type: 'Ekuitas', initialBalance: 0, currentBalance: 0 },
+      { code: '3002', name: 'Laba Ditahan', type: 'Ekuitas', initialBalance: 0, currentBalance: 0 },
+      { code: '3003', name: 'Prive Pemilik', type: 'Ekuitas', initialBalance: 0, currentBalance: 0 },
+      { code: '4001', name: 'Pendapatan Penjualan POS', type: 'Pendapatan', initialBalance: 0, currentBalance: 0 },
+      { code: '4002', name: 'Pendapatan Pesanan Catering', type: 'Pendapatan', initialBalance: 0, currentBalance: 0 },
+      { code: '5001', name: 'Harga Pokok Penjualan (HPP)', type: 'Beban', initialBalance: 0, currentBalance: 0 },
+      { code: '6001', name: 'Beban Gaji Karyawan', type: 'Beban', initialBalance: 0, currentBalance: 0 },
+      { code: '6002', name: 'Beban Sewa Tempat & Outlet', type: 'Beban', initialBalance: 0, currentBalance: 0 },
+      { code: '6003', name: 'Beban Listrik, Air & Gas', type: 'Beban', initialBalance: 0, currentBalance: 0 },
+      { code: '6004', name: 'Beban Marketing & Iklan', type: 'Beban', initialBalance: 0, currentBalance: 0 },
+      { code: '6005', name: 'Beban Operasional & Kurir', type: 'Beban', initialBalance: 0, currentBalance: 0 }
     ],
 
-    // Data Jurnal Contoh
-    jurnalList: [
-      { id: 'JRN-20260918-001', date: '2026-09-18', noEntry: 'JE-0901', desc: 'Penerimaan Penjualan Harian Kasir POS', debitCode: '1001', debitName: 'Kas di Tangan', debitAmount: 2450000, creditCode: '4001', creditName: 'Pendapatan Penjualan POS', creditAmount: 2450000, ref: 'SHIFT-0918-01', proof: '' },
-      { id: 'JRN-20260918-002', date: '2026-09-18', noEntry: 'JE-0902', desc: 'Setor Tunai Kasir ke Rekening Bank BCA', debitCode: '1002', debitName: 'Kas di Bank', debitAmount: 2000000, creditCode: '1001', creditName: 'Kas di Tangan', creditAmount: 2000000, ref: 'SETOR-BCA-88', proof: '' },
-      { id: 'JRN-20260917-001', date: '2026-09-17', noEntry: 'JE-0903', desc: 'Pembelian Bahan Baku Ayam & Daging Segar', debitCode: '5001', debitName: 'Harga Pokok Penjualan (HPP)', debitAmount: 1350000, creditCode: '1001', creditName: 'Kas di Tangan', creditAmount: 1350000, ref: 'INV-SUPP-841', proof: '' },
-      { id: 'JRN-20260916-001', date: '2026-09-16', noEntry: 'JE-0904', desc: 'Pembayaran Tagihan Listrik & Token Outlet', debitCode: '6003', debitName: 'Beban Listrik, Air & Gas', debitAmount: 650000, creditCode: '1002', creditName: 'Kas di Bank', creditAmount: 650000, ref: 'PLN-TRX-0916', proof: '' },
-      { id: 'JRN-20260915-001', date: '2026-09-15', noEntry: 'JE-0905', desc: 'Pelunasan Piutang Catering Syukuran PT ABC', debitCode: '1002', debitName: 'Kas di Bank', debitAmount: 3500000, creditCode: '1003', creditName: 'Piutang Usaha / Catering', creditAmount: 3500000, ref: 'CAT-PAID-042', proof: '' }
-    ],
+    // Data Jurnal Realtime
+    jurnalList: [],
 
     // Riwayat Export
-    exportHistory: [
-      { date: '2026-09-18 10:15', report: 'Laporan Laba Rugi', period: 'Sep 2026', format: 'PDF', status: 'Selesai' },
-      { date: '2026-09-17 18:30', report: 'Jurnal Umum Lengkap', period: 'Sep 2026', format: 'CSV', status: 'Selesai' },
-      { date: '2026-09-15 09:00', report: 'Neraca Keuangan', period: 'Agu 2026', format: 'PDF', status: 'Selesai' }
-    ],
+    exportHistory: [],
 
     // Summary Metrics
     get summaryMetrics() {
+      const s = this.summary || {};
+      const bs = this.laporanData?.balanceSheet || {};
+      const pl = this.laporanData?.pl || {};
       return {
-        totalAset: 65350000,
-        totalKewajiban: 3850000,
-        totalEkuitas: 48350000,
-        labaBulanIni: 11150000,
-        kasDiTangan: 4850000,
-        kasDiBank: 38450000,
-        piutang: 1850000,
-        hutangSupplier: 3200000
+        totalAset: s.totalAset || bs.totalAset || 0,
+        totalKewajiban: s.totalKewajiban || bs.totalKewajiban || 0,
+        totalEkuitas: s.totalEkuitas || bs.totalEkuitas || 0,
+        labaBulanIni: s.labaBulanIni || pl.labaBersih || 0,
+        kasDiTangan: s.kas || bs.kas || 0,
+        kasDiBank: s.bank || bs.bank || 0,
+        piutang: s.piutang || bs.piutang || 0,
+        hutangSupplier: s.hutang || bs.hutangSupplier || 0
       };
+    },
+
+    get isEmptyDatabase() {
+      const m = this.summaryMetrics;
+      return m.totalAset === 0 &&
+             m.totalKewajiban === 0 &&
+             m.totalEkuitas === 0 &&
+             m.labaBulanIni === 0 &&
+             m.kasDiTangan === 0 &&
+             m.kasDiBank === 0 &&
+             (!this.jurnalList || this.jurnalList.length === 0);
     },
 
     // Formatter Rupiah Helper
@@ -278,7 +282,7 @@
               <span class="font-extrabold text-base tracking-tight text-stone-900">Akuntansi</span>
               <span class="px-1.5 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[10px] font-extrabold uppercase">FINANCE</span>
             </div>
-            <p class="text-[11px] text-stone-500 truncate">Digital Culinary</p>
+            <p class="text-[11px] text-stone-500 truncate">Dapur Kuliner Viral</p>
           </div>
         </a>
 
@@ -487,7 +491,14 @@
         <!-- Header Section Dashboard -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-stone-200">
           <div>
-            <h2 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">Ringkasan Eksekutif Keuangan</h2>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">Ringkasan Eksekutif Keuangan</h2>
+              <template x-if="isEmptyDatabase">
+                <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
+                  Belum ada data / Database masih kosong
+                </span>
+              </template>
+            </div>
             <p class="text-xs sm:text-sm text-stone-500 font-medium">Status kesehatan neraca, likuiditas kas, dan profitabilitas bisnis.</p>
           </div>
 
@@ -999,7 +1010,7 @@
           <div class="p-6 rounded-3xl bg-white border border-stone-200 shadow-xs space-y-6">
             
             <div class="border-b-2 border-stone-900 pb-4 text-center space-y-1">
-              <h3 class="text-xl font-black text-stone-900 uppercase tracking-wide">Digital Culinary</h3>
+              <h3 class="text-xl font-black text-stone-900 uppercase tracking-wide">DAPUR KULINER VIRAL</h3>
               <h4 class="text-base font-bold text-stone-700" x-text="reportSubTab === 'pl' ? 'LAPORAN LABA RUGI KOMPREHENSIF' : (reportSubTab === 'cashFlow' ? 'LAPORAN ARUS KAS (METODE LANGSUNG)' : 'LAPORAN POSISI KEUANGAN (NERACA)')"></h4>
               <p class="text-xs text-stone-500 font-mono">Untuk Periode yang Berakhir pada <span x-text="bulanAktif"></span></p>
             </div>

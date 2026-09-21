@@ -1,15 +1,15 @@
 /**
  * ============================================================================
  * SISTEM AKUNTANSI & KEUANGAN (DOUBLE-ENTRY ACCOUNTING ENGINE)
- * Digital Culinary - Panel Admin & Owner
+ * Digital Culinary / Dapur Kuliner - Panel Admin & Owner
  * 
  * Modul:
- * 1. Chart of Accounts (COA) Standar Resto & Catering (Real dari Firebase / Endpoint)
+ * 1. Chart of Accounts (COA) Standar 18 Akun F&B (Default 0, Sync via API)
  * 2. Jurnal Umum (General Journal) & Validasi Double-Entry
- * 3. Buku Besar (General Ledger) dengan Saldo Berjalan Real-time
- * 4. Laporan Laba Rugi (Profit & Loss / P&L) dari Ledger Real
+ * 3. Buku Besar (General Ledger) dengan Saldo Berjalan
+ * 4. Laporan Laba Rugi (Profit & Loss / P&L)
  * 5. Laporan Arus Kas (Cash Flow Statement)
- * 6. Laporan Neraca Keuangan (Balance Sheet)
+ * 6. Laporan Neraca Keuangan (Balance Sheet SAK EMKM)
  * 7. Visualisasi Tren Arus Kas 30 Hari (Chart.js)
  * 8. Generator Ekspor Dokumen Resmi (jsPDF & CSV)
  * 9. Hook Auto-Jurnal Realtime dari Transaksi POS Kasir
@@ -20,7 +20,7 @@
 let _accountingChartInstance = null;
 
 // ============================================================================
-// DEFINISI STRUKTUR STANDAR BAGAN AKUN (COA) RESTO & CATERING (SEMUA SALDO AWAL 0)
+// PREDEFINED CHART OF ACCOUNTS (COA) STANDAR RESTO & CATERING (NILAI AWAL 0)
 // ============================================================================
 const DEFAULT_COA = [
   { code: '1001', name: 'Kas di Tangan (Cash on Hand)', type: 'Aset', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 },
@@ -43,25 +43,18 @@ const DEFAULT_COA = [
   { code: '6005', name: 'Beban Operasional & Kurir', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 }
 ];
 
-// Tidak ada dummy journals (array kosong murni)
 const DEFAULT_JOURNALS = [];
 
 // ============================================================================
 // HELPER FUNCTIONS AKUNTANSI
 // ============================================================================
 
-/**
- * Format angka ke format Rupiah standar Indonesia
- */
 function formatRupiah(num) {
   if (isNaN(num) || num === null || num === undefined) return 'Rp 0';
   const val = Math.round(Number(num));
   return 'Rp ' + val.toLocaleString('id-ID');
 }
 
-/**
- * Format tanggal dari timestamp atau string ke format lokal (YYYY-MM-DD)
- */
 function formatDate(ts) {
   if (!ts) return '-';
   const d = new Date(ts);
@@ -72,28 +65,20 @@ function formatDate(ts) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/**
- * Validasi Double Entry Journal: Total Debit harus sama dengan Total Kredit
- */
 function validateDoubleEntry(debitAmount, creditAmount) {
   const d = Math.round(Number(debitAmount) || 0);
   const c = Math.round(Number(creditAmount) || 0);
   return d > 0 && c > 0 && d === c;
 }
 
-/**
- * Hitung saldo akhir berdasarkan tipe akun dan mutasi debit/kredit
- */
 function hitungSaldo(initialBalance, totalDebit, totalCredit, accountType) {
   const init = Number(initialBalance) || 0;
   const deb = Number(totalDebit) || 0;
   const kre = Number(totalCredit) || 0;
 
-  // Akun Debit Normal (Aset, Beban, Prive)
   if (accountType === 'Aset' || accountType === 'Beban' || accountType === 'Prive') {
     return init + deb - kre;
   }
-  // Akun Kredit Normal (Kewajiban, Ekuitas, Pendapatan)
   return init + kre - deb;
 }
 
@@ -117,14 +102,13 @@ window.accountingApp = function() {
     jurnalSearch: '',
     ledgerAkun: '1001',
     
-    // Status UI
+    // Status UI & Summary Realtime State
     loading: false,
     loadingSummary: false,
     toastMsg: '',
     toastType: 'success',
     toastVisible: false,
 
-    // Real Summary Metrics dari Server / Firebase
     summary: {
       totalAset: 0,
       totalKewajiban: 0,
@@ -133,10 +117,13 @@ window.accountingApp = function() {
       kas: 0,
       bank: 0,
       piutang: 0,
-      hutang: 0
+      hutang: 0,
+      pendapatan: 0,
+      hpp: 0,
+      beban: 0
     },
 
-    // Data Master & Transaksi Real
+    // Data Master & Transaksi
     coaList: [],
     jurnalList: [],
     ledgerData: {
@@ -148,7 +135,7 @@ window.accountingApp = function() {
       transactions: []
     },
 
-    // Laporan Keuangan (Real, Initial 0)
+    // Laporan Keuangan
     laporanData: {
       pl: {
         pendapatanPOS: 0,
@@ -213,7 +200,6 @@ window.accountingApp = function() {
     editingCoa: { code: '', name: '', initialBalance: 0 },
     newCoaForm: { code: '', name: '', type: 'Aset', initialBalance: 0 },
 
-    // Form Jurnal Manual
     manualJournalForm: {
       date: new Date().toISOString().split('T')[0],
       desc: '',
@@ -224,26 +210,49 @@ window.accountingApp = function() {
       proofImage: ''
     },
 
-    // Form Export
     exportForm: {
       period: '2026-09',
       reportType: 'all',
       format: 'pdf'
     },
 
-    // Riwayat Export
     exportHistory: [],
-
-    // Firebase Runtime Config
     _fbConfig: null,
+
+    // ------------------------------------------------------------------------
+    // GETTER COMPUTED
+    // ------------------------------------------------------------------------
+    get summaryMetrics() {
+      const s = this.summary || {};
+      const bs = this.laporanData?.balanceSheet || {};
+      const pl = this.laporanData?.pl || {};
+      return {
+        totalAset: s.totalAset || bs.totalAset || 0,
+        totalKewajiban: s.totalKewajiban || bs.totalKewajiban || 0,
+        totalEkuitas: s.totalEkuitas || bs.totalEkuitas || 0,
+        labaBulanIni: s.labaBulanIni || pl.labaBersih || 0,
+        kasDiTangan: s.kas || bs.kas || 0,
+        kasDiBank: s.bank || bs.bank || 0,
+        piutang: s.piutang || bs.piutang || 0,
+        hutangSupplier: s.hutang || bs.hutangSupplier || 0
+      };
+    },
+
+    get isEmptyDatabase() {
+      const m = this.summaryMetrics;
+      return m.totalAset === 0 &&
+             m.totalKewajiban === 0 &&
+             m.totalEkuitas === 0 &&
+             m.labaBulanIni === 0 &&
+             m.kasDiTangan === 0 &&
+             m.kasDiBank === 0 &&
+             (!this.jurnalList || this.jurnalList.length === 0);
+    },
 
     // ------------------------------------------------------------------------
     // 1. INITIALIZATION (init)
     // ------------------------------------------------------------------------
     async init() {
-      console.log('[ACCT-APP] Initializing accounting application...');
-      
-      // 1. Cek sesi admin / manajemen
       const adminSession = sessionStorage.getItem('dapur_admin_session');
       if (!adminSession) {
         alert('Akses Terbatas: Silakan login sebagai Admin / Owner terlebih dahulu.');
@@ -251,7 +260,6 @@ window.accountingApp = function() {
         return;
       }
 
-      // Set tahun dan bulan aktif saat ini
       const now = new Date();
       const curYear = now.getFullYear();
       const curMonth = String(now.getMonth() + 1).padStart(2, '0');
@@ -261,27 +269,22 @@ window.accountingApp = function() {
 
       this.loading = true;
 
-      // 2. Muat konfigurasi Firebase jika ada
       await this.initFirebaseConfig();
 
-      // 3. Muat Data Real dari Backend (Summary, COA, Journal)
-      await this.loadSummary(this.bulanAktif);
+      // PANGGIL SEMUA API REALTIME SECARA BERURUTAN / SIMULTAN
       await this.loadCOA();
-      await this.loadJournal(this.bulanAktif);
-
-      // 4. Hitung Saldo & Muat Dashboard
+      await this.loadJurnal(this.bulanAktif);
+      await this.loadSummary(this.bulanAktif);
       await this.loadDashboard();
 
-      // 5. Muat Riwayat Export dari LocalStorage
       this.loadExportHistory();
 
-      // 6. Listener perubahan periode bulan
+      // Listener Perubahan Periode
       this.$watch('bulanAktif', async (newVal) => {
-        console.log(`[ACCT-APP] Bulan aktif changed to: ${newVal}`);
         this.exportForm.period = newVal;
         this.loading = true;
+        await this.loadJurnal(newVal);
         await this.loadSummary(newVal);
-        await this.loadJournal(newVal);
         await this.loadDashboard();
         if (this.activeTab === 'ledger') {
           await this.loadLedger(this.ledgerAkun, newVal);
@@ -297,19 +300,13 @@ window.accountingApp = function() {
 
       this.loading = false;
 
-      // 7. Render Chart Dashboard setelah DOM selesai
       this.$nextTick(() => {
         this.renderCashFlowChart();
       });
 
-      // 8. Daftarkan hook global ke window
       window._accountingAppInstance = this;
-      console.log('[ACCT-APP] Accounting App initialized with real data');
     },
 
-    /**
-     * Inisialisasi Firebase Config
-     */
     async initFirebaseConfig() {
       try {
         const res = await fetch('/api/firebase-config');
@@ -317,210 +314,340 @@ window.accountingApp = function() {
           this._fbConfig = await res.json();
         }
       } catch (e) {
-        console.warn('[ACCT-APP] Firebase config fetch note:', e);
+        console.warn('Firebase config fetch note:', e);
       }
     },
 
     // ------------------------------------------------------------------------
-    // 2. RINGKASAN EKSEKUTIF / SUMMARY KEUANGAN
+    // 2. FETCH REALTIME APIS (SUMMARY, COA, JOURNAL, LEDGER)
     // ------------------------------------------------------------------------
-    
+
     /**
      * GET /accounting/summary/{bulan}
-     * Mengambil summary real dari backend Firebase
      */
     async loadSummary(bulan) {
       const targetBulan = bulan || this.bulanAktif;
       try {
         this.loadingSummary = true;
-        console.log(`[ACCT-APP] Fetching summary for period ${targetBulan}...`);
+        console.log(`[ACCT-APP] Fetching summary for period: ${targetBulan}`);
         const res = await fetch(`/accounting/summary/${encodeURIComponent(targetBulan)}`);
-        const json = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: Gagal mengambil summary`);
+        }
 
+        const json = await res.json();
         if (json && json.success && json.data) {
           const d = json.data;
-          console.log(`[ACCT-APP] Summary data received for ${targetBulan}:`, d);
-
-          const totalAset = Number(d.totalAset) || 0;
-          const totalKewajiban = Number(d.totalKewajiban) || 0;
-          const totalEkuitas = Number(d.totalEkuitas) || 0;
-          const labaBulanIni = Number(d.labaBersih) || 0;
+          
           const kas = Number(d.saldoKas) || 0;
           const bank = Number(d.saldoBank) || 0;
           const piutang = Number(d.piutang) || 0;
-          const hutang = Number(d.hutangSupplier) || 0;
+          const persediaan = Number(d.persediaanAkhir) || 0;
+          
+          const totalPendapatan = Number(d.pendapatan?.totalPendapatan) || 0;
+          const totalHpp = Number(d.hpp?.totalHpp) || 0;
+          const totalBeban = Number(d.bebanOperasional?.totalBeban) || 0;
+          const labaBersih = Number(d.labaBersih) || (totalPendapatan - totalHpp - totalBeban);
+
+          const hutangSupplier = Number(d.hutangSupplier) || 0;
+          const totalKewajiban = Number(d.totalKewajiban) || hutangSupplier;
+
+          const calcTotalAset = Number(d.totalAset) || (kas + bank + piutang + persediaan);
+          const calcTotalEkuitas = Number(d.totalEkuitas) || (calcTotalAset - totalKewajiban);
 
           this.summary = {
-            totalAset,
-            totalKewajiban,
-            totalEkuitas,
-            labaBulanIni,
+            totalAset: calcTotalAset,
+            totalKewajiban: totalKewajiban,
+            totalEkuitas: calcTotalEkuitas,
+            labaBulanIni: labaBersih,
+            kas: kas,
+            bank: bank,
+            piutang: piutang,
+            hutang: hutangSupplier,
+            pendapatan: totalPendapatan,
+            hpp: totalHpp,
+            beban: totalBeban
+          };
+
+          // Sinkronkan ke laporanData
+          this.laporanData.pl = {
+            pendapatanPOS: Number(d.pendapatan?.penjualanPos) || 0,
+            pendapatanCatering: Number(d.pendapatan?.penjualanCatering) || 0,
+            totalPendapatan,
+            hpp: totalHpp,
+            labaKotor: Number(d.labaKotor) || (totalPendapatan - totalHpp),
+            bebanGaji: Number(d.bebanOperasional?.gaji) || 0,
+            bebanSewa: Number(d.bebanOperasional?.sewa) || 0,
+            bebanListrik: Number(d.bebanOperasional?.utilitas) || 0,
+            bebanMarketing: Number(d.bebanOperasional?.marketing) || 0,
+            bebanOperasional: Number(d.bebanOperasional?.kurir || d.bebanOperasional?.penyusutan) || 0,
+            totalBeban,
+            labaBersih
+          };
+
+          this.laporanData.balanceSheet = {
             kas,
             bank,
             piutang,
-            hutang
+            persediaan,
+            totalAsetLancar: kas + bank + piutang + persediaan,
+            peralatan: 0,
+            totalAsetTetap: 0,
+            totalAset: calcTotalAset,
+            hutangSupplier,
+            hutangBeban: 0,
+            totalKewajiban,
+            modalPemilik: 0,
+            labaDitahan: 0,
+            labaBerjalan: labaBersih,
+            prive: 0,
+            totalEkuitas: calcTotalEkuitas,
+            totalKewajibanEkuitas: totalKewajiban + calcTotalEkuitas,
+            isBalance: true,
+            selisih: 0
           };
 
-          // Sinkronkan ke laporanData.pl jika tersedia rincian
-          const revPOS = Number(d.pendapatan?.penjualanPos) || 0;
-          const revCatering = Number(d.pendapatan?.penjualanCatering) || 0;
-          const totalPendapatan = Number(d.pendapatan?.totalPendapatan) || (revPOS + revCatering);
-          const hpp = Number(d.hpp?.totalHpp) || Number(d.hpp?.bahanBaku) || 0;
-          const labaKotor = Number(d.labaKotor) || (totalPendapatan - hpp);
-          const bebanGaji = Number(d.beban?.gaji) || 0;
-          const bebanSewa = Number(d.beban?.sewa) || 0;
-          const bebanListrik = Number(d.beban?.utilitas) || 0;
-          const bebanMarketing = Number(d.beban?.marketing) || 0;
-          const bebanKurir = Number(d.beban?.kurir) || 0;
-          const bebanPenyusutan = Number(d.beban?.penyusutan) || 0;
-          const totalBeban = Number(d.beban?.totalBeban) || (bebanGaji + bebanSewa + bebanListrik + bebanMarketing + bebanKurir + bebanPenyusutan);
-
-          this.laporanData.pl = {
-            pendapatanPOS: revPOS,
-            pendapatanCatering: revCatering,
-            totalPendapatan,
-            hpp,
-            labaKotor,
-            bebanGaji,
-            bebanSewa,
-            bebanListrik,
-            bebanMarketing,
-            bebanOperasional: bebanKurir + bebanPenyusutan,
-            totalBeban,
-            labaBersih: labaBulanIni
-          };
-
-          // Sinkronkan ke balanceSheet
-          this.laporanData.balanceSheet.kas = kas;
-          this.laporanData.balanceSheet.bank = bank;
-          this.laporanData.balanceSheet.piutang = piutang;
-          this.laporanData.balanceSheet.persediaan = Number(d.persediaanAkhir) || 0;
-          this.laporanData.balanceSheet.totalAset = totalAset || (kas + bank + piutang + (Number(d.persediaanAkhir) || 0));
-          this.laporanData.balanceSheet.hutangSupplier = hutang;
-          this.laporanData.balanceSheet.totalKewajiban = totalKewajiban;
-          this.laporanData.balanceSheet.totalEkuitas = totalEkuitas;
-          this.laporanData.balanceSheet.labaBerjalan = labaBulanIni;
+          console.log(`[ACCT-APP] Summary successfully loaded for ${targetBulan}:`, this.summary);
         } else {
-          console.warn(`[ACCT-APP] Summary data empty for ${targetBulan}, reset to 0`);
+          console.warn(`[ACCT-APP] Summary empty or null for ${targetBulan}. Resetting state to 0.`);
           this.summary = {
-            totalAset: 0,
-            totalKewajiban: 0,
-            totalEkuitas: 0,
-            labaBulanIni: 0,
-            kas: 0,
-            bank: 0,
-            piutang: 0,
-            hutang: 0
+            totalAset: 0, totalKewajiban: 0, totalEkuitas: 0,
+            labaBulanIni: 0, kas: 0, bank: 0, piutang: 0, hutang: 0,
+            pendapatan: 0, hpp: 0, beban: 0
           };
         }
       } catch (err) {
-        console.error('[ACCT-APP] Load summary error:', err);
-        this.showToast(`Gagal memuat ringkasan keuangan untuk ${targetBulan}`, 'error');
+        console.error(`[ACCT-APP] Load summary error for ${targetBulan}:`, err);
         this.summary = {
-          totalAset: 0,
-          totalKewajiban: 0,
-          totalEkuitas: 0,
-          labaBulanIni: 0,
-          kas: 0,
-          bank: 0,
-          piutang: 0,
-          hutang: 0
+          totalAset: 0, totalKewajiban: 0, totalEkuitas: 0,
+          labaBulanIni: 0, kas: 0, bank: 0, piutang: 0, hutang: 0,
+          pendapatan: 0, hpp: 0, beban: 0
         };
+        this.showToast(`Gagal memuat ringkasan keuangan periode ${targetBulan}`, 'error');
       } finally {
         this.loadingSummary = false;
       }
     },
 
     /**
-     * Getter Metrics untuk Dashboard UI
-     */
-    get summaryMetrics() {
-      return {
-        totalAset: Number(this.summary?.totalAset) ?? Number(this.laporanData.balanceSheet?.totalAset) ?? 0,
-        totalKewajiban: Number(this.summary?.totalKewajiban) ?? Number(this.laporanData.balanceSheet?.totalKewajiban) ?? 0,
-        totalEkuitas: Number(this.summary?.totalEkuitas) ?? Number(this.laporanData.balanceSheet?.totalEkuitas) ?? 0,
-        labaBulanIni: Number(this.summary?.labaBulanIni) ?? Number(this.laporanData.pl?.labaBersih) ?? 0,
-        kasDiTangan: Number(this.summary?.kas) ?? Number(this.laporanData.balanceSheet?.kas) ?? 0,
-        kasDiBank: Number(this.summary?.bank) ?? Number(this.laporanData.balanceSheet?.bank) ?? 0,
-        piutang: Number(this.summary?.piutang) ?? Number(this.laporanData.balanceSheet?.piutang) ?? 0,
-        hutangSupplier: Number(this.summary?.hutang) ?? Number(this.laporanData.balanceSheet?.hutangSupplier) ?? 0
-      };
-    },
-
-    /**
-     * Status apakah database masih kosong (semua saldo 0 dan belum ada jurnal)
-     */
-    get isDatabaseEmpty() {
-      const s = this.summaryMetrics;
-      return (
-        s.totalAset === 0 &&
-        s.totalKewajiban === 0 &&
-        s.totalEkuitas === 0 &&
-        s.labaBulanIni === 0 &&
-        (!this.jurnalList || this.jurnalList.length === 0)
-      );
-    },
-
-    // ------------------------------------------------------------------------
-    // 3. CHART OF ACCOUNTS (COA)
-    // ------------------------------------------------------------------------
-    
-    /**
-     * GET /accounting/coa & hitung saldo berjalan berdasarkan mutasi jurnal
+     * GET /accounting/coa
      */
     async loadCOA() {
       try {
-        console.log('[ACCT-APP] Loading COA from /accounting/coa...');
-        let loadedCoa = null;
+        console.log('[ACCT-APP] Fetching Chart of Accounts...');
+        const res = await fetch('/accounting/coa');
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: Gagal mengambil COA`);
+        }
 
-        try {
-          const res = await fetch('/accounting/coa');
-          if (res.ok) {
-            const json = await res.json();
-            if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {
-              loadedCoa = json.data;
-              console.log(`[ACCT-APP] Loaded ${loadedCoa.length} COA accounts from API`);
-            }
+        const json = await res.json();
+        if (json && json.success && json.data) {
+          let loadedCoa = [];
+          const data = json.data;
+
+          if (Array.isArray(data)) {
+            loadedCoa = data.map(item => ({
+              code: String(item.code || item.acc || ''),
+              name: String(item.name || item.n || ''),
+              type: String(item.type || item.t || 'Aset'),
+              normalBalance: item.normalBalance || ((item.type === 'Kewajiban' || item.type === 'Ekuitas' || item.type === 'Pendapatan') ? 'Kredit' : 'Debit'),
+              initialBalance: Number(item.initialBalance) || 0,
+              currentBalance: Number(item.currentBalance) || 0
+            }));
+          } else if (typeof data === 'object') {
+            const typeMap = {
+              'asset': 'Aset',
+              'liability': 'Kewajiban',
+              'equity': 'Ekuitas',
+              'revenue': 'Pendapatan',
+              'expense': 'Beban'
+            };
+            loadedCoa = Object.entries(data).map(([code, val]) => ({
+              code: String(code),
+              name: typeof val === 'string' ? val : (val.n || val.name || `Akun ${code}`),
+              type: typeof val === 'object' && val.t ? (typeMap[val.t] || val.t) : (val.type || 'Aset'),
+              normalBalance: (val.t === 'liability' || val.t === 'equity' || val.t === 'revenue' || val.type === 'Kewajiban' || val.type === 'Ekuitas' || val.type === 'Pendapatan') ? 'Kredit' : 'Debit',
+              initialBalance: Number(val.initialBalance || val.opening) || 0,
+              currentBalance: Number(val.currentBalance || val.closing) || 0
+            }));
           }
-        } catch (err) {
-          console.warn('[ACCT-APP] Fetch /accounting/coa note:', err);
-        }
 
-        // Coba dari LocalStorage jika offline
-        if (!loadedCoa) {
-          const localCoa = localStorage.getItem('dapur_accounting_coa');
-          if (localCoa) {
-            try { 
-              const parsed = JSON.parse(localCoa);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                loadedCoa = parsed;
-              }
-            } catch (e) {}
+          if (loadedCoa.length > 0) {
+            this.coaList = loadedCoa;
+          } else {
+            this.coaList = JSON.parse(JSON.stringify(DEFAULT_COA));
           }
+          console.log(`[ACCT-APP] COA loaded successfully (${this.coaList.length} accounts)`);
+        } else {
+          console.warn('[ACCT-APP] COA API empty. Using default 18 accounts with 0 balance.');
+          this.coaList = JSON.parse(JSON.stringify(DEFAULT_COA));
         }
-
-        // Default COA template dengan semua saldo 0
-        if (!loadedCoa || loadedCoa.length === 0) {
-          loadedCoa = DEFAULT_COA.map(acc => ({
-            ...acc,
-            initialBalance: 0,
-            currentBalance: 0
-          }));
-        }
-
-        this.coaList = loadedCoa;
+      } catch (err) {
+        console.error('[ACCT-APP] Error loadCOA:', err);
+        this.coaList = JSON.parse(JSON.stringify(DEFAULT_COA));
+        this.showToast('Gagal memuat Chart of Accounts dari server', 'error');
+      } finally {
         this.recalculateAllAccountBalances();
-      } catch (e) {
-        console.error('[ACCT-APP] Error loadCOA:', e);
-        this.showToast('Gagal memuat Bagan Akun (COA)', 'error');
-        this.coaList = DEFAULT_COA.map(acc => ({ ...acc, initialBalance: 0, currentBalance: 0 }));
       }
     },
 
     /**
-     * Simpan Perubahan Saldo Awal Akun
-     * PATCH /accounting/coa/{accCode}/saldoAwal = nilai
+     * GET /accounting/journal/{bulan}
      */
+    async loadJurnal(bulan) {
+      const targetBulan = bulan || this.bulanAktif;
+      try {
+        console.log(`[ACCT-APP] Fetching journal entries for: ${targetBulan}`);
+        const res = await fetch(`/accounting/journal/${encodeURIComponent(targetBulan)}`);
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: Gagal mengambil jurnal`);
+        }
+
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.data)) {
+          const formatted = json.data.map(j => {
+            let debitCode = j.debitCode || '';
+            let debitName = j.debitName || '';
+            let debitAmount = Number(j.debitAmount) || 0;
+            let creditCode = j.creditCode || '';
+            let creditName = j.creditName || '';
+            let creditAmount = Number(j.creditAmount) || 0;
+
+            if ((!debitCode || !creditCode) && Array.isArray(j.lines) && j.lines.length >= 2) {
+              const dLine = j.lines.find(l => Number(l.debit) > 0) || j.lines[0];
+              const cLine = j.lines.find(l => Number(l.credit) > 0) || j.lines[1];
+              if (dLine) {
+                debitCode = dLine.acc || dLine.code || '';
+                debitAmount = Number(dLine.debit) || 0;
+                const foundCoa = (this.coaList || []).find(c => c.code === debitCode);
+                debitName = foundCoa ? foundCoa.name : `Akun ${debitCode}`;
+              }
+              if (cLine) {
+                creditCode = cLine.acc || cLine.code || '';
+                creditAmount = Number(cLine.credit) || 0;
+                const foundCoa = (this.coaList || []).find(c => c.code === creditCode);
+                creditName = foundCoa ? foundCoa.name : `Akun ${creditCode}`;
+              }
+            }
+
+            return {
+              id: j.id || j.firebaseKey || j.noEntry,
+              date: j.date || formatDate(j.timestamp || Date.now()),
+              timestamp: j.timestamp || Date.now(),
+              noEntry: j.noEntry || j.ref || 'JE-0000',
+              desc: j.desc || j.keterangan || '-',
+              debitCode,
+              debitName,
+              debitAmount,
+              creditCode,
+              creditName,
+              creditAmount,
+              ref: j.ref || j.noEntry || '-',
+              proof: j.proof || '',
+              status: j.status || 'approved',
+              lines: j.lines || []
+            };
+          });
+
+          formatted.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          this.jurnalList = formatted;
+          console.log(`[ACCT-APP] Loaded ${this.jurnalList.length} journal entries for ${targetBulan}`);
+        } else {
+          console.warn(`[ACCT-APP] Journal empty for ${targetBulan}`);
+          this.jurnalList = [];
+        }
+      } catch (err) {
+        console.error(`[ACCT-APP] Error loadJurnal for ${targetBulan}:`, err);
+        this.jurnalList = [];
+        this.showToast(`Gagal memuat jurnal periode ${targetBulan}`, 'error');
+      } finally {
+        this.recalculateAllAccountBalances();
+      }
+    },
+
+    /**
+     * GET /accounting/ledger/{acc}/{bulan}
+     */
+    async loadLedger(accCode, bulan) {
+      if (!accCode) accCode = '1001';
+      const targetBulan = bulan || this.bulanAktif;
+      this.ledgerAkun = accCode;
+
+      const accObj = this.coaList.find(c => c.code === accCode) || {
+        code: accCode,
+        name: 'Akun ' + accCode,
+        type: 'Aset',
+        initialBalance: 0
+      };
+
+      let openingBal = Number(accObj.initialBalance) || 0;
+      let runningBalance = openingBal;
+      let totalDebit = 0;
+      let totalCredit = 0;
+      const transactions = [];
+
+      try {
+        console.log(`[ACCT-APP] Fetching ledger for account ${accCode} period ${targetBulan}`);
+        const res = await fetch(`/accounting/ledger/${encodeURIComponent(accCode)}/${encodeURIComponent(targetBulan)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.success && json.data) {
+            if (json.data.opening !== undefined) openingBal = Number(json.data.opening) || 0;
+            runningBalance = openingBal;
+          }
+        }
+      } catch (err) {
+        console.warn(`[ACCT-APP] Ledger fetch note for ${accCode}:`, err);
+      }
+
+      // Hitung mutasi dari jurnalList
+      const relatedJournals = (this.jurnalList || [])
+        .filter(j => j.debitCode === accCode || j.creditCode === accCode)
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      relatedJournals.forEach(j => {
+        const isDebit = j.debitCode === accCode;
+        const dAmt = isDebit ? Number(j.debitAmount) || 0 : 0;
+        const cAmt = !isDebit ? Number(j.creditAmount) || 0 : 0;
+
+        totalDebit += dAmt;
+        totalCredit += cAmt;
+
+        if (accObj.type === 'Aset' || accObj.type === 'Beban' || accObj.type === 'Prive') {
+          runningBalance += (dAmt - cAmt);
+        } else {
+          runningBalance += (cAmt - dAmt);
+        }
+
+        transactions.push({
+          date: j.date,
+          ref: j.ref || j.noEntry,
+          desc: j.desc,
+          debit: dAmt,
+          credit: cAmt,
+          runningBalance: runningBalance
+        });
+      });
+
+      this.ledgerData = {
+        account: accObj,
+        openingBalance: openingBal,
+        totalDebit: totalDebit,
+        totalCredit: totalCredit,
+        closingBalance: runningBalance,
+        transactions: transactions
+      };
+
+      return this.ledgerData;
+    },
+
+    // ------------------------------------------------------------------------
+    // 3. PENGELOLAAN COA & SALDO AWAL
+    // ------------------------------------------------------------------------
+
     async updateSaldoAwal(accCode, nilai) {
       const amt = Number(nilai) || 0;
       const target = this.coaList.find(c => c.code === accCode);
@@ -529,9 +656,6 @@ window.accountingApp = function() {
       target.initialBalance = amt;
       this.recalculateAllAccountBalances();
 
-      // Simpan ke local & server
-      localStorage.setItem('dapur_accounting_coa', JSON.stringify(this.coaList));
-
       try {
         await fetch(`/accounting/coa/${encodeURIComponent(accCode)}/saldoAwal`, {
           method: 'PATCH',
@@ -539,17 +663,15 @@ window.accountingApp = function() {
           body: JSON.stringify({ saldoAwal: amt })
         });
       } catch (e) {
-        console.warn('[ACCT-APP] Server update saldo awal note:', e);
+        console.warn('Server update saldo awal note:', e);
       }
 
       this.showToast(`Saldo awal akun [${accCode}] berhasil diperbarui`, 'success');
       this.modalEditSaldo = false;
+      await this.loadSummary(this.bulanAktif);
       await this.loadDashboard();
     },
 
-    /**
-     * Tambah Akun Baru ke COA
-     */
     async tambahAkun() {
       const { code, name, type, initialBalance } = this.newCoaForm;
       if (!code || !name) {
@@ -557,7 +679,6 @@ window.accountingApp = function() {
         return;
       }
 
-      // Cek duplikasi kode akun
       if (this.coaList.some(c => c.code === code.trim())) {
         this.showToast(`Kode akun [${code}] sudah digunakan`, 'error');
         return;
@@ -575,9 +696,6 @@ window.accountingApp = function() {
       this.coaList.push(newAcc);
       this.coaList.sort((a, b) => a.code.localeCompare(b.code));
 
-      // Simpan
-      localStorage.setItem('dapur_accounting_coa', JSON.stringify(this.coaList));
-
       try {
         await fetch('/accounting/coa', {
           method: 'POST',
@@ -590,16 +708,13 @@ window.accountingApp = function() {
       this.newCoaForm = { code: '', name: '', type: 'Aset', initialBalance: 0 };
       this.modalAddAkun = false;
       this.recalculateAllAccountBalances();
+      await this.loadSummary(this.bulanAktif);
       await this.loadDashboard();
     },
 
-    /**
-     * Hitung ulang seluruh saldo akun berjalan berdasarkan mutasi seluruh jurnal
-     */
     recalculateAllAccountBalances() {
       const totalsByAcc = {};
 
-      // Inisialisasi dari saldo awal
       this.coaList.forEach(acc => {
         totalsByAcc[acc.code] = {
           initial: Number(acc.initialBalance) || 0,
@@ -609,30 +724,16 @@ window.accountingApp = function() {
         };
       });
 
-      // Akumulasikan semua mutasi jurnal real
       this.jurnalList.forEach(j => {
-        if (Array.isArray(j.lines)) {
-          j.lines.forEach(l => {
-            const code = String(l.acc || l.code || '');
-            const dAmt = Number(l.debit) || 0;
-            const cAmt = Number(l.credit) || 0;
-            if (totalsByAcc[code]) {
-              totalsByAcc[code].debit += dAmt;
-              totalsByAcc[code].credit += cAmt;
-            }
-          });
-        } else {
-          const dCode = j.debitCode;
-          const cCode = j.creditCode;
-          const dAmt = Number(j.debitAmount) || 0;
-          const cAmt = Number(j.creditAmount) || 0;
+        const dCode = j.debitCode;
+        const cCode = j.creditCode;
+        const dAmt = Number(j.debitAmount) || 0;
+        const cAmt = Number(j.creditAmount) || 0;
 
-          if (totalsByAcc[dCode]) totalsByAcc[dCode].debit += dAmt;
-          if (totalsByAcc[cCode]) totalsByAcc[cCode].credit += cAmt;
-        }
+        if (totalsByAcc[dCode]) totalsByAcc[dCode].debit += dAmt;
+        if (totalsByAcc[cCode]) totalsByAcc[cCode].credit += cAmt;
       });
 
-      // Update current balance per akun
       this.coaList.forEach(acc => {
         const stat = totalsByAcc[acc.code];
         if (stat) {
@@ -642,82 +743,9 @@ window.accountingApp = function() {
     },
 
     // ------------------------------------------------------------------------
-    // 4. JURNAL UMUM (GENERAL JOURNAL)
+    // 4. JURNAL MANUAL
     // ------------------------------------------------------------------------
 
-    /**
-     * Alias loadJurnal -> loadJournal
-     */
-    async loadJurnal(bulan) {
-      return this.loadJournal(bulan);
-    },
-
-    /**
-     * GET /accounting/journal/{bulan}
-     * Memuat daftar jurnal real dari Firebase untuk periode tertentu
-     */
-    async loadJournal(bulan) {
-      const targetBulan = bulan || this.bulanAktif;
-      try {
-        console.log(`[ACCT-APP] Loading Journal for period ${targetBulan}...`);
-        let list = null;
-
-        try {
-          const res = await fetch(`/accounting/journal/${encodeURIComponent(targetBulan)}`);
-          if (res.ok) {
-            const json = await res.json();
-            if (json && json.success && Array.isArray(json.data)) {
-              list = json.data;
-              console.log(`[ACCT-APP] Loaded ${list.length} journals from API for ${targetBulan}`);
-            }
-          }
-        } catch (e) {
-          console.warn('[ACCT-APP] Fetch journal note:', e);
-        }
-
-        if (!list) {
-          const stored = localStorage.getItem(`dapur_journal_${targetBulan}`);
-          if (stored) {
-            try { list = JSON.parse(stored); } catch (e) {}
-          }
-        }
-
-        // Jika tidak ada data, list kosong (TIDAK ADA DATA DUMMY)
-        this.jurnalList = Array.isArray(list) ? list : [];
-
-        // Normalisasi struktur jurnal jika diperlukan
-        this.jurnalList.forEach(j => {
-          if (!j.debitCode && Array.isArray(j.lines)) {
-            const debitLine = j.lines.find(l => Number(l.debit) > 0);
-            const creditLine = j.lines.find(l => Number(l.credit) > 0);
-            if (debitLine) {
-              j.debitCode = debitLine.acc;
-              j.debitAmount = debitLine.debit;
-              j.debitName = j.debitName || ('Akun ' + debitLine.acc);
-            }
-            if (creditLine) {
-              j.creditCode = creditLine.acc;
-              j.creditAmount = creditLine.credit;
-              j.creditName = j.creditName || ('Akun ' + creditLine.acc);
-            }
-          }
-        });
-
-        // Sort timestamp DESC
-        this.jurnalList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-        this.recalculateAllAccountBalances();
-      } catch (err) {
-        console.error('[ACCT-APP] Error loadJournal:', err);
-        this.showToast(`Gagal memuat Jurnal Umum periode ${targetBulan}`, 'error');
-        this.jurnalList = [];
-        this.recalculateAllAccountBalances();
-      }
-    },
-
-    /**
-     * Tambah Jurnal Manual (Double-Entry Validation)
-     */
     async tambahJurnalManual() {
       const { date, desc, debitAccount, creditAccount, amount, ref, proofImage } = this.manualJournalForm;
       const amt = Number(amount) || 0;
@@ -737,7 +765,6 @@ window.accountingApp = function() {
         return;
       }
 
-      // Validasi Double-Entry: Total Debit = Total Kredit
       if (!validateDoubleEntry(amt, amt)) {
         this.showToast('Transaksi tidak seimbang (Double-entry mismatch)', 'error');
         return;
@@ -763,38 +790,33 @@ window.accountingApp = function() {
         creditCode: creditAccount,
         creditName: creditAccObj.name,
         creditAmount: amt,
+        ref: ref ? ref.trim() : `MANUAL-${entryId.slice(-4)}`,
+        proof: proofImage || '',
+        status: 'approved',
         lines: [
           { acc: debitAccount, debit: amt, credit: 0 },
           { acc: creditAccount, debit: 0, credit: amt }
-        ],
-        status: 'approved',
-        ref: ref ? ref.trim() : `MANUAL-${entryId.slice(-4)}`,
-        proof: proofImage || ''
+        ]
       };
 
-      // Tambahkan ke jurnal
       this.jurnalList.unshift(newEntry);
 
-      // Simpan ke LocalStorage & Server
-      localStorage.setItem(`dapur_journal_${bulanKey}`, JSON.stringify(this.jurnalList));
-
       try {
-        await fetch(`/accounting/journal/${encodeURIComponent(bulanKey)}/${encodeURIComponent(entryId)}`, {
+        await fetch(`/accounting/journal/${encodeURIComponent(bulanKey)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newEntry)
         });
       } catch (e) {
-        console.warn('[ACCT-APP] Post journal entry note:', e);
+        console.warn('Manual journal save note:', e);
       }
 
       this.recalculateAllAccountBalances();
-      await this.loadSummary(this.bulanAktif);
+      await this.loadSummary(bulanKey);
       await this.loadDashboard();
 
       this.showToast(`Jurnal [${noEntry}] sebesar ${formatRupiah(amt)} berhasil dicatat!`, 'success');
 
-      // Reset form
       this.manualJournalForm = {
         date: new Date().toISOString().split('T')[0],
         desc: '',
@@ -808,9 +830,6 @@ window.accountingApp = function() {
       this.setTab('jurnal');
     },
 
-    /**
-     * Upload File Bukti Transaksi
-     */
     handleProofUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -828,9 +847,6 @@ window.accountingApp = function() {
       reader.readAsDataURL(file);
     },
 
-    /**
-     * Preset Transaksi Cepat untuk mempermudah form input manual
-     */
     applyPreset(type) {
       const today = new Date().toISOString().split('T')[0];
       switch(type) {
@@ -901,134 +917,13 @@ window.accountingApp = function() {
           };
           break;
       }
-      this.showToast(`Template [${type}] dipilih, silakan masukkan nominal`, 'success');
+      this.showToast(`Preset [${type}] berhasil diaplikasikan`, 'success');
     },
 
     // ------------------------------------------------------------------------
-    // 5. BUKU BESAR (GENERAL LEDGER)
+    // 5. KALKULASI LAPORAN KEUANGAN (LABA RUGI, ARUS KAS, NERACA)
     // ------------------------------------------------------------------------
 
-    /**
-     * GET /accounting/ledger/{accCode}/{bulan}
-     * Memuat buku besar real akun tertentu
-     */
-    async loadLedger(accCode, bulan) {
-      const targetAcc = accCode || this.ledgerAkun || '1001';
-      const targetBulan = bulan || this.bulanAktif;
-      this.ledgerAkun = targetAcc;
-
-      const accObj = this.coaList.find(c => c.code === targetAcc) || {
-        code: targetAcc,
-        name: 'Akun ' + targetAcc,
-        type: 'Aset',
-        initialBalance: 0
-      };
-
-      try {
-        console.log(`[ACCT-APP] Loading Ledger for acc ${targetAcc} bulan ${targetBulan}...`);
-        const res = await fetch(`/accounting/ledger/${encodeURIComponent(targetAcc)}/${encodeURIComponent(targetBulan)}`);
-        let serverLedger = null;
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.success && json.data) {
-            serverLedger = json.data;
-          }
-        }
-
-        // Susun baris mutasi transaksi secara kronologis dari jurnalList
-        let openingBal = serverLedger ? Number(serverLedger.opening) || 0 : (Number(accObj.initialBalance) || 0);
-        let runningBalance = openingBal;
-        let totalDebit = 0;
-        let totalCredit = 0;
-        const transactions = [];
-
-        const relatedJournals = (this.jurnalList || [])
-          .filter(j => {
-            if (j.debitCode === targetAcc || j.creditCode === targetAcc) return true;
-            if (Array.isArray(j.lines)) {
-              return j.lines.some(l => String(l.acc || l.code) === targetAcc);
-            }
-            return false;
-          })
-          .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-        relatedJournals.forEach(j => {
-          let dAmt = 0;
-          let cAmt = 0;
-
-          if (j.debitCode === targetAcc) dAmt += Number(j.debitAmount) || 0;
-          if (j.creditCode === targetAcc) cAmt += Number(j.creditAmount) || 0;
-
-          if (Array.isArray(j.lines)) {
-            j.lines.forEach(l => {
-              if (String(l.acc || l.code) === targetAcc) {
-                dAmt += Number(l.debit) || 0;
-                cAmt += Number(l.credit) || 0;
-              }
-            });
-          }
-
-          totalDebit += dAmt;
-          totalCredit += cAmt;
-
-          if (accObj.type === 'Aset' || accObj.type === 'Beban' || accObj.type === 'Prive') {
-            runningBalance += (dAmt - cAmt);
-          } else {
-            runningBalance += (cAmt - dAmt);
-          }
-
-          transactions.push({
-            date: j.date || formatDate(j.timestamp),
-            ref: j.ref || j.noEntry || j.id || '-',
-            desc: j.desc || j.keterangan || '-',
-            debit: dAmt,
-            credit: cAmt,
-            runningBalance: runningBalance
-          });
-        });
-
-        if (serverLedger) {
-          this.ledgerData = {
-            account: accObj,
-            openingBalance: Number(serverLedger.opening) || 0,
-            totalDebit: Number(serverLedger.debit) || totalDebit,
-            totalCredit: Number(serverLedger.credit) || totalCredit,
-            closingBalance: Number(serverLedger.closing) || runningBalance,
-            transactions: transactions
-          };
-        } else {
-          this.ledgerData = {
-            account: accObj,
-            openingBalance: openingBal,
-            totalDebit: totalDebit,
-            totalCredit: totalCredit,
-            closingBalance: runningBalance,
-            transactions: transactions
-          };
-        }
-      } catch (err) {
-        console.error(`[ACCT-APP] Error loadLedger acc ${targetAcc}:`, err);
-        this.showToast(`Gagal memuat Buku Besar akun ${targetAcc}`, 'error');
-        this.ledgerData = {
-          account: accObj,
-          openingBalance: 0,
-          totalDebit: 0,
-          totalCredit: 0,
-          closingBalance: 0,
-          transactions: []
-        };
-      }
-
-      return this.ledgerData;
-    },
-
-    // ------------------------------------------------------------------------
-    // 6. LAPORAN KEUANGAN (LABA RUGI, ARUS KAS, NERACA)
-    // ------------------------------------------------------------------------
-
-    /**
-     * 6A. Laporan Laba Rugi (P&L)
-     */
     async loadLabaRugi(bulan) {
       let revPOS = 0;
       let revCatering = 0;
@@ -1039,23 +934,19 @@ window.accountingApp = function() {
       let marketing = 0;
       let operasional = 0;
 
-      // Hitung mutasi dari jurnal
       this.jurnalList.forEach(j => {
         const dAmt = Number(j.debitAmount) || 0;
         const cAmt = Number(j.creditAmount) || 0;
 
-        // Pendapatan (Kredit menambah, Debit mengurangi)
         if (j.creditCode === '4001' || j.creditCode === '401') revPOS += cAmt;
         if (j.debitCode === '4001' || j.debitCode === '401') revPOS -= dAmt;
 
         if (j.creditCode === '4002' || j.creditCode === '402') revCatering += cAmt;
         if (j.debitCode === '4002' || j.debitCode === '402') revCatering -= dAmt;
 
-        // HPP (Debit menambah, Kredit mengurangi)
         if (j.debitCode === '5001' || j.debitCode === '501') hpp += dAmt;
         if (j.creditCode === '5001' || j.creditCode === '501') hpp -= cAmt;
 
-        // Beban Operasional (Debit menambah, Kredit mengurangi)
         if (j.debitCode === '6001' || j.debitCode === '601') gaji += dAmt;
         if (j.creditCode === '6001' || j.creditCode === '601') gaji -= cAmt;
 
@@ -1071,21 +962,6 @@ window.accountingApp = function() {
         if (j.debitCode === '6005' || j.debitCode === '605') operasional += dAmt;
         if (j.creditCode === '6005' || j.creditCode === '605') operasional -= cAmt;
       });
-
-      // Tambahkan saldo dari COA jika belum terangkum
-      const getAccBal = (code) => {
-        const found = this.coaList.find(c => c.code === code);
-        return found ? Number(found.currentBalance) || 0 : 0;
-      };
-
-      if (revPOS === 0 && getAccBal('4001') > 0) revPOS = getAccBal('4001');
-      if (revCatering === 0 && getAccBal('4002') > 0) revCatering = getAccBal('4002');
-      if (hpp === 0 && getAccBal('5001') > 0) hpp = getAccBal('5001');
-      if (gaji === 0 && getAccBal('6001') > 0) gaji = getAccBal('6001');
-      if (sewa === 0 && getAccBal('6002') > 0) sewa = getAccBal('6002');
-      if (listrik === 0 && getAccBal('6003') > 0) listrik = getAccBal('6003');
-      if (marketing === 0 && getAccBal('6004') > 0) marketing = getAccBal('6004');
-      if (operasional === 0 && getAccBal('6005') > 0) operasional = getAccBal('6005');
 
       const totalPendapatan = revPOS + revCatering;
       const labaKotor = totalPendapatan - hpp;
@@ -1110,9 +986,6 @@ window.accountingApp = function() {
       return this.laporanData.pl;
     },
 
-    /**
-     * 6B. Laporan Arus Kas (Cash Flow)
-     */
     async loadArusKas(bulan) {
       let penerimaanPelanggan = 0;
       let pembayaranSupplier = 0;
@@ -1129,25 +1002,22 @@ window.accountingApp = function() {
         const dAmt = Number(j.debitAmount) || 0;
         const cAmt = Number(j.creditAmount) || 0;
 
-        // Arus Kas Masuk (DEBIT Kas / Bank)
         if (isKasOrBank(j.debitCode)) {
-          if (j.creditCode === '4001' || j.creditCode === '4002' || j.creditCode === '1003' || j.creditCode === '401' || j.creditCode === '402' || j.creditCode === '103') {
+          if (j.creditCode === '4001' || j.creditCode === '4002' || j.creditCode === '1003') {
             penerimaanPelanggan += dAmt;
-          } else if (j.creditCode === '3001' || j.creditCode === '301') {
+          } else if (j.creditCode === '3001') {
             setoranModal += dAmt;
           }
         }
 
-        // Arus Kas Keluar (KREDIT Kas / Bank)
         if (isKasOrBank(j.creditCode)) {
-          if (j.debitCode === '5001' || j.debitCode === '2001' || j.debitCode === '1004' || j.debitCode === '501' || j.debitCode === '201' || j.debitCode === '105') {
+          if (j.debitCode === '5001' || j.debitCode === '2001' || j.debitCode === '1004') {
             pembayaranSupplier += cAmt;
-          } else if (j.debitCode === '6001' || j.debitCode === '601') {
+          } else if (j.debitCode === '6001') {
             pembayaranGaji += cAmt;
-          } else if (j.debitCode === '6002' || j.debitCode === '6003' || j.debitCode === '6004' || j.debitCode === '6005' ||
-                     j.debitCode === '602' || j.debitCode === '603' || j.debitCode === '604' || j.debitCode === '605') {
+          } else if (j.debitCode === '6002' || j.debitCode === '6003' || j.debitCode === '6004' || j.debitCode === '6005') {
             pembayaranOperasional += cAmt;
-          } else if (j.debitCode === '1005' || j.debitCode === '106') {
+          } else if (j.debitCode === '1005') {
             pembelianPeralatan += cAmt;
           } else if (j.debitCode === '3003') {
             prive += cAmt;
@@ -1160,8 +1030,8 @@ window.accountingApp = function() {
       const kasBersihPendanaan = setoranModal - prive;
       const kenaikanKas = kasBersihOperasi + kasBersihInvestasi + kasBersihPendanaan;
 
-      const kasAwal = ((this.coaList.find(c => c.code === '1001' || c.code === '101') || {}).initialBalance || 0) +
-                      ((this.coaList.find(c => c.code === '1002' || c.code === '102') || {}).initialBalance || 0);
+      const kasAwal = ((this.coaList.find(c => c.code === '1001') || {}).initialBalance || 0) +
+                      ((this.coaList.find(c => c.code === '1002') || {}).initialBalance || 0);
       const kasAkhir = kasAwal + kenaikanKas;
 
       this.laporanData.cashFlow = {
@@ -1183,36 +1053,32 @@ window.accountingApp = function() {
       return this.laporanData.cashFlow;
     },
 
-    /**
-     * 6C. Laporan Neraca (Balance Sheet - Aset = Kewajiban + Ekuitas)
-     */
-        async loadNeraca(bulan) {
+    async loadNeraca(bulan) {
       const getBal = (code) => {
         const f = this.coaList.find(c => c.code === code);
         return f ? Number(f.currentBalance) || 0 : 0;
       };
 
-      // Prioritas: summary (dari endpoint) → fallback: COA lokal
-      const kas = Number(this.summary?.kas ?? getBal('1001') ?? getBal('101') ?? 0);
-      const bank = Number(this.summary?.bank ?? getBal('1002') ?? getBal('102') ?? 0);
-      const piutang = Number(this.summary?.piutang ?? getBal('1003') ?? getBal('103') ?? 0);
-      const persediaan = Number(this.summary?.persediaanAkhir ?? getBal('1004') ?? getBal('105') ?? 0);
+      const kas = getBal('1001');
+      const bank = getBal('1002');
+      const piutang = getBal('1003');
+      const persediaan = getBal('1004');
       const totalAsetLancar = kas + bank + piutang + persediaan;
 
-      const peralatan = getBal('1005') || getBal('106') || 0;
+      const peralatan = getBal('1005');
       const totalAsetTetap = peralatan;
-      const totalAset = Number(this.summary?.totalAset ?? (totalAsetLancar + totalAsetTetap));
+      const totalAset = totalAsetLancar + totalAsetTetap;
 
-      const hutangSupplier = Number(this.summary?.hutang ?? getBal('2001') ?? getBal('201') ?? 0);
-      const hutangBeban = getBal('2002') || 0;
-      const totalKewajiban = Number(this.summary?.totalKewajiban ?? (hutangSupplier + hutangBeban));
+      const hutangSupplier = getBal('2001');
+      const hutangBeban = getBal('2002');
+      const totalKewajiban = hutangSupplier + hutangBeban;
 
-      const modalPemilik = getBal('3001') || getBal('301') || 0;
-      const labaDitahan = getBal('3002') || getBal('302') || 0;
-      const labaBerjalan = Number(this.laporanData.pl.labaBersih) || Number(this.summary?.labaBulanIni) || 0;
-      const prive = getBal('3003') || 0;
+      const modalPemilik = getBal('3001');
+      const labaDitahan = getBal('3002');
+      const labaBerjalan = this.laporanData.pl.labaBersih || 0;
+      const prive = getBal('3003');
 
-      const totalEkuitas = Number(this.summary?.totalEkuitas ?? (modalPemilik + labaDitahan + labaBerjalan - prive));
+      const totalEkuitas = modalPemilik + labaDitahan + labaBerjalan - prive;
       const totalKewajibanEkuitas = totalKewajiban + totalEkuitas;
 
       const selisih = Math.abs(totalAset - totalKewajibanEkuitas);
@@ -1244,12 +1110,9 @@ window.accountingApp = function() {
     },
 
     // ------------------------------------------------------------------------
-    // 7. DASHBOARD EXECUTIVE METRICS & CHART
+    // 6. DASHBOARD & GRAFIK
     // ------------------------------------------------------------------------
-    
-    /**
-     * Hitung ringkasan angka untuk Dashboard
-     */
+
     async loadDashboard() {
       await this.loadLabaRugi(this.bulanAktif);
       await this.loadArusKas(this.bulanAktif);
@@ -1258,9 +1121,6 @@ window.accountingApp = function() {
       this.renderCashFlowChart();
     },
 
-    /**
-     * Render Grafik Arus Kas 30 Hari (Chart.js)
-     */
     renderCashFlowChart() {
       const canvas = document.getElementById('cashFlowChartCanvas');
       if (!canvas) return;
@@ -1270,7 +1130,6 @@ window.accountingApp = function() {
         _accountingChartInstance = null;
       }
 
-      // Generate 30 Hari Terakhir
       const labels = [];
       const inflowData = [];
       const outflowData = [];
@@ -1288,12 +1147,8 @@ window.accountingApp = function() {
         const dateStr = d.toISOString().split('T')[0];
         this.jurnalList.forEach(j => {
           if (j.date === dateStr) {
-            if (j.debitCode === '1001' || j.debitCode === '1002' || j.debitCode === '101' || j.debitCode === '102') {
-              dayInflow += Number(j.debitAmount) || 0;
-            }
-            if (j.creditCode === '1001' || j.creditCode === '1002' || j.creditCode === '101' || j.creditCode === '102') {
-              dayOutflow += Number(j.creditAmount) || 0;
-            }
+            if (j.debitCode === '1001' || j.debitCode === '1002') dayInflow += Number(j.debitAmount) || 0;
+            if (j.creditCode === '1001' || j.creditCode === '1002') dayOutflow += Number(j.creditAmount) || 0;
           }
         });
 
@@ -1310,7 +1165,7 @@ window.accountingApp = function() {
             {
               label: 'Kas Masuk (Inflow)',
               data: inflowData,
-              borderColor: '#10b981', // emerald-500
+              borderColor: '#10b981',
               backgroundColor: 'rgba(16, 185, 129, 0.08)',
               borderWidth: 2.5,
               tension: 0.35,
@@ -1321,7 +1176,7 @@ window.accountingApp = function() {
             {
               label: 'Kas Keluar (Outflow)',
               data: outflowData,
-              borderColor: '#f43f5e', // rose-500
+              borderColor: '#f43f5e',
               backgroundColor: 'rgba(244, 63, 94, 0.04)',
               borderWidth: 2,
               tension: 0.35,
@@ -1376,12 +1231,9 @@ window.accountingApp = function() {
     },
 
     // ------------------------------------------------------------------------
-    // 8. EXPORT DATA (PDF & CSV GENERATOR)
+    // 7. EXPORT DATA (PDF & CSV GENERATOR)
     // ------------------------------------------------------------------------
 
-    /**
-     * Ekspor Laporan Keuangan ke format PDF (jsPDF)
-     */
     async exportPDF(type, bulan) {
       try {
         const { jsPDF } = window.jspdf || {};
@@ -1394,10 +1246,9 @@ window.accountingApp = function() {
         const periodeStr = bulan || this.bulanAktif;
         const generatedDate = new Date().toLocaleString('id-ID');
 
-        // Header Dokumen
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
-        doc.text('Digital Culinary', 105, 18, { align: 'center' });
+        doc.text('DIGITAL CULINARY', 105, 18, { align: 'center' });
         
         doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
@@ -1468,7 +1319,6 @@ window.accountingApp = function() {
           y += 18;
         }
 
-        // Tanda Tangan
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.text('Disiapkan oleh:', 30, y + 10);
@@ -1476,21 +1326,17 @@ window.accountingApp = function() {
         doc.text('( Bagian Keuangan )', 30, y + 30);
         doc.text('( Owner / Direksi )', 140, y + 30);
 
-        // Download
         const filename = `Laporan_${type.toUpperCase()}_${periodeStr}.pdf`;
         doc.save(filename);
 
         this.addExportHistory(titleMap[type] || 'Laporan', periodeStr, 'PDF');
         this.showToast(`Laporan ${filename} berhasil diunduh!`, 'success');
       } catch (err) {
-        console.error('[ACCT-APP] Export PDF error:', err);
+        console.error('Export PDF error:', err);
         this.showToast('Gagal membuat file PDF', 'error');
       }
     },
 
-    /**
-     * Ekspor Data Jurnal & Laporan ke CSV
-     */
     async exportCSV(type, bulan) {
       try {
         let csvContent = '';
@@ -1521,21 +1367,15 @@ window.accountingApp = function() {
         this.addExportHistory(`Data ${type.toUpperCase()}`, periodeStr, 'CSV');
         this.showToast('File CSV berhasil diunduh', 'success');
       } catch (e) {
-        console.error('[ACCT-APP] Export CSV error:', e);
+        console.error('Export CSV error:', e);
         this.showToast('Gagal export CSV', 'error');
       }
     },
 
-    /**
-     * Ekspor Format Excel (.csv kompatibel Excel)
-     */
     async exportExcel(type, bulan) {
       await this.exportCSV(type, bulan);
     },
 
-    /**
-     * Catat Riwayat Ekspor
-     */
     addExportHistory(report, period, format) {
       const entry = {
         date: new Date().toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }),
@@ -1545,7 +1385,7 @@ window.accountingApp = function() {
         status: 'Selesai'
       };
       this.exportHistory.unshift(entry);
-      if (this.exportHistory.length > 7) this.exportHistory.pop();
+      if (this.exportHistory.length > 10) this.exportHistory.pop();
       localStorage.setItem('dapur_export_history', JSON.stringify(this.exportHistory));
     },
 
@@ -1560,12 +1400,9 @@ window.accountingApp = function() {
     },
 
     // ------------------------------------------------------------------------
-    // 9. HOOK AUTO-JURNAL REALTIME TRANSAKSI POS
+    // 8. HOOK AUTO-JURNAL REALTIME TRANSAKSI POS
     // ------------------------------------------------------------------------
 
-    /**
-     * Auto Generate Jurnal Entry dari Transaksi POS
-     */
     async autoGenerateJurnalDariTransaksi(tx) {
       if (!tx || (!tx.id && !tx.orderId)) return;
 
@@ -1577,20 +1414,18 @@ window.accountingApp = function() {
       const dateStr = formatDate(tx.t || tx.timestamp || Date.now());
       const bulanKey = dateStr.substring(0, 7);
 
-      // Cek apakah jurnal untuk transaksi ini sudah ada (Idempotensi)
       const existing = this.jurnalList.find(j => j.ref === txId);
       if (existing) return;
 
-      // Tentukan Akun Debit berdasarkan Metode Pembayaran
-      let debitCode = '1001'; // Kas di Tangan
+      let debitCode = '1001';
       let debitName = 'Kas di Tangan (Cash on Hand)';
 
       if (pm.includes('qris') || pm.includes('bank') || pm.includes('transfer') || pm.includes('ewallet') || pm.includes('gopay') || pm.includes('ovo') || pm.includes('dana')) {
-        debitCode = '1002'; // Kas di Bank
+        debitCode = '1002';
         debitName = 'Kas di Bank (BCA Operasional)';
       }
 
-      const creditCode = '4001'; // Pendapatan Penjualan POS
+      const creditCode = '4001';
       const creditName = 'Pendapatan Penjualan POS';
 
       const entryId = 'J' + Date.now();
@@ -1608,21 +1443,19 @@ window.accountingApp = function() {
         creditCode,
         creditName,
         creditAmount: grandTotal,
+        ref: txId,
+        proof: '',
+        status: 'approved',
         lines: [
           { acc: debitCode, debit: grandTotal, credit: 0 },
           { acc: creditCode, debit: 0, credit: grandTotal }
-        ],
-        status: 'approved',
-        ref: txId,
-        proof: ''
+        ]
       };
 
       this.jurnalList.unshift(posJournalEntry);
-      localStorage.setItem(`dapur_journal_${bulanKey}`, JSON.stringify(this.jurnalList));
 
-      // Kirim ke server
       try {
-        fetch(`/accounting/journal/${encodeURIComponent(bulanKey)}/${encodeURIComponent(entryId)}`, {
+        fetch(`/accounting/journal/${encodeURIComponent(bulanKey)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(posJournalEntry)
@@ -1630,11 +1463,11 @@ window.accountingApp = function() {
       } catch (e) {}
 
       this.recalculateAllAccountBalances();
-      await this.loadSummary(this.bulanAktif);
+      await this.loadSummary(bulanKey);
     },
 
     // ------------------------------------------------------------------------
-    // 10. UI HELPERS & NAVIGATION
+    // 9. UI HELPERS & NAVIGATION
     // ------------------------------------------------------------------------
 
     setTab(tab) {
@@ -1686,23 +1519,13 @@ window.accountingApp = function() {
   };
 };
 
-// ============================================================================
-// GLOBAL HOOK REGISTRATION
-// ============================================================================
-/**
- * Global function callable from kasir-app.js or any other modules
- * Fire-and-forget: tidak memblokir alur utama POS
- */
+// Global Hook Registration
 window.recordAccountingEntry = function(tx) {
   try {
     if (window._accountingAppInstance && typeof window._accountingAppInstance.autoGenerateJurnalDariTransaksi === 'function') {
       window._accountingAppInstance.autoGenerateJurnalDariTransaksi(tx);
-    } else {
-      const queue = JSON.parse(localStorage.getItem('dapur_accounting_pending_queue') || '[]');
-      queue.push(tx);
-      localStorage.setItem('dapur_accounting_pending_queue', JSON.stringify(queue));
     }
   } catch (err) {
-    console.warn('[ACCT-APP] Hook recordAccountingEntry note:', err);
+    console.warn('Hook recordAccountingEntry note:', err);
   }
 };
