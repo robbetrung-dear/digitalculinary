@@ -18,12 +18,17 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers: cors });
   }
 
-  const dbUrl = (env.FIREBASE_DATABASE_URL || "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app").replace(/\/$/, "");
+  const dbUrl = (env.FIREBASE_DATABASE_URL || "https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app").replace(/\/$/, "");
   const apiKey = env.FIREBASE_API_KEY || "";
   const authParam = apiKey ? `?auth=${encodeURIComponent(apiKey)}` : "";
 
   const fullPath = url.pathname.replace(/^\/recipes\/?/, '');
   const parts = fullPath.split('/').filter(Boolean);
+  
+  // ✅ Fix: kalau path kosong, serve static HTML
+  if (parts.length === 0) {
+    return context.next();
+  }
 
   try {
     // 1. GET /recipes — Ambil semua resep menu
