@@ -1797,7 +1797,7 @@
 
         <!-- List Order Cards -->
         <div class="space-y-3">
-          <template x-for="hist in getRecentOrders()" :key="'hist-modal-' + hist.orderId">
+          <template x-for="(hist, idx) in getRecentOrders()" :key="'hist-modal-' + (hist.orderId || 'orphan') + '-' + idx">
             <div class="p-4 rounded-2xl border-2 border-stone-200 bg-white hover:border-brand-300 transition">
               <div class="flex items-start justify-between gap-3 pb-3 border-b border-stone-100">
                 <div class="min-w-0">
