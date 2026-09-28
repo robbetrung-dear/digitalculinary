@@ -19,15 +19,15 @@
       if (event.stopImmediatePropagation) event.stopImmediatePropagation();
     });
   </script>
-  <title>DIGITAL CULINARY & Catering Rumahan | Dari Dapur Kami, Viral di Meja Anda</title>
+  <title>Dapur Kuliner Viral & Catering Rumahan | Dari Dapur Kami, Viral di Meja Anda</title>
   
   <!-- SEO Meta Tags -->
   <meta name="description" content="Pesan menu viral (Rice Bowl Katsu, Chicken Wings, Aneka Mie, Dimsum, Seblak) & Catering Harian / Acara (Silver, Gold, Platinum). Real-time tracking & cek ongkir 7 kurir instan." />
   <meta name="keywords" content="catering murah, rice bowl katsu, menu viral, seblak prasmanan, chicken egg roll, catering kantor, catering jakarta" />
-  <meta name="author" content="DIGITAL CULINARY" />
+  <meta name="author" content="Dapur Kuliner Viral" />
 
   <!-- OpenGraph Social Cards -->
-  <meta property="og:title" content="DIGITAL CULINARY & Catering Rumahan" />
+  <meta property="og:title" content="Dapur Kuliner Viral & Catering Rumahan" />
   <meta property="og:description" content="Pesan aneka rice bowl viral, chicken wings, bento, & paket catering mulai Rp25.000/pax. Cek ongkir instan & bayar via QRIS/VA." />
   <meta property="og:image" content="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1200&auto=format&fit=crop&q=80" />
   <meta property="og:type" content="restaurant" />
@@ -38,7 +38,7 @@
   {
     "@context": "https://schema.org",
     "@type": "FoodEstablishment",
-    "name": "DIGITAL CULINARY & Catering",
+    "name": "Dapur Kuliner Viral & Catering",
     "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800",
     "priceRange": "Rp7.000 - Rp78.000",
     "servesCuisine": "Indonesian, Japanese Fusion, Street Food",
@@ -693,7 +693,7 @@
                 <div class="mt-5 space-y-2 border-t border-stone-100 pt-4">
                   <div class="text-[11px] font-bold text-stone-700 uppercase tracking-wider">Isi Dalam Box:</div>
                   <ul class="space-y-1.5 text-xs text-stone-600">
-                    <template x-for="menuItem in pkg.items" :key="menuItem">
+                    <template x-for="(menuItem, idx) in pkg.items" :key="'pkg-item-' + idx + '-' + menuItem">
                       <li class="flex items-start gap-2">
                         <i class="fa-solid fa-check text-emerald-600 mt-0.5 text-[11px]"></i>
                         <span x-text="menuItem"></span>
@@ -1282,7 +1282,7 @@
 
         <!-- Nama Merchant & NMID -->
         <div class="mt-3 text-center">
-          <h4 class="font-extrabold text-xs text-stone-900 uppercase" x-text="siteConfig.paymentConfig.qrisMerchantName || 'DIGITAL CULINARY - QRIS RESMI'"></h4>
+          <h4 class="font-extrabold text-xs text-stone-900 uppercase" x-text="siteConfig.paymentConfig.qrisMerchantName || 'DAPUR KULINER VIRAL - QRIS RESMI'"></h4>
           <p class="text-[10px] font-mono text-stone-400 mt-0.5" x-text="'NMID: ' + (siteConfig.paymentConfig.qrisNmid || 'ID1020023456789')"></p>
         </div>
       </div>
@@ -1373,7 +1373,7 @@
 
         <div>
           <span class="text-[10px] uppercase font-bold text-stone-400 block">Atas Nama Rekening</span>
-          <span class="text-xs font-extrabold text-stone-800 uppercase" x-text="siteConfig.paymentConfig.bankAccountHolder || 'DIGITAL CULINARY'"></span>
+          <span class="text-xs font-extrabold text-stone-800 uppercase" x-text="siteConfig.paymentConfig.bankAccountHolder || 'DAPUR KULINER VIRAL'"></span>
         </div>
       </div>
 
@@ -1687,6 +1687,9 @@
             <h3 class="font-extrabold text-stone-900 text-lg">Keranjang Belanja</h3>
           </div>
           <div class="flex items-center gap-3">
+                        <button type="button" @click="openHistoryModal()" class="text-xs text-brand-600 hover:text-brand-800 font-bold flex items-center gap-1 border border-brand-200 bg-brand-50 px-2.5 py-1 rounded-lg">
+              <i class="fa-solid fa-clock-rotate-left"></i> Riwayat
+            </button>
             <button x-show="cart.length > 0" @click="emptyCart()" class="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1">
               <i class="fa-solid fa-trash-can"></i> Kosongkan
             </button>
@@ -1735,6 +1738,138 @@
     </div>
   </div>
 
+    <!-- =============================================================== -->
+  <!-- MODAL: RIWAYAT PEMESANAN PELANGGAN (localStorage)               -->
+  <!-- =============================================================== -->
+  <div
+    x-cloak
+    x-show="isHistoryModalOpen"
+    class="fixed inset-0 z-[70] overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+      @click.away="isHistoryModalOpen = false"
+      class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+
+      <!-- Header Modal -->
+      <div class="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center text-lg">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-stone-900 text-base">Riwayat Pemesanan Anda</h3>
+            <p class="text-xs text-stone-500">
+              <span x-text="getRecentOrders().length"></span> pesanan tersimpan di perangkat ini
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            x-show="getRecentOrders().length > 0"
+            @click="clearAllHistory()"
+            class="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
+            <i class="fa-solid fa-trash-can"></i> Hapus Semua
+          </button>
+          <button
+            type="button"
+            @click="isHistoryModalOpen = false"
+            class="w-8 h-8 rounded-full text-stone-400 hover:text-stone-700 flex items-center justify-center">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body: List Riwayat -->
+      <div class="p-5 overflow-y-auto flex-1">
+
+        <!-- Empty State -->
+        <template x-if="getRecentOrders().length === 0">
+          <div class="text-center py-12 space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center text-2xl mx-auto">
+              <i class="fa-solid fa-receipt"></i>
+            </div>
+            <p class="font-bold text-stone-700 text-sm">Belum ada riwayat pemesanan</p>
+            <p class="text-xs text-stone-400 max-w-xs mx-auto leading-relaxed">
+              Riwayat akan otomatis muncul di sini setelah Anda menyelesaikan pemesanan. Riwayat disimpan lokal di perangkat Anda dan akan hilang jika Anda menghapus data browser.
+            </p>
+          </div>
+        </template>
+
+        <!-- List Order Cards -->
+        <div class="space-y-3">
+          <template x-for="hist in getRecentOrders()" :key="'hist-modal-' + hist.orderId">
+            <div class="p-4 rounded-2xl border-2 border-stone-200 bg-white hover:border-brand-300 transition">
+              <div class="flex items-start justify-between gap-3 pb-3 border-b border-stone-100">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono font-black text-xs text-stone-900" x-text="hist.orderId"></span>
+                    <span
+                      class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                      :class="{
+                        'bg-emerald-100 text-emerald-800': hist.status === 'Selesai',
+                        'bg-blue-100 text-blue-800': hist.status === 'Dibayar' || hist.status === 'Diproses',
+                        'bg-indigo-100 text-indigo-800': hist.status === 'Dikirim',
+                        'bg-amber-100 text-amber-800': hist.status === 'Pending' || !hist.status
+                      }"
+                      x-text="hist.status || 'Pending'"></span>
+                  </div>
+                  <p class="text-[11px] text-stone-500 mt-1" x-text="formatHistoryDate(hist.createdAt)"></p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <div class="text-[10px] text-stone-400 font-bold uppercase">Total</div>
+                  <div class="font-mono font-black text-brand-700 text-sm" x-text="formatRupiah(hist.totalAmount || 0)"></div>
+                </div>
+              </div>
+
+              <!-- Items summary -->
+              <div class="pt-3 text-[11px] text-stone-600 space-y-0.5">
+                <template x-for="(it, iIdx) in (hist.items || [])" :key="'hist-item-' + iIdx">
+                  <div class="flex justify-between gap-2">
+                    <span class="truncate" x-text="(it.name || it.id) + ' x' + (it.quantity || 1)"></span>
+                    <span class="font-mono flex-shrink-0" x-text="formatRupiah((it.price || 0) * (it.quantity || 1))"></span>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Actions -->
+              <div class="pt-3 mt-3 border-t border-stone-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  @click="deleteHistoryOrder(hist.orderId)"
+                  class="px-3 py-1.5 rounded-lg text-[11px] font-bold text-stone-500 hover:text-red-600 hover:bg-red-50 transition border border-stone-200">
+                  <i class="fa-solid fa-trash-can text-[10px] mr-1"></i> Hapus
+                </button>
+                <button
+                  type="button"
+                  @click="downloadReceiptPDF(hist)"
+                  class="px-3.5 py-1.5 rounded-lg text-[11px] font-black text-white bg-brand-600 hover:bg-brand-700 transition shadow-sm flex items-center gap-1.5">
+                  <i class="fa-solid fa-receipt text-[10px]"></i>
+                  <span>Cetak Ulang Struk</span>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between gap-3 flex-shrink-0">
+        <div class="text-[10px] text-stone-400 italic flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>Riwayat disimpan lokal. Hilang otomatis jika Anda clear cache browser.</span>
+        </div>
+        <button
+          type="button"
+          @click="isHistoryModalOpen = false"
+          class="px-4 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 font-bold text-xs transition">
+          Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- MODAL LOGIN GANDA (LOGIN GATE: KASIR PINTAR vs PANEL ADMIN) -->
   <div 
     x-cloak 
@@ -1769,7 +1904,7 @@
           </div>
           <h2 class="text-2xl font-extrabold text-stone-900 tracking-tight">Pilih Akses</h2>
           <p class="text-xs text-stone-500 mt-1 max-w-xs mx-auto">
-            Silakan pilih pintu masuk portal sesuai peran operasional Anda di <span class="font-bold text-stone-700">DIGITAL CULINARY</span>.
+            Silakan pilih pintu masuk portal sesuai peran operasional Anda di <span class="font-bold text-stone-700">Dapur Kuliner Viral</span>.
           </p>
         </div>
 
@@ -2744,7 +2879,7 @@
 
           <!-- Daftar Menu Items -->
           <div class="space-y-3">
-            <template x-for="item in filteredAdminMenuList" :key="item.id">
+                        <template x-for="(item, itemIdx) in filteredAdminMenuList" :key="item.id || ('m-fallback-' + itemIdx)">
               <div class="p-3 bg-stone-50 hover:bg-stone-100/80 rounded-2xl border border-stone-200 flex items-center justify-between gap-3 transition">
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="relative flex-shrink-0">
@@ -2855,7 +2990,13 @@
                     </div>
                     <div class="sm:col-span-2">
                       <label class="block text-xs font-bold text-stone-700 mb-1">Daftar Isi Paket (pisahkan dengan koma)</label>
-                      <textarea :value="pkg.items.join(', ')" @input="pkg.items = $event.target.value.split(',').map(s=>s.trim()).filter(Boolean)" rows="2" class="w-full p-2 border border-stone-300 rounded text-xs"></textarea>
+                      <textarea
+  :value="pkg.items.join(', ')"
+  @change="pkg.items = $event.target.value.split(',').map(s=>s.trim()).filter(Boolean)"
+  @keydown.enter.shift.prevent="null"
+  rows="2"
+  placeholder="Pisahkan dengan koma. Contoh: Nasi Putih, Chicken Katsu, Air Mineral"
+  class="w-full p-2 border border-stone-300 rounded text-xs leading-relaxed focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
                     </div>
                   </div>
                 </div>
@@ -3333,7 +3474,7 @@
               </div>
               <div>
                 <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Nama Toko di QRIS Dinamis</label>
-                <input type="text" x-model="siteConfig.paymentConfig.qrisMerchantName" placeholder="Contoh: DIGITAL CULINARY" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" />
+                <input type="text" x-model="siteConfig.paymentConfig.qrisMerchantName" placeholder="Contoh: DAPUR KULINER VIRAL" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" />
               </div>
             </div>
 
@@ -3382,7 +3523,7 @@
               </div>
               <div class="space-y-1 text-center sm:text-left flex-1">
                 <span class="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Live Preview QRIS Toko</span>
-                <h6 class="text-xs font-extrabold text-stone-900 mt-1" x-text="siteConfig.paymentConfig.qrisMerchantName || 'DIGITAL CULINARY'"></h6>
+                <h6 class="text-xs font-extrabold text-stone-900 mt-1" x-text="siteConfig.paymentConfig.qrisMerchantName || 'DAPUR KULINER VIRAL'"></h6>
                 <p class="text-[11px] text-stone-500 font-mono" x-text="'NMID: ' + (siteConfig.paymentConfig.qrisNmid || '-')"></p>
                 <p class="text-[11px] text-stone-600 italic" x-text="siteConfig.paymentConfig.qrisInstructions"></p>
               </div>
@@ -3412,7 +3553,7 @@
               </div>
               <div>
                 <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Atas Nama Rekening</label>
-                <input type="text" x-model="siteConfig.paymentConfig.bankAccountHolder" placeholder="Contoh: DIGITAL CULINARY" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" />
+                <input type="text" x-model="siteConfig.paymentConfig.bankAccountHolder" placeholder="Contoh: DAPUR KULINER VIRAL" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" />
               </div>
             </div>
 
@@ -3594,7 +3735,7 @@
               <i class="fa-brands fa-cloudflare text-orange-500 text-base"></i>
               <span>Panduan Lengkap Deployment ke Cloudflare Pages</span>
             </h4>
-            <p class="text-xs text-stone-600 mt-0.5">Langkah demi langkah menyebarkan website DIGITAL CULINARY ke Cloudflare Pages dengan CDN gratis global, SSL otomatis, dan serverless functions.</p>
+            <p class="text-xs text-stone-600 mt-0.5">Langkah demi langkah menyebarkan website Dapur Kuliner Viral ke Cloudflare Pages dengan CDN gratis global, SSL otomatis, dan serverless functions.</p>
           </div>
 
           <!-- Langkah 1: Push ke GitHub -->
@@ -3615,7 +3756,7 @@
             <p class="text-xs text-stone-500">Jalankan perintah ini di terminal proyek Anda untuk menyimpan kode ke akun GitHub:</p>
             <pre class="bg-stone-900 text-stone-100 p-3.5 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">git init
 git add .
-git commit -m "feat: deploy DIGITAL CULINARY"
+git commit -m "feat: deploy dapur kuliner viral"
 git branch -M main
 git remote add origin https://github.com/USERNAME/NAMA-REPO-ANDA.git
 git push -u origin main</pre>
@@ -3710,6 +3851,65 @@ git push -u origin main</pre>
             <h4 class="font-extrabold text-stone-900 text-sm">Ubah Password Keamanan Panel Admin</h4>
             <p class="text-xs text-stone-500">Ganti password masuk admin dengan standar keamanan ketat.</p>
           </div>
+          
+          <!-- KUSTOMISASI JUDUL PANEL KASIR -->
+          <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-4">
+            <div>
+              <h4 class="font-extrabold text-stone-900 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-pen-nib text-emerald-600"></i>
+                <span>Kustomisasi Judul Panel Kasir</span>
+              </h4>
+              <p class="text-xs text-stone-600 mt-1">Ubah nama brand yang tampil di header POS Kasir. Perubahan langsung tersinkron ke <code>/kasir</code>.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Judul Utama (Nama Toko)</label>
+                <input 
+                  type="text" 
+                  x-model="siteConfig.kasirTitle" 
+                  placeholder="Kasir Pintar" 
+                  class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" 
+                />
+                <p class="text-[10px] text-stone-500 mt-1">Contoh: "Kasir Pintar", "Kasir Cerdas", "POS Dapur"</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Subtitle (Nama Brand)</label>
+                <input 
+                  type="text" 
+                  x-model="siteConfig.kasirSubtitle" 
+                  placeholder="Dapur Kuliner Viral" 
+                  class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold" 
+                />
+                <p class="text-[10px] text-stone-500 mt-1">Tampil di bawah judul utama</p>
+              </div>
+            </div>
+
+            <!-- Live Preview -->
+            <div class="p-3 bg-white rounded-xl border border-emerald-200 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-sm">
+                <i class="fa-solid fa-cash-register text-lg"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-extrabold text-base tracking-tight text-stone-900" x-text="siteConfig.kasirTitle || 'Kasir Pintar'"></span>
+                  <span class="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase">POS</span>
+                </div>
+                <p class="text-[11px] text-stone-500" x-text="siteConfig.kasirSubtitle || 'Dapur Kuliner Viral'"></p>
+              </div>
+            </div>
+
+            <div class="flex justify-end">
+              <button 
+                type="button" 
+                @click="saveSiteConfig()" 
+                class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 shadow-sm transition cursor-pointer">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>Simpan Judul Kasir</span>
+              </button>
+            </div>
+          </div>
 
           <form @submit.prevent="saveNewAdminPassword()" class="max-w-md space-y-4">
             <div>
@@ -3755,6 +3955,95 @@ git push -u origin main</pre>
               Simpan Password Baru
             </button>
           </form>
+
+                    <!-- =============================================================== -->
+          <!-- 🔒 CARD: SUPERVISOR PIN (Aksi Destruktif Kasir POS)              -->
+          <!-- =============================================================== -->
+          <div class="bg-red-50 p-4 rounded-2xl border-2 border-red-200 space-y-4">
+            <div class="flex items-center gap-2 pb-3 border-b border-red-200">
+              <div class="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shadow-xs flex-shrink-0">
+                <i class="fa-solid fa-shield-halved"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="font-extrabold text-stone-900 text-sm">Supervisor PIN (Khusus Aksi Destruktif)</h4>
+                <p class="text-[11px] text-stone-500 leading-snug">PIN 6-digit untuk otorisasi aksi berbahaya di Kasir POS: hapus item inventory, edit stok manual, edit harga beli, tutup shift, dll.</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-700 uppercase mb-1">PIN Baru (6 digit angka)</label>
+                <input
+                  type="password"
+                  inputmode="numeric"
+                  maxlength="6"
+                  autocomplete="new-password"
+                  x-model="supervisorPinNew"
+                  @input="supervisorPinNew = String(supervisorPinNew||'').replace(/\D/g,'').slice(0,6); supervisorPinMsg = '';"
+                  placeholder="••••••"
+                  class="w-full h-12 px-3 rounded-xl border-2 border-stone-300 text-center text-xl font-mono tracking-[0.5em] bg-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 transition" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Konfirmasi PIN Baru</label>
+                <input
+                  type="password"
+                  inputmode="numeric"
+                  maxlength="6"
+                  autocomplete="new-password"
+                  x-model="supervisorPinConfirm"
+                  @input="supervisorPinConfirm = String(supervisorPinConfirm||'').replace(/\D/g,'').slice(0,6); supervisorPinMsg = '';"
+                  placeholder="••••••"
+                  class="w-full h-12 px-3 rounded-xl border-2 border-stone-300 text-center text-xl font-mono tracking-[0.5em] bg-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 transition" />
+              </div>
+            </div>
+
+            <!-- Status Validasi Live -->
+            <div class="p-3 bg-white rounded-xl border border-red-100 space-y-1.5 text-[11px]">
+              <span class="font-bold text-stone-700 block text-[10px] uppercase">Status Validasi:</span>
+              <div class="flex items-center gap-1.5" :class="/^\d{6}$/.test(supervisorPinNew) ? 'text-emerald-600 font-semibold' : 'text-stone-400'">
+                <i :class="/^\d{6}$/.test(supervisorPinNew) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'"></i>
+                <span>PIN harus 6 digit angka</span>
+              </div>
+              <div class="flex items-center gap-1.5" :class="supervisorPinNew.length === 6 && supervisorPinNew === supervisorPinConfirm ? 'text-emerald-600 font-semibold' : 'text-stone-400'">
+                <i :class="supervisorPinNew.length === 6 && supervisorPinNew === supervisorPinConfirm ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'"></i>
+                <span>PIN & konfirmasi harus cocok</span>
+              </div>
+              <div class="flex items-center gap-1.5" :class="supervisorPinNew.length === 6 && supervisorPinNew !== String(siteConfig.supervisorPin || '') ? 'text-emerald-600 font-semibold' : 'text-stone-400'">
+                <i :class="supervisorPinNew.length === 6 && supervisorPinNew !== String(siteConfig.supervisorPin || '') ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'"></i>
+                <span>PIN baru harus beda dari PIN saat ini</span>
+              </div>
+            </div>
+
+            <!-- Pesan Hasil -->
+            <p x-show="supervisorPinMsg"
+               x-text="supervisorPinMsg"
+               :class="supervisorPinMsgOk ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'"
+               class="text-[11px] font-bold p-2.5 rounded-xl border"></p>
+
+            <!-- Tombol Simpan -->
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                @click="supervisorPinNew = ''; supervisorPinConfirm = ''; supervisorPinMsg = '';"
+                class="px-4 py-2 rounded-xl border border-stone-300 text-stone-600 hover:bg-stone-100 font-bold text-xs transition cursor-pointer">
+                Reset Form
+              </button>
+              <button
+                type="button"
+                @click="saveSupervisorPin()"
+                :disabled="!/^\d{6}$/.test(supervisorPinNew) || supervisorPinNew !== supervisorPinConfirm || supervisorPinNew === String(siteConfig.supervisorPin || '')"
+                :class="(!/^\d{6}$/.test(supervisorPinNew) || supervisorPinNew !== supervisorPinConfirm || supervisorPinNew === String(siteConfig.supervisorPin || '')) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700 cursor-pointer'"
+                class="px-5 py-2.5 rounded-xl bg-red-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition shadow-md shadow-red-600/30">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>SIMPAN SUPERVISOR PIN</span>
+              </button>
+            </div>
+
+            <div class="pt-2 border-t border-red-200 flex items-center gap-2 text-[10px] text-stone-500">
+              <i class="fa-solid fa-circle-info text-red-500"></i>
+              <span>PIN default: <strong class="font-mono text-stone-800">211211</strong> &bull; Tersimpan di <code class="font-mono">/site_config/supervisorPin</code> (Firebase)</span>
+            </div>
+          </div>
 
           <!-- =============================================================== -->
           <!-- FITUR EDIT AKSES LOGIN POS KASIR PINTAR                         -->
@@ -3878,12 +4167,7 @@ git push -u origin main</pre>
 
       <!-- Modal Footer -->
       <div class="p-4 sm:p-6 border-t border-stone-200 bg-stone-50 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <button 
-          type="button" 
-          @click="resetSiteConfig()" 
-          class="text-xs text-stone-500 hover:text-red-600 font-semibold underline">
-          Kembalikan Pengaturan ke Default Pabrik
-        </button>
+        
 
         <div class="flex items-center gap-3 w-full sm:w-auto">
           <button 
@@ -4235,29 +4519,27 @@ git push -u origin main</pre>
     <span x-text="adminToast"></span>
   </div>
 
-  <!-- FLOATING TRACKER BUTTON (Selalu Muncul di Mobile, Tablet & Desktop) -->
+  <!-- FLOATING TRACKER BUTTON (ICON ONLY) -->
   <aside aria-label="Lacak Pesanan" class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto">
     <button 
       type="button"
       @click="isTrackerOpen = true" 
-      class="h-11 sm:h-13 px-3.5 sm:px-4 bg-white hover:bg-stone-50 text-brand-600 rounded-full flex items-center gap-2 shadow-2xl border-2 border-brand-500/20 hover:scale-105 active:scale-95 transition-all duration-200 group"
+      class="w-12 h-12 sm:w-14 sm:h-14 bg-white hover:bg-stone-50 text-brand-600 rounded-full flex items-center justify-center shadow-2xl border-2 border-brand-500/20 hover:scale-110 active:scale-95 transition-all duration-200 group"
       title="Lacak Pesanan Realtime"
       aria-label="Lacak Pesanan Realtime">
-      <i class="fa-solid fa-satellite-dish text-lg sm:text-xl group-hover:animate-pulse"></i>
-      <span class="text-xs font-black tracking-wide text-stone-900">Lacak</span>
+      <i class="fa-solid fa-satellite-dish text-xl sm:text-2xl group-hover:animate-pulse"></i>
     </button>
   </aside>
 
-  <!-- FLOATING WHATSAPP BUTTON (Selalu Muncul di Mobile, Tablet & Desktop) -->
+  <!-- FLOATING WHATSAPP BUTTON (ICON ONLY) -->
   <aside aria-label="Bantuan WhatsApp" class="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-[60] pointer-events-auto">
     <button 
       type="button"
       @click="openWhatsAppOrder()" 
-      class="group relative bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black h-11 sm:h-13 px-3.5 sm:px-5 rounded-full shadow-2xl hover:shadow-emerald-500/50 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+      class="group relative w-12 h-12 sm:w-14 sm:h-14 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white rounded-full shadow-2xl hover:shadow-emerald-500/50 transition-all transform hover:scale-110 active:scale-95 flex items-center justify-center"
       title="Chat WhatsApp Admin"
       aria-label="Chat WhatsApp Admin">
-      <i class="fa-brands fa-whatsapp text-xl sm:text-2xl"></i>
-      <span class="text-xs font-black tracking-wide">WhatsApp</span>
+      <i class="fa-brands fa-whatsapp text-2xl sm:text-3xl"></i>
       <span x-show="cartTotalCount > 0" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-600 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-xs" x-text="cartTotalCount"></span>
     </button>
   </aside>
@@ -4633,7 +4915,7 @@ git push -u origin main</pre>
           await set(testRef, {
             pingAt: new Date().toISOString(),
             status: "OK",
-            client: "Admin CMS DIGITAL CULINARY"
+            client: "Admin CMS Dapur Kuliner Viral"
           });
           return { success: true, message: "Koneksi Realtime Database BERHASIL! Sinkronisasi multi-device aktif." };
         } catch (err) {
@@ -4753,14 +5035,51 @@ git push -u origin main</pre>
           }
         }
       },
-      listenMenu: (callback) => {
+        listenMenu: (callback) => {
         if (db) {
           const menuRef = ref(db, 'menu_items');
           return onValue(menuRef, (snapshot) => {
             const val = snapshot.val();
-            if (val) {
-              const arr = Array.isArray(val) ? val : Object.values(val);
+            if (val && typeof val === 'object') {
+              // ✅ FIX: Inject Firebase key sebagai 'id' kalau missing
+              let rawArr;
+              if (Array.isArray(val)) {
+                rawArr = val.map((item, idx) => {
+                  if (!item || typeof item !== 'object') return null;
+                  return { ...item, id: item.id || ('auto_' + idx) };
+                }).filter(Boolean);
+              } else {
+                rawArr = Object.entries(val).map(([key, item]) => {
+                  if (!item || typeof item !== 'object') return null;
+                  return { ...item, id: item.id || key };
+                }).filter(Boolean);
+              }
+
+              // ✅ DEDUPE: pastikan semua ID unique (avoid Alpine x-for crash)
+              const seen = new Set();
+              const dupes = [];
+              const arr = rawArr.map((item, idx) => {
+                let uid = item.id || ('auto_' + idx);
+                if (seen.has(uid)) {
+                  // Rename duplicate dengan suffix biar tetap tampil
+                  let suffix = 2;
+                  while (seen.has(uid + '___dup' + suffix)) suffix++;
+                  dupes.push(uid);
+                  uid = uid + '___dup' + suffix;
+                  item.id = uid;
+                }
+                seen.add(uid);
+                return item;
+              });
+
+              if (dupes.length > 0) {
+                console.warn('[FB-MENU] ⚠️ Duplicate IDs found & renamed:', [...new Set(dupes)]);
+                console.warn(`[FB-MENU] Total duplicates: ${dupes.length} of ${rawArr.length}`);
+              }
+
               callback(arr);
+            } else {
+              callback([]); // Explicit empty (bukan undefined)
             }
           });
         }
@@ -4804,6 +5123,7 @@ git push -u origin main</pre>
         activeTab: 'menu',
         selectedCategory: 'all',
         isCartOpen: false,
+        isHistoryModalOpen: false,
         isTrackerOpen: false,
         isNavMenuOpen: false,
         isProcessingPayment: false,
@@ -4812,11 +5132,11 @@ git push -u origin main</pre>
 
         // PENGATURAN TAMPILAN, KONTEN & BRANDING (EDITABLE DI ADMIN)
         siteConfig: {
-          brandName: 'DIGITAL CULINARY',
+          brandName: 'DAPUR KULINER VIRAL',
           brandWords: [
-            { text: 'DIGITAL', color: '#ea580c' },
-            { text: 'CULINARY', color: '#f59e0b' },
-            { text: '', color: '#e11d48' }
+            { text: 'DAPUR', color: '#ea580c' },
+            { text: 'KULINER', color: '#f59e0b' },
+            { text: 'VIRAL', color: '#e11d48' }
           ],
           tagline: 'Kuliner & Catering',
           logoType: 'icon', // 'icon' | 'image'
@@ -4878,19 +5198,25 @@ git push -u origin main</pre>
             facebook: 'https://facebook.com/digitalculinary-app',
             tiktok: 'https://tiktok.com/@digitalculinary-app'
           },
+
+          // ✅ TAMBAHKAN INI
+          kasirTitle: 'Kasir Pintar',
+          kasirSubtitle: 'Dapur Kuliner Viral',
+                    supervisorPin: '211211',
+          
           // PENGATURAN PEMBAYARAN, QRIS & GATEWAY
           paymentConfig: {
             enableEwalletTransfer: true,
             enableQris: true,
             qrisType: 'both', // 'both' | 'static' | 'dynamic'
             qrisImage: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126570014ID.LINKAJA.WWW01189360091100223126830208123456780303UMI51440014ID.CO.QRIS.WWW0215ID10200234567890303UMI5204581253033605802ID5919DAPUR+KULINER+VIRAL6007JAKARTA61051219062070703A016304ABCD',
-            qrisMerchantName: 'DIGITAL CULINARY - QRIS RESMI',
+            qrisMerchantName: 'DAPUR KULINER VIRAL - QRIS RESMI',
             qrisNmid: 'ID1020023456789',
             qrisInstructions: 'Buka BCA Mobile / GoPay / OVO / DANA / ShopeePay / Livin, scan QRIS dan lakukan pembayaran sesuai nominal yang tertera.',
             enableBankTransfer: true,
             bankName: 'BCA (Bank Central Asia)',
             bankAccountNumber: '8735-0982-11',
-            bankAccountHolder: 'DIGITAL CULINARY',
+            bankAccountHolder: 'DAPUR KULINER VIRAL',
             bankInstructions: 'Transfer nominal tepat sesuai total pesanan. Simpan struk dan konfirmasi ke WhatsApp admin.',
             ewalletPhone: '0812-3456-7890',
             ewalletInstructions: 'Transfer menggunakan DANA, ShopeePay, GoPay, OVO, atau LinkAja ke nomor tertera. Simpan bukti transfer dan konfirmasi ke WhatsApp admin.'
@@ -5015,6 +5341,12 @@ git push -u origin main</pre>
           'fa-star', 'fa-heart', 'fa-crown', 'fa-award', 'fa-tag', 'fa-border-all', 'fa-cubes'
         ],
 
+        // 🔒 Supervisor PIN State (untuk form edit/ubah PIN)
+        supervisorPinNew: '',
+        supervisorPinConfirm: '',
+        supervisorPinMsg: '',
+        supervisorPinMsgOk: false,
+
         // Form Ubah Password Admin
         changePasswordForm: {
           current: '',
@@ -5134,45 +5466,10 @@ git push -u origin main</pre>
         ],
 
         // DAFTAR MENU LENGKAP PERSIS SESUAI SCREENSHOT GRABMERCHANT
-        menuItems: [
-          // ALA CARTE
-          { id: 'ac-1', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Telur Orak Arik', price: 7000, description: 'Telur orak-arik lembut bumbu gurih khas dapur.', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'ac-2', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Chicken Egg Roll', price: 28000, badge: 'FAVORIT', description: 'Gulungan ayam lembut berbalut telur renyah ala bento.', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'ac-3', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Telor Dadar', price: 7000, description: 'Telor dadar renyah khas rumahan bertabur daun bawang.', image: 'https://images.unsplash.com/photo-1510693206972-df098062cb71?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'ac-4', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Telor Ceplok', price: 7000, description: 'Telor ceplok mata sapi setengah matang / matang sempurna.', image: 'https://images.unsplash.com/photo-1508892336360-cf002061266e?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'ac-5', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Chicken Popcorn', price: 28000, description: 'Potongan ayam renyah bitesize dengan bumbu gurih rempah.', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'ac-6', category: 'ala_carte', categoryLabel: 'Ala Carte', name: 'Chicken Katsu', price: 25000, badge: 'BEST SELLER', description: 'Fillet dada ayam tebal berselimut tepung roti renyah keemasan.', image: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-
-          // ANEKA MIE
-          { id: 'mie-1', category: 'mie', categoryLabel: 'Aneka Mie', name: 'Mie Bowl Nyemek Bangla', price: 23000, badge: 'VIRAL', description: 'Mie kuah nyemek kental rempah rempah khas bangla bertabur telur dan daun bawang.', image: 'https://images.unsplash.com/photo-1612927601601-6638404737ce?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'mie-2', category: 'mie', categoryLabel: 'Aneka Mie', name: 'Mie Bowl Goreng Katsu Manis Gurih', price: 28000, description: 'Mie goreng lezat berpadu Chicken Katsu renyah dan saus teriyaki gurih.', image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'mie-3', category: 'mie', categoryLabel: 'Aneka Mie', name: 'Mie Bowl Goreng Katsu Geprek', price: 28000, badge: 'PEDAS', badgeColor: 'bg-red-600 text-white', description: 'Mie goreng gurih disajikan dengan Chicken Katsu berbalur sambal bawang ulek segar.', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'mie-4', category: 'mie', categoryLabel: 'Aneka Mie', name: 'Mie Goreng Bowl Telur', price: 23000, description: 'Mie goreng bumbu kecap manis gurih dengan topping telur ceplok/dadar.', image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-
-          // CEMILAN / SIDE DISH
-          { id: 'sd-1', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Udang Keju Lumer', price: 28000, badge: 'VIRAL', description: 'Olahan udang juicy berisi keju mozarella lumer di lidah, disajikan dengan saus cocolan.', image: 'https://images.unsplash.com/photo-1551248429-40975aa4de74?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'sd-2', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Chicken Wings Spicy Isi 5', price: 45000, description: 'Sayap ayam krispi berbalut saus pedas manis korea gurih isi 5 pcs.', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'sd-3', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Chicken Wings Spicy Isi 10', price: 78000, badge: 'HEMAT', description: 'Porsi puas 10 sayap ayam saus spicy korea nikmat disantap bersama teman.', image: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'sd-4', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Chicken Wings Manis Gurih Isi 5', price: 45000, description: 'Sayap ayam bumbu honey soy garlic manis gurih tanpa rasa pedas isi 5 pcs.', image: 'https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'sd-5', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Chicken Wings Manis Gurih Isi 10', price: 78000, description: 'Paket besar 10 sayap ayam bumbu honey garlic gurih renyah.', image: 'https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'sd-6', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'French Fries Crispy', price: 20000, description: 'Kentang goreng renyah bumbu sea salt gurih dengan saus tomat & sambal.', image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'sd-7', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Sosis Solo', price: 25000, description: 'Sosis solo kulit dadar lembut isi daging ayam suwir gurih rempah isi 4 pcs.', image: 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'sd-8', category: 'cemilan', categoryLabel: 'Cemilan / Side Dish', name: 'Churros Saus Coklat', price: 28000, description: 'Churros renyah bertabur cinnamon sugar dengan dipping saus dark chocolate tebal.', image: 'https://images.unsplash.com/photo-1624300629298-e9de39c13be5?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-
-          // MAKANAN (BENTO & RICE BOWL)
-          { id: 'rb-1', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Nasi Chicken Egg Roll Wings', price: 39000, badge: 'KOMPLIT', description: 'Nasi hangat pulen + Chicken Egg Roll empuk + Chicken Wings bumbu + salad mayonaise.', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'rb-2', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Nasi Chicken Egg Roll Bento', price: 38000, description: 'Bento box nasi, Chicken Egg Roll potongan melimpah, salad segar, saus sambal.', image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'rb-3', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Rice Bowl Chicken Katsu Mayo', price: 28000, description: 'Nasi putih pulen, katsu renyah, saus japanese mayo & salad bento renyah.', image: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'rb-4', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Rice Bowl Chicken Katsu Geprek', price: 28000, badge: 'PEDAS', badgeColor: 'bg-red-600 text-white', description: 'Nasi hangat, katsu gurih digeprek dengan sambal bawang pedas nampol & lalap timun.', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'rb-5', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Rice Bowl Chicken Popcorn Spicy', price: 28000, description: 'Rice bowl ayam popcorn crunchy berselimut saus pedas manis ala korea.', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'rb-6', category: 'rice_bowl', categoryLabel: 'Bento & Rice Bowl', name: 'Rice Bowl Chicken Popcorn Salted Egg', price: 38000, badge: 'SPESIAL', description: 'Nasi hangat berpadu chicken popcorn dengan lumuran saus telur asin asli & daun kari wangi.', image: 'https://images.unsplash.com/photo-1555126634-323283e090fa?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-
-          // VIRAL & DESSERT
-          { id: 'vr-1', category: 'viral', categoryLabel: 'Viral & Dessert', name: 'Seblak Prasmanan Komplit', price: 22000, badge: 'VIRAL', description: 'Seblak kuah kencur pedas membara dengan topping dumpling keju, sosis, bakso, cuanki, mie & telur.', image: 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=600&auto=format&fit=crop&q=80', isSpicy: true },
-          { id: 'vr-2', category: 'viral', categoryLabel: 'Viral & Dessert', name: 'Dimsum Mentai Mozarella (4 pcs)', price: 20000, description: 'Dimsum ayam udang lembut dengan saus mentai gurih dibakar torch sampai wangi.', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80', isSpicy: false },
-          { id: 'vr-3', category: 'viral', categoryLabel: 'Viral & Dessert', name: 'Dessert Box Tiramisu Choco Melt', price: 25000, description: 'Lapisan sponge cake lembut berpadu krim mascarpone kopi dan lumuran dark chocolate.', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80', isSpicy: false }
-        ],
-
+        // 📋 Menu items — di-load dari localStorage / Firebase saja (single source of truth)
+        // Jangan hardcode di sini biar sync dengan backend konsisten
+        menuItems: [],
+        
         // DAFTAR TARIF 7 KURIR BERDAMPINGAN DARI BITESHIP PROXY
         courierRates: [
           { courier_code: 'pickup', courier_name: 'Ambil Sendiri', courier_service_name: 'Diambil di Toko', price: 0, estimated_etd: 'Kapan Saja', badge_color: 'border-blue-500 text-blue-700 bg-blue-50', icon: 'fa-person-walking-luggage', recommended: true },
@@ -5191,7 +5488,7 @@ git push -u origin main</pre>
             return this.siteConfig.brandWords;
           }
           const defaultColors = ['#ea580c', '#f59e0b', '#e11d48', '#10b981', '#6366f1'];
-          const words = (this.siteConfig.brandName || 'DIGITAL CULINARY').trim().split(/\s+/);
+          const words = (this.siteConfig.brandName || 'DAPUR KULINER VIRAL').trim().split(/\s+/);
           return words.map((w, idx) => ({
             text: w,
             color: defaultColors[idx % defaultColors.length]
@@ -5200,7 +5497,7 @@ git push -u origin main</pre>
 
         syncBrandWordsFromTitle() {
           const defaultColors = ['#ea580c', '#f59e0b', '#e11d48', '#10b981', '#6366f1', '#8b5cf6'];
-          const words = (this.siteConfig.brandName || 'DIGITAL CULINARY').trim().split(/\s+/);
+          const words = (this.siteConfig.brandName || 'DAPUR KULINER VIRAL').trim().split(/\s+/);
           this.siteConfig.brandWords = words.map((w, idx) => {
             const existing = (this.siteConfig.brandWords || [])[idx];
             return {
@@ -5235,12 +5532,12 @@ git push -u origin main</pre>
 
         getBrandFirstWord() {
           const words = this.getBrandWords();
-          return words[0] || { text: 'DIGITAL', color: '#ea580c' };
+          return words[0] || { text: 'DAPUR', color: '#ea580c' };
         },
 
         getBrandRemainingWords() {
           const words = this.getBrandWords();
-          return words.slice(1).length > 0 ? words.slice(1) : [{ text: 'CULINARY', color: '#f59e0b' }];
+          return words.slice(1).length > 0 ? words.slice(1) : [{ text: 'KULINER VIRAL', color: '#f59e0b' }];
         },
 
         getOrderCustomerName(order) {
@@ -5437,13 +5734,15 @@ git push -u origin main</pre>
             this.syncBrandWordsFromTitle();
           }
 
-          // 2. Muat Menu Items dari LocalStorage jika ada editan admin
+          // 2. Muat Menu Items dari LocalStorage (fallback cepat sebelum Firebase)
           try {
             const savedMenu = localStorage.getItem("dapur_menu_items");
             if (savedMenu) {
               const parsedMenu = JSON.parse(savedMenu);
-              if (Array.isArray(parsedMenu) && parsedMenu.length > 0) {
+              if (Array.isArray(parsedMenu)) {
+                // ✅ Terima array kosong juga (hindari fallback ke dummy)
                 this.menuItems = parsedMenu;
+                console.log('[ADMIN-MENU] Loaded from localStorage:', parsedMenu.length, 'items');
               }
             }
           } catch (e) {
@@ -5494,14 +5793,22 @@ git push -u origin main</pre>
                   }
                 });
               }
-              if (window.FirebaseBridge && window.FirebaseBridge.listenMenu) {
+                if (window.FirebaseBridge && window.FirebaseBridge.listenMenu) {
                 window.FirebaseBridge.listenMenu((liveMenu) => {
-                  if (liveMenu && Array.isArray(liveMenu) && liveMenu.length > 0) {
+                  // ✅ FIX: Override selalu (bahkan kalau kosong) — hindari hardcoded fallback
+                  if (Array.isArray(liveMenu)) {
                     this.menuItems = liveMenu;
                     this.syncCategoriesWithKasir();
+                    console.log('[ADMIN-MENU] Loaded from Firebase:', liveMenu.length, 'items');
+                  } else {
+                    // Firebase return null → anggap kosong
+                    this.menuItems = [];
+                    this.syncCategoriesWithKasir();
+                    console.log('[ADMIN-MENU] Firebase menu empty');
                   }
                 });
               }
+          
               if (window.FirebaseBridge && window.FirebaseBridge.listenCategories) {
                 window.FirebaseBridge.listenCategories((liveCats) => {
                   if (liveCats && Array.isArray(liveCats) && liveCats.length > 0) {
@@ -5623,8 +5930,10 @@ git push -u origin main</pre>
           return { total, kasir, visible, hidden };
         },
 
-        get filteredAdminMenuList() {
-          let list = this.menuItems;
+          get filteredAdminMenuList() {
+          // ✅ FIX: Defensive — selalu array, hindari crash Alpine
+          let list = Array.isArray(this.menuItems) ? [...this.menuItems] : [];
+          if (list.length === 0) return list;
           if (this.adminMenuSourceFilter === 'kasir') {
             list = list.filter(m => m.fromKasir || (m.id && String(m.id).startsWith('m_')));
           } else if (this.adminMenuSourceFilter === 'visible') {
@@ -5689,6 +5998,40 @@ git push -u origin main</pre>
 
         removeFromCart(id) {
           this.cart = this.cart.filter(c => c.id !== id);
+        },
+
+                // 📜 RIWAYAT PEMESANAN PELANGGAN (localStorage, auto-clear saat browser clear)
+        openHistoryModal() {
+          this.isCartOpen = false;
+          this.isHistoryModalOpen = true;
+        },
+
+        deleteHistoryOrder(orderId) {
+          if (!orderId) return;
+          if (!confirm(`Hapus riwayat pesanan ${orderId}?`)) return;
+          this.recentOrders = (this.recentOrders || []).filter(o => o.orderId !== orderId);
+          try {
+            localStorage.setItem('dapur_recent_orders', JSON.stringify(this.recentOrders));
+          } catch (e) {}
+          this.showToast('Riwayat pesanan dihapus.');
+        },
+
+        clearAllHistory() {
+          if (!confirm('Hapus SEMUA riwayat pemesanan di perangkat ini?')) return;
+          this.recentOrders = [];
+          try {
+            localStorage.removeItem('dapur_recent_orders');
+          } catch (e) {}
+          this.showToast('Semua riwayat pemesanan dihapus.');
+        },
+
+        formatHistoryDate(iso) {
+          try {
+            return new Date(iso).toLocaleString('id-ID', {
+              day: '2-digit', month: 'short', year: 'numeric',
+              hour: '2-digit', minute: '2-digit'
+            });
+          } catch (e) { return iso || '-'; }
         },
 
         emptyCart() {
@@ -6029,7 +6372,7 @@ git push -u origin main</pre>
 
         // Salin Perintah Git Deploy Cloudflare Pages
         copyGitDeployCommands() {
-          const cmds = 'git init\ngit add .\ngit commit -m "feat: deploy DIGITAL CULINARY"\ngit branch -M main\ngit remote add origin https://github.com/USERNAME/REPO.git\ngit push -u origin main';
+          const cmds = 'git init\ngit add .\ngit commit -m "feat: deploy dapur kuliner viral"\ngit branch -M main\ngit remote add origin https://github.com/USERNAME/REPO.git\ngit push -u origin main';
           this.copyToClipboard(cmds, 'Perintah Git berhasil disalin!');
         },
 
@@ -6103,7 +6446,7 @@ git push -u origin main</pre>
         // UNDUH FILE firebase-config.js
         downloadFirebaseConfigJs() {
           const cfg = this.firebaseConfigInput.apiKey ? this.firebaseConfigInput : (window.FirebaseBridge ? window.FirebaseBridge.getConfig() : {});
-          const jsContent = `// firebase-config.js\n// Di-generate otomatis dari Panel Admin DIGITAL CULINARY\n\nexport const firebaseConfig = ${JSON.stringify(cfg, null, 2)};\n\nexport const IS_DEMO_MODE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_FIREBASE");\n`;
+          const jsContent = `// firebase-config.js\n// Di-generate otomatis dari Panel Admin Dapur Kuliner Viral\n\nexport const firebaseConfig = ${JSON.stringify(cfg, null, 2)};\n\nexport const IS_DEMO_MODE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_FIREBASE");\n`;
           const blob = new Blob([jsContent], { type: "application/javascript" });
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
@@ -6140,64 +6483,120 @@ git push -u origin main</pre>
         },
 
         // AUTO-DOWNLOAD STRUK PDF DENGAN jsPDF
+                // AUTO-DOWNLOAD STRUK PDF DENGAN jsPDF (v2 — nama menu wrap, no truncate)
         downloadReceiptPDF(order) {
           try {
             const { jsPDF } = window.jspdf;
+
+            // Hitung tinggi halaman dinamis berdasarkan jumlah items (wrap-aware)
+            const itemCount = (order.items || []).length;
+            const pageHeight = Math.max(160, 130 + (itemCount * 10));
+
             const doc = new jsPDF({
               orientation: 'portrait',
               unit: 'mm',
-              format: [80, 160] // Format struk kasir thermal 80mm
+              format: [80, pageHeight]
             });
 
+            let y = 10;
+
+            // === HEADER: Brand ===
             doc.setFont("courier", "bold");
             doc.setFontSize(11);
-            doc.text(this.siteConfig.brandName || "DIGITAL CULINARY", 40, 10, { align: "center" });
-            
-            doc.setFont("courier", "normal");
-            doc.setFontSize(7.5);
-            doc.text((this.siteConfig.address || "Jl. Sudirman No. 45, Jakarta").substring(0, 36), 40, 15, { align: "center" });
-            doc.text(`WA: ${this.siteConfig.phone || "0812-3456-7890"}`, 40, 19, { align: "center" });
-            doc.text("----------------------------------------", 40, 23, { align: "center" });
-
-            doc.text(`No Order : ${order.orderId || 'ORD-DEMO'}`, 5, 28);
-            doc.text(`Tgl/Jam  : ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}`, 5, 32);
-            doc.text(`Pemesan  : ${(order.customer?.name || 'Pelanggan').substring(0, 20)}`, 5, 36);
-            doc.text(`Kurir    : ${order.courier?.name || 'GoSend'}`, 5, 40);
-            doc.text("----------------------------------------", 40, 44, { align: "center" });
-
-            let y = 49;
-            (order.items || []).forEach(item => {
-              const itemTotal = (item.price * item.quantity);
-              doc.text(`${item.name.substring(0, 18)} x${item.quantity}`, 5, y);
-              doc.text(`Rp${itemTotal.toLocaleString('id-ID')}`, 75, y, { align: "right" });
+            const brandName = String(this.siteConfig.brandName || "DAPUR KULINER VIRAL").toUpperCase();
+            const brandLines = doc.splitTextToSize(brandName, 72);
+            brandLines.forEach(line => {
+              doc.text(line, 40, y, { align: "center" });
               y += 5;
             });
 
+            // === HEADER: Alamat & Telepon (wrap) ===
+            doc.setFont("courier", "normal");
+            doc.setFontSize(7.5);
+            const addrLines = doc.splitTextToSize(this.siteConfig.address || "Jl. Sudirman No. 45, Jakarta", 72);
+            addrLines.forEach(line => {
+              doc.text(line, 40, y, { align: "center" });
+              y += 4;
+            });
+            doc.text(`WA: ${this.siteConfig.phone || "0812-3456-7890"}`, 40, y, { align: "center" });
+            y += 4;
             doc.text("----------------------------------------", 40, y, { align: "center" });
             y += 5;
+
+            // === INFO ORDER ===
+            doc.setFontSize(8);
+            doc.text(`No Order : ${order.orderId || 'ORD-DEMO'}`, 5, y); y += 4;
+            doc.text(`Tgl/Jam  : ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}`, 5, y); y += 4;
+
+            // Pemesan — wrap kalau nama panjang
+            const custName = String(order.customer?.name || 'Pelanggan');
+            const custLines = doc.splitTextToSize(`Pemesan  : ${custName}`, 72);
+            custLines.forEach(line => {
+              doc.text(line, 5, y);
+              y += 4;
+            });
+
+            doc.text(`Kurir    : ${order.courier?.name || 'GoSend'}`, 5, y); y += 4;
+            doc.text("----------------------------------------", 40, y, { align: "center" });
+            y += 5;
+
+            // === DAFTAR ITEMS (nama menu wrap, bukan truncate) ===
+              (order.items || []).forEach(item => {
+              const itemName = String(item.name || 'Menu');
+              const itemTotal = (item.price || 0) * (item.quantity || 1);
+              const qty = item.quantity || 1;
+
+              // Nama menu wrap max 50mm (sisakan ruang untuk harga di kanan)
+              doc.setFont("courier", "bold");
+              const nameLines = doc.splitTextToSize(itemName, 50);
+
+              nameLines.forEach((line, idx) => {
+                doc.text(line, 5, y);
+
+                // Baris terakhir nama menu → harga lengkap qty + total di kanan
+                if (idx === nameLines.length - 1) {
+                  const priceText = `${qty}x = Rp${itemTotal.toLocaleString('id-ID')}`;
+                  doc.text(priceText, 75, y, { align: "right" });
+                }
+                y += 4;
+              });
+              y += 1; // spacing antar item
+            });
+
+            y += 2;
+            doc.text("----------------------------------------", 40, y, { align: "center" });
+            y += 5;
+
+            // === RINGKASAN ===
+            doc.setFont("courier", "normal");
+            doc.setFontSize(8);
             doc.text("Subtotal:", 5, y);
             doc.text(`Rp${(order.subtotal || 0).toLocaleString('id-ID')}`, 75, y, { align: "right" });
             y += 4;
+
             doc.text("Ongkir:", 5, y);
             doc.text(`Rp${(order.courierFee || 0).toLocaleString('id-ID')}`, 75, y, { align: "right" });
             y += 5;
+
             doc.setFont("courier", "bold");
             doc.text("TOTAL BAYAR:", 5, y);
             doc.text(`Rp${(order.totalAmount || 0).toLocaleString('id-ID')}`, 75, y, { align: "right" });
-            
             y += 8;
-            doc.setFont("courier", "bold");
-            doc.setFontSize(10);
-            doc.text("*** LUNAS (MIDTRANS SNAP) ***", 40, y, { align: "center" });
 
-            y += 6;
+            // === STATUS LUNAS ===
+            doc.setFontSize(10);
+            doc.text("*** LUNAS ***", 40, y, { align: "center" });
+            y += 7;
+
+            // === FOOTER ===
             doc.setFont("courier", "normal");
             doc.setFontSize(7);
             doc.text("Terima kasih atas pesanan Anda!", 40, y, { align: "center" });
             doc.text("Simpan struk ini sebagai bukti order.", 40, y + 4, { align: "center" });
 
-            // Trigger auto download ke device pelanggan
+            // Trigger auto download
             doc.save(`Struk_Dapur_${order.orderId || 'Order'}.pdf`);
+
           } catch (err) {
             console.warn("Gagal auto-generate PDF struk:", err);
           }
@@ -6328,7 +6727,7 @@ git push -u origin main</pre>
             doc.text("FORMULIR PESANAN CATERING B2B", 105, 20, { align: "center" });
 
             doc.setFontSize(14);
-            doc.text(this.siteConfig.brandName || "DIGITAL CULINARY", 105, 28, { align: "center" });
+            doc.text(this.siteConfig.brandName || "DAPUR KULINER VIRAL", 105, 28, { align: "center" });
             
             doc.setLineWidth(0.5);
             doc.line(20, 32, 190, 32);
@@ -6561,6 +6960,11 @@ git push -u origin main</pre>
             this.adminPasswordInput = '';
             this.adminPasswordError = '';
             this.isAdminAuthModalOpen = true;
+            // Reset Supervisor PIN form state
+            this.supervisorPinNew = '';
+            this.supervisorPinConfirm = '';
+            this.supervisorPinMsg = '';
+            this.supervisorPinMsgOk = false;
           }
         },
 
@@ -6735,6 +7139,55 @@ git push -u origin main</pre>
           sessionStorage.removeItem("dapur_admin_session");
           this.isAdminPanelOpen = false;
           this.showToast('Berhasil keluar dari Panel Admin.');
+        },
+
+                // 🔒 SIMPAN SUPERVISOR PIN KE FIREBASE
+        async saveSupervisorPin() {
+          const pin = String(this.supervisorPinNew || '').trim();
+          const confirmPin = String(this.supervisorPinConfirm || '').trim();
+
+          // Validasi
+          if (!/^\d{6}$/.test(pin)) {
+            this.supervisorPinMsg = '❌ PIN harus 6 digit angka';
+            this.supervisorPinMsgOk = false;
+            return;
+          }
+          if (pin !== confirmPin) {
+            this.supervisorPinMsg = '❌ PIN dan konfirmasi tidak cocok';
+            this.supervisorPinMsgOk = false;
+            return;
+          }
+          if (pin === String(this.siteConfig.supervisorPin || '').trim()) {
+            this.supervisorPinMsg = '⚠️ PIN baru harus beda dari PIN saat ini';
+            this.supervisorPinMsgOk = false;
+            return;
+          }
+
+          try {
+            // Update siteConfig (top-level field)
+            this.siteConfig.supervisorPin = pin;
+
+            // Simpan ke Firebase via FirebaseBridge (yang sudah ada)
+            if (window.FirebaseBridge && window.FirebaseBridge.saveSiteConfig) {
+              await window.FirebaseBridge.saveSiteConfig(this.siteConfig);
+            } else {
+              // Fallback: simpan ke localStorage saja
+              localStorage.setItem('dapur_site_config', JSON.stringify(this.siteConfig));
+            }
+
+            this.supervisorPinNew = '';
+            this.supervisorPinConfirm = '';
+            this.supervisorPinMsg = '✅ Supervisor PIN berhasil diubah! Perubahan akan langsung aktif di Kasir POS.';
+            this.supervisorPinMsgOk = true;
+            this.showToast('Supervisor PIN berhasil disimpan ke Firebase!');
+
+            console.log('[ADMIN-SEC] Supervisor PIN updated');
+
+          } catch (err) {
+            console.error('[ADMIN-SEC] Save error:', err);
+            this.supervisorPinMsg = '❌ Gagal menyimpan: ' + (err.message || err);
+            this.supervisorPinMsgOk = false;
+          }
         },
 
         async saveNewAdminPassword() {
