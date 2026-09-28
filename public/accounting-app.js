@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * SISTEM AKUNTANSI & KEUANGAN (DOUBLE-ENTRY ACCOUNTING ENGINE)
- * Digital Culinary - Panel Admin & Owner
+ * Dapur Kuliner Viral - Panel Admin & Ownerj.debitName || ('Akun '
  * 
  * Modul:
  * 1. Chart of Accounts (COA) Standar Resto & Catering (Real dari Firebase / Endpoint)
@@ -42,6 +42,29 @@ const DEFAULT_COA = [
   { code: '6004', name: 'Beban Marketing & Iklan', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 },
   { code: '6005', name: 'Beban Operasional & Kurir', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 }
 ];
+
+// Mapping alias akun 3-digit (POS Kasir) dan 4-digit (Akuntansi)
+const CODE_MAP = {
+  '101': '1001', '1001': '101',
+  '102': '1002', '1002': '102',
+  '103': '1003', '1003': '103',
+  '105': '1004', '1004': '105',
+  '106': '1005', '1005': '106',
+  '201': '2001', '2001': '201',
+  '202': '2002', '2002': '202',
+  '301': '3001', '3001': '301',
+  '302': '3003', '3003': '302',
+  '303': '3002', '3002': '303',
+  '401': '4001', '4001': '401',
+  '402': '4002', '4002': '402',
+  '501': '5001', '5001': '501',
+  '601': '6001', '6001': '601',
+  '602': '6002', '6002': '602',
+  '603': '6003', '6003': '603',
+  '604': '6004', '6004': '604',
+  '605': '6005', '6005': '605',
+  '606': '6006', '6006': '606'
+};
 
 // Tidak ada dummy journals (array kosong murni)
 const DEFAULT_JOURNALS = [];
@@ -116,6 +139,43 @@ window.accountingApp = function() {
     jurnalFilterAkun: 'all',
     jurnalSearch: '',
     ledgerAkun: '1001',
+
+    // Trial/Live State
+    isProductionMode: false,
+    productionStartDate: '',
+    dataPreview: { journals: 0, ledgers: 0, orders: 0, transactions: 0 },
+    isNeracaBalanced: false,
+    // State: simpan status per-periode yang sudah ditutup (contoh: {"2026-09": true})
+closedPeriods: {},
+
+// Helper: dipanggil dari HTML untuk cek apakah suatu bulan sudah ditutup
+    closedPeriods: {},
+    isPeriodClosed(bulan) {
+    if (!bulan) return false;
+    return !!this.closedPeriods[bulan];
+},
+
+    // Modal state
+    showClosePeriodModal: false,
+    showResetModal: false,
+    showGoLiveModal: false,
+
+    // Confirm text & password
+    closePeriodConfirmText: '',
+    closePeriodPassword: '',
+    resetConfirmText: '',
+    resetPassword1: '',
+    resetPassword2: '',
+    goLiveConfirmText: '',
+    goLivePassword1: '',
+    goLivePassword2: '',
+
+    // Go-Live validation
+    goLiveValidation: {
+      neracaBalance: false,
+      noDraftJournals: true,
+      noPendingOrders: true
+    },
     
     // Status UI
     loading: false,
@@ -286,6 +346,9 @@ window.accountingApp = function() {
         if (this.activeTab === 'ledger') {
           await this.loadLedger(this.ledgerAkun, newVal);
         }
+        if (this.activeTab === 'trial-live') {
+          await this.loadTrialPreview();
+        }
         this.loading = false;
       });
 
@@ -302,7 +365,10 @@ window.accountingApp = function() {
         this.renderCashFlowChart();
       });
 
-      // 8. Daftarkan hook global ke window
+      // 8. Load status Trial/Live
+      await this.loadTrialPreview();
+
+      // 9. Daftarkan hook global ke window
       window._accountingAppInstance = this;
       console.log('[ACCT-APP] Accounting App initialized with real data');
     },
@@ -435,15 +501,20 @@ window.accountingApp = function() {
      * Getter Metrics untuk Dashboard UI
      */
     get summaryMetrics() {
+      const getVal = (v1, v2) => {
+        if (v1 !== undefined && v1 !== null && !isNaN(Number(v1))) return Number(v1);
+        if (v2 !== undefined && v2 !== null && !isNaN(Number(v2))) return Number(v2);
+        return 0;
+      };
       return {
-        totalAset: Number(this.summary?.totalAset) ?? Number(this.laporanData.balanceSheet?.totalAset) ?? 0,
-        totalKewajiban: Number(this.summary?.totalKewajiban) ?? Number(this.laporanData.balanceSheet?.totalKewajiban) ?? 0,
-        totalEkuitas: Number(this.summary?.totalEkuitas) ?? Number(this.laporanData.balanceSheet?.totalEkuitas) ?? 0,
-        labaBulanIni: Number(this.summary?.labaBulanIni) ?? Number(this.laporanData.pl?.labaBersih) ?? 0,
-        kasDiTangan: Number(this.summary?.kas) ?? Number(this.laporanData.balanceSheet?.kas) ?? 0,
-        kasDiBank: Number(this.summary?.bank) ?? Number(this.laporanData.balanceSheet?.bank) ?? 0,
-        piutang: Number(this.summary?.piutang) ?? Number(this.laporanData.balanceSheet?.piutang) ?? 0,
-        hutangSupplier: Number(this.summary?.hutang) ?? Number(this.laporanData.balanceSheet?.hutangSupplier) ?? 0
+        totalAset: getVal(this.summary?.totalAset, this.laporanData.balanceSheet?.totalAset),
+        totalKewajiban: getVal(this.summary?.totalKewajiban, this.laporanData.balanceSheet?.totalKewajiban),
+        totalEkuitas: getVal(this.summary?.totalEkuitas, this.laporanData.balanceSheet?.totalEkuitas),
+        labaBulanIni: getVal(this.summary?.labaBulanIni ?? this.summary?.labaBersih, this.laporanData.pl?.labaBersih),
+        kasDiTangan: getVal(this.summary?.kas ?? this.summary?.saldoKas, this.laporanData.balanceSheet?.kas),
+        kasDiBank: getVal(this.summary?.bank ?? this.summary?.saldoBank, this.laporanData.balanceSheet?.bank),
+        piutang: getVal(this.summary?.piutang, this.laporanData.balanceSheet?.piutang),
+        hutangSupplier: getVal(this.summary?.hutang ?? this.summary?.hutangSupplier, this.laporanData.balanceSheet?.hutangSupplier)
       };
     },
 
@@ -477,9 +548,25 @@ window.accountingApp = function() {
           const res = await fetch('/accounting/coa');
           if (res.ok) {
             const json = await res.json();
-            if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {
-              loadedCoa = json.data;
-              console.log(`[ACCT-APP] Loaded ${loadedCoa.length} COA accounts from API`);
+            if (json && json.success && json.data) {
+              if (Array.isArray(json.data) && json.data.length > 0) {
+                loadedCoa = json.data;
+              } else if (typeof json.data === 'object' && Object.keys(json.data).length > 0) {
+                // Map object format { "101": { n: "Kas", t: "asset" } } to array format
+                const typeMap = { asset: 'Aset', liability: 'Kewajiban', equity: 'Ekuitas', revenue: 'Pendapatan', expense: 'Beban' };
+                const normalMap = { asset: 'Debit', liability: 'Kredit', equity: 'Kredit', revenue: 'Kredit', expense: 'Debit' };
+                loadedCoa = Object.entries(json.data).map(([code, item]) => ({
+                  code,
+                  name: item.n || item.name || `Akun ${code}`,
+                  type: typeMap[item.t] || item.type || 'Aset',
+                  normalBalance: normalMap[item.t] || (code.startsWith('2') || code.startsWith('3') || code.startsWith('4') ? 'Kredit' : 'Debit'),
+                  initialBalance: Number(item.initialBalance) || 0,
+                  currentBalance: Number(item.currentBalance) || 0
+                }));
+              }
+              if (loadedCoa && loadedCoa.length > 0) {
+                console.log(`[ACCT-APP] Loaded ${loadedCoa.length} COA accounts from API`);
+              }
             }
           }
         } catch (err) {
@@ -609,33 +696,46 @@ window.accountingApp = function() {
         };
       });
 
-      // Akumulasikan semua mutasi jurnal real
+      const addToAcc = (rawCode, dAmt, cAmt) => {
+        const c = String(rawCode || '').trim();
+        if (totalsByAcc[c]) {
+          totalsByAcc[c].debit += dAmt;
+          totalsByAcc[c].credit += cAmt;
+        }
+        const mapped = CODE_MAP[c];
+        if (mapped && totalsByAcc[mapped]) {
+          totalsByAcc[mapped].debit += dAmt;
+          totalsByAcc[mapped].credit += cAmt;
+        }
+      };
+
+      // Akumulasikan semua mutasi jurnal real (hanya yang tidak ditolak)
       this.jurnalList.forEach(j => {
+        if (j.status === 'rejected') return;
+
         if (Array.isArray(j.lines)) {
           j.lines.forEach(l => {
-            const code = String(l.acc || l.code || '');
+            const raw = String(l.acc || l.code || '');
             const dAmt = Number(l.debit) || 0;
             const cAmt = Number(l.credit) || 0;
-            if (totalsByAcc[code]) {
-              totalsByAcc[code].debit += dAmt;
-              totalsByAcc[code].credit += cAmt;
-            }
+            addToAcc(raw, dAmt, cAmt);
           });
         } else {
           const dCode = j.debitCode;
           const cCode = j.creditCode;
           const dAmt = Number(j.debitAmount) || 0;
           const cAmt = Number(j.creditAmount) || 0;
-
-          if (totalsByAcc[dCode]) totalsByAcc[dCode].debit += dAmt;
-          if (totalsByAcc[cCode]) totalsByAcc[cCode].credit += cAmt;
+          addToAcc(dCode, dAmt, 0);
+          addToAcc(cCode, 0, cAmt);
         }
       });
 
-      // Update current balance per akun
+      // Update current balance per akun dan simpan total mutasi debit & kredit
       this.coaList.forEach(acc => {
         const stat = totalsByAcc[acc.code];
         if (stat) {
+          acc.totalDebit = stat.debit;
+          acc.totalCredit = stat.credit;
           acc.currentBalance = hitungSaldo(stat.initial, stat.debit, stat.credit, stat.type);
         }
       });
@@ -686,22 +786,44 @@ window.accountingApp = function() {
         this.jurnalList = Array.isArray(list) ? list : [];
 
         // Normalisasi struktur jurnal jika diperlukan
-        this.jurnalList.forEach(j => {
-          if (!j.debitCode && Array.isArray(j.lines)) {
-            const debitLine = j.lines.find(l => Number(l.debit) > 0);
-            const creditLine = j.lines.find(l => Number(l.credit) > 0);
-            if (debitLine) {
-              j.debitCode = debitLine.acc;
-              j.debitAmount = debitLine.debit;
-              j.debitName = j.debitName || ('Akun ' + debitLine.acc);
-            }
-            if (creditLine) {
-              j.creditCode = creditLine.acc;
-              j.creditAmount = creditLine.credit;
-              j.creditName = j.creditName || ('Akun ' + creditLine.acc);
-            }
-          }
-        });
+        // Helper: mapping kode akun → nama
+const _getAccNameById = (code) => {
+  const map = {
+    '1001': 'Kas di Tangan', '1002': 'Bank BCA', '1003': 'Piutang Usaha',
+    '1004': 'Persediaan Bahan Baku', '1005': 'Peralatan & Mesin Dapur',
+    '2001': 'Hutang Dagang / Supplier', '2002': 'Hutang Beban & Operasional',
+    '3001': 'Modal Pemilik', '3002': 'Laba Ditahan', '3003': 'Prive Pemilik',
+    '4001': 'Pendapatan Penjualan POS', '4002': 'Pendapatan Pesanan Catering',
+    '5001': 'Harga Pokok Penjualan (HPP)',
+    '6001': 'Beban Gaji Karyawan', '6002': 'Beban Sewa Tempat & Outlet',
+    '6003': 'Beban Listrik, Air & Gas', '6004': 'Beban Marketing & Iklan',
+    '6005': 'Beban Operasional & Kurir', '6006': 'Beban Penyusutan',
+    // Legacy 3-digit
+    '101':'Kas di Tangan','102':'Bank','103':'Piutang Usaha','105':'Persediaan Bahan Baku',
+    '201':'Hutang Supplier','301':'Modal Pemilik','302':'Prive Pemilik',
+    '401':'Pendapatan Penjualan','402':'Pendapatan Catering','501':'HPP',
+    '601':'Beban Gaji','602':'Beban Sewa','603':'Beban Listrik & Air',
+    '604':'Beban Marketing','605':'Beban Kurir','606':'Beban Penyusutan'
+  };
+  return map[String(code)] || ('Akun ' + code);
+};
+
+this.jurnalList.forEach(j => {
+  if (!j.debitCode && Array.isArray(j.lines)) {
+    const debitLine = j.lines.find(l => Number(l.debit) > 0);
+    const creditLine = j.lines.find(l => Number(l.credit) > 0);
+    if (debitLine) {
+      j.debitCode = debitLine.acc;
+      j.debitAmount = debitLine.debit;
+      j.debitName = j.debitName || _getAccNameById(debitLine.acc);  // ← FIX
+    }
+    if (creditLine) {
+      j.creditCode = creditLine.acc;
+      j.creditAmount = creditLine.credit;
+      j.creditName = j.creditName || _getAccNameById(creditLine.acc);  // ← FIX
+    }
+  }
+});
 
         // Sort timestamp DESC
         this.jurnalList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -942,30 +1064,47 @@ window.accountingApp = function() {
         let totalCredit = 0;
         const transactions = [];
 
+        // ✅ FIX: Normalisasi kode akun 3-digit → 4-digit
+        const _ACC_MAP = {
+          '101':'1001','102':'1002','103':'1003','105':'1004','106':'1005',
+          '201':'2001','202':'2002',
+          '301':'3001','302':'3003','303':'3002',
+          '401':'4001','402':'4002',
+          '501':'5001',
+          '601':'6001','602':'6002','603':'6003','604':'6004','605':'6005','606':'6006'
+        };
+        const _normalizeAcc = (acc) => {
+          const clean = String(acc || '').trim();
+          return _ACC_MAP[clean] || clean;
+        };
+        const targetAccNorm = _normalizeAcc(targetAcc);
+
         const relatedJournals = (this.jurnalList || [])
           .filter(j => {
-            if (j.debitCode === targetAcc || j.creditCode === targetAcc) return true;
+            if (_normalizeAcc(j.debitCode) === targetAccNorm) return true;
+            if (_normalizeAcc(j.creditCode) === targetAccNorm) return true;
             if (Array.isArray(j.lines)) {
-              return j.lines.some(l => String(l.acc || l.code) === targetAcc);
+              return j.lines.some(l => _normalizeAcc(l.acc || l.code) === targetAccNorm);
             }
             return false;
           })
           .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-        relatedJournals.forEach(j => {
+          relatedJournals.forEach(j => {
           let dAmt = 0;
           let cAmt = 0;
-
-          if (j.debitCode === targetAcc) dAmt += Number(j.debitAmount) || 0;
-          if (j.creditCode === targetAcc) cAmt += Number(j.creditAmount) || 0;
-
-          if (Array.isArray(j.lines)) {
+            
+          // ✅ FIX: Hanya pakai 1 sumber — prioritas lines, fallback debitCode/creditCode
+          if (Array.isArray(j.lines) && j.lines.length > 0) {
             j.lines.forEach(l => {
-              if (String(l.acc || l.code) === targetAcc) {
+              if (_normalizeAcc(l.acc || l.code) === targetAccNorm) {
                 dAmt += Number(l.debit) || 0;
                 cAmt += Number(l.credit) || 0;
               }
             });
+          } else {
+            if (_normalizeAcc(j.debitCode) === targetAccNorm) dAmt += Number(j.debitAmount) || 0;
+            if (_normalizeAcc(j.creditCode) === targetAccNorm) cAmt += Number(j.creditAmount) || 0;
           }
 
           totalDebit += dAmt;
@@ -1186,33 +1325,40 @@ window.accountingApp = function() {
     /**
      * 6C. Laporan Neraca (Balance Sheet - Aset = Kewajiban + Ekuitas)
      */
-        async loadNeraca(bulan) {
+    async loadNeraca(bulan) {
       const getBal = (code) => {
         const f = this.coaList.find(c => c.code === code);
         return f ? Number(f.currentBalance) || 0 : 0;
       };
 
-      // Prioritas: summary (dari endpoint) → fallback: COA lokal
-      const kas = Number(this.summary?.kas ?? getBal('1001') ?? getBal('101') ?? 0);
-      const bank = Number(this.summary?.bank ?? getBal('1002') ?? getBal('102') ?? 0);
-      const piutang = Number(this.summary?.piutang ?? getBal('1003') ?? getBal('103') ?? 0);
-      const persediaan = Number(this.summary?.persediaanAkhir ?? getBal('1004') ?? getBal('105') ?? 0);
+      const kas = getBal('1001') || getBal('101') || (this.summary?.saldoKas !== undefined ? Number(this.summary.saldoKas) : (this.summary?.kas !== undefined ? Number(this.summary.kas) : 0));
+      const bank = getBal('1002') || getBal('102') || (this.summary?.saldoBank !== undefined ? Number(this.summary.saldoBank) : (this.summary?.bank !== undefined ? Number(this.summary.bank) : 0));
+      const piutang = getBal('1003') || getBal('103') || (this.summary?.piutang !== undefined ? Number(this.summary.piutang) : 0);
+      const persediaan = getBal('1004') || getBal('105') || (this.summary?.persediaanAkhir !== undefined ? Number(this.summary.persediaanAkhir) : 0);
       const totalAsetLancar = kas + bank + piutang + persediaan;
 
       const peralatan = getBal('1005') || getBal('106') || 0;
       const totalAsetTetap = peralatan;
-      const totalAset = Number(this.summary?.totalAset ?? (totalAsetLancar + totalAsetTetap));
+      const totalAset = (this.summary?.totalAset !== undefined && this.summary?.totalAset !== null && !isNaN(Number(this.summary.totalAset)))
+        ? Number(this.summary.totalAset)
+        : (totalAsetLancar + totalAsetTetap);
 
-      const hutangSupplier = Number(this.summary?.hutang ?? getBal('2001') ?? getBal('201') ?? 0);
+      const hutangSupplier = getBal('2001') || getBal('201') || (this.summary?.hutangSupplier !== undefined ? Number(this.summary.hutangSupplier) : (this.summary?.hutang !== undefined ? Number(this.summary.hutang) : 0));
       const hutangBeban = getBal('2002') || 0;
-      const totalKewajiban = Number(this.summary?.totalKewajiban ?? (hutangSupplier + hutangBeban));
+      const totalKewajiban = (this.summary?.totalKewajiban !== undefined && this.summary?.totalKewajiban !== null && !isNaN(Number(this.summary.totalKewajiban)))
+        ? Number(this.summary.totalKewajiban)
+        : (hutangSupplier + hutangBeban);
 
       const modalPemilik = getBal('3001') || getBal('301') || 0;
       const labaDitahan = getBal('3002') || getBal('302') || 0;
-      const labaBerjalan = Number(this.laporanData.pl.labaBersih) || Number(this.summary?.labaBulanIni) || 0;
+      const labaBerjalan = (this.laporanData.pl.labaBersih !== undefined && !isNaN(Number(this.laporanData.pl.labaBersih)))
+        ? Number(this.laporanData.pl.labaBersih)
+        : ((this.summary?.labaBersih !== undefined ? Number(this.summary.labaBersih) : Number(this.summary?.labaBulanIni)) || 0);
       const prive = getBal('3003') || 0;
 
-      const totalEkuitas = Number(this.summary?.totalEkuitas ?? (modalPemilik + labaDitahan + labaBerjalan - prive));
+      const totalEkuitas = (this.summary?.totalEkuitas !== undefined && this.summary?.totalEkuitas !== null && !isNaN(Number(this.summary.totalEkuitas)))
+        ? Number(this.summary.totalEkuitas)
+        : (modalPemilik + labaDitahan + labaBerjalan - prive);
       const totalKewajibanEkuitas = totalKewajiban + totalEkuitas;
 
       const selisih = Math.abs(totalAset - totalKewajibanEkuitas);
@@ -1397,7 +1543,7 @@ window.accountingApp = function() {
         // Header Dokumen
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
-        doc.text('Digital Culinary', 105, 18, { align: 'center' });
+        doc.text('DAPUR KULINER VIRAL', 105, 18, { align: 'center' });
         
         doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
@@ -1534,6 +1680,29 @@ window.accountingApp = function() {
     },
 
     /**
+     * Handler Utama Ekspor Data dari Form UI
+     */
+    async handleExportData(form) {
+      const type = form?.report || this.exportForm?.report || 'pl';
+      const format = form?.format || this.exportForm?.format || 'pdf';
+      const bulan = form?.period || this.exportForm?.period || this.bulanAktif;
+
+      this.showToast(`Memproses ekspor laporan ${type.toUpperCase()} (${format.toUpperCase()})...`, 'info');
+      try {
+        if (format === 'pdf') {
+          await this.generatePDFReport(type, bulan);
+        } else if (format === 'excel') {
+          await this.exportExcel(type, bulan);
+        } else {
+          await this.exportCSV(type, bulan);
+        }
+      } catch (err) {
+        console.error('[ACCT-APP] handleExportData error:', err);
+        this.showToast('Gagal memproses ekspor: ' + (err.message || err), 'error');
+      }
+    },
+
+    /**
      * Catat Riwayat Ekspor
      */
     addExportHistory(report, period, format) {
@@ -1650,6 +1819,159 @@ window.accountingApp = function() {
         this.loadLabaRugi(this.bulanAktif);
         this.loadArusKas(this.bulanAktif);
         this.loadNeraca(this.bulanAktif);
+      } else if (tab === 'trial-live' || tab === 'trial_live') {
+        this.loadTrialPreview();
+      }
+    },
+
+    // ========================================================================
+    // TRIAL / LIVE MANAGEMENT
+    // ========================================================================
+
+        async loadTrialPreview() {
+      try {
+        const res = await fetch('/accounting/trial?action=preview');
+        const json = await res.json();
+        if (json.success) {
+          this.dataPreview = json.preview || { journals: 0, ledgers: 0, orders: 0, transactions: 0 };
+          this.isProductionMode = json.mode === 'production';
+          this.productionStartDate = json.productionStartedAt 
+            ? new Date(json.productionStartedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+            : '';
+          this.isNeracaBalanced = json.validation?.neracaBalance || false;
+          this.goLiveValidation = {
+            neracaBalance: !!json.validation?.neracaBalance,
+            noDraftJournals: !!json.validation?.noDraftJournals,
+            noPendingOrders: !!json.validation?.noPendingOrders
+          };
+          
+          // Cek periode ditutup (404 = belum ditutup, itu normal)
+          const bulan = this.bulanAktif || new Date().toISOString().slice(0, 7);
+          try {
+            const cpRes = await fetch(`/accounting/closed_periods/${bulan}.json`);
+            if (cpRes.ok) {
+              const cpData = await cpRes.json();
+              if (cpData && cpData.closed) {
+                this.closedPeriods[bulan] = true;
+              } else {
+                delete this.closedPeriods[bulan];
+              }
+            } else {
+              // 404 = belum ditutup, itu normal. Tidak perlu log error.
+              delete this.closedPeriods[bulan];
+            }
+          } catch (e) {
+            // Silent: anggap belum ditutup
+            delete this.closedPeriods[bulan];
+          }
+        }
+      } catch (e) {
+        console.warn('[TRIAL] Preview error:', e);
+      }
+    },
+
+    openClosePeriodModal() {
+      this.closePeriodConfirmText = '';
+      this.closePeriodPassword = '';
+      this.showClosePeriodModal = true;
+    },
+
+    async executeClosePeriod() {
+      if (this.closePeriodConfirmText !== 'TUTUP BUKU') return;
+      if (!this.closePeriodPassword) return;
+
+      try {
+        const res = await fetch('/accounting/trial?action=close-period', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bulan: this.bulanAktif,
+            adminName: 'Admin',
+            password: this.closePeriodPassword
+          })
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert('✅ ' + json.message);
+          this.showClosePeriodModal = false;
+          await this.loadTrialPreview();
+        } else {
+          alert('❌ ' + json.error);
+        }
+      } catch (e) {
+        alert('Gagal: ' + e.message);
+      }
+    },
+
+    openResetModal() {
+      this.resetConfirmText = '';
+      this.resetPassword1 = '';
+      this.resetPassword2 = '';
+      this.showResetModal = true;
+    },
+
+    async executeReset() {
+      if (this.resetConfirmText !== 'RESET') return;
+      if (this.resetPassword1 !== this.resetPassword2 || !this.resetPassword1) return;
+
+      try {
+        const res = await fetch('/accounting/trial?action=reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: this.resetPassword1 })
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert('✅ Reset berhasil!\n\nData diarsipkan ke:\n' + json.archivedTo);
+          this.showResetModal = false;
+          await this.loadTrialPreview();
+          await this.loadSummary(this.bulanAktif);
+          await this.loadJournal(this.bulanAktif);
+        } else {
+          alert('❌ ' + json.error);
+        }
+      } catch (e) {
+        alert('Gagal: ' + e.message);
+      }
+    },
+
+    openGoLiveModal() {
+      this.goLiveConfirmText = '';
+      this.goLivePassword1 = '';
+      this.goLivePassword2 = '';
+      this.showGoLiveModal = true;
+      // Refresh validation
+      this.loadTrialPreview();
+    },
+
+    async executeGoLive() {
+      if (this.goLiveConfirmText !== 'GO-LIVE') return;
+      if (this.goLivePassword1 !== this.goLivePassword2 || !this.goLivePassword1) return;
+      if (!this.goLiveValidation.neracaBalance) {
+        alert('❌ Neraca tidak balance. Perbaiki dulu sebelum Go-Live.');
+        return;
+      }
+
+      if (!confirm('⚠️ Yakin Go-Live? Setelah ini tidak bisa kembali ke mode trial.')) return;
+
+      try {
+        const res = await fetch('/accounting/trial?action=go-live', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: this.goLivePassword1 })
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert('🚀 ' + json.message + '\n\nArchive: ' + json.archivedTo);
+          this.showGoLiveModal = false;
+          await this.loadTrialPreview();
+          await this.loadSummary(this.bulanAktif);
+          await this.loadJournal(this.bulanAktif);
+        } else {
+          alert('❌ ' + json.error);
+        }
+      } catch (e) {
+        alert('Gagal: ' + e.message);
       }
     },
 
