@@ -2515,6 +2515,12 @@
 
           <!-- TAMPILAN B: JURNAL UMUM -->
           <div x-show="accountingTab === 'journal'" class="space-y-4">
+            <!-- Empty state kalau tidak ada jurnal -->
+            <div x-show="getAccountingJournal().length === 0" class="py-10 text-center space-y-2 bg-stone-50 rounded-2xl border border-dashed border-stone-300">
+              <i class="fa-solid fa-book text-stone-300 text-3xl"></i>
+              <p class="font-bold text-stone-700 text-xs">Belum ada jurnal tercatat</p>
+              <p class="text-[11px] text-stone-400">Jurnal yang di-approve akan tampil di sini</p>
+            </div>
             <div class="overflow-x-auto rounded-2xl border border-stone-200">
               <table class="w-full text-left text-xs">
                 <thead class="bg-stone-100 text-stone-700 font-extrabold uppercase border-b border-stone-200">
