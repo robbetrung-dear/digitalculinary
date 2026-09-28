@@ -8,8 +8,7 @@ export const firebaseConfig = {
   projectId: "digitalculinary-app",
   storageBucket: "digitalculinary-app.firebasestorage.app",
   messagingSenderId: "650221083781",
-  appId: "1:650221083781:web:e44211db213b81ae19ddec",
-  measurementId: "G-H4LQP2ZPW4"
+  appId: "1:650221083781:web:e44211db213b81ae19ddec"
 };
 
 export const IS_DEMO_MODE = false;
