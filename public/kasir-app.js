@@ -1,6 +1,8 @@
 /**
+ customKasirTitle: 'Kasir Pintar',
+ customKasirSubtitle: 'Dapur Kuliner Viral',
  * /public/kasir-app.js — BAGIAN 1 dari 3 (Transaksi & Pembayaran)
- * Sistem Kasir Pintar POS - Digital Culinary & Catering Rumahan
+ * Sistem Kasir Pintar POS - Dapur Kuliner Viral & Catering Rumahan
  * 
  * FUNGSI UTAMA:
  * 1. initKasir(): Validasi sesi, jam realtime, sinkronisasi menu, inventory & pending reconcile
@@ -31,6 +33,17 @@ window.kasirApp = () => ({
   },
   currentTime: '',
   _clockInterval: null,
+
+  // Bagan Akun (COA) Backend Integration
+  coaListBackend: [],
+  coaListBackendLoading: false,
+
+   // Global loading state (dipakai di submitJournalEntry, approveJournal, rejectJournal)
+  isLoading: false,
+ 
+  // ✅ Custom Title (dari Admin Panel → Security)
+  customKasirTitle: 'Kasir Pintar',
+  customKasirSubtitle: 'Dapur Kuliner Viral',
 
   // Katalog Menu & Keranjang
   cart: [],
@@ -116,6 +129,19 @@ window.kasirApp = () => ({
   cashReceived: 0,
   currentOrder: null,
   qrisOrderId: '',
+  qrisDisplayMode: 'dynamic', // 'dynamic' | 'static'
+   // 🔒 Supervisor PIN Security State
+  supervisorPin: '211211',
+         // 📊 Range Filter State untuk Laporan
+        reportPeriod: 'today',      // 'today' | 'week' | 'month' | 'custom'
+        reportStartDate: '',         // untuk custom (YYYY-MM-DD)
+        reportEndDate: '',           // untuk custom
+        reportLoading: false,
+ // default, override dari Firebase /site_config/supervisorPin
+  showPinModal: false,
+  pinInput: '',
+  pinErrorMessage: '',
+  pinContext: null,               // { actionLabel, targetLabel, opts, resolve }
   qrisQrUrl: '',
   qrisRedirectUrl: '',
   midtransPollingTimer: null,
@@ -131,6 +157,7 @@ window.kasirApp = () => ({
   reconciliationList: [],
   reconciliationFilter: 'all',
   reconcileFilter: 'semua',
+  reconcileDateRange: 'today',
   selectedOrders: [],
   selectedReconcileIds: [],
   showRekonsiliasiModal: false,
@@ -154,7 +181,17 @@ window.kasirApp = () => ({
   _reconcileInterval: null,
 
   // Shift, Inventory & Laporan State (BAGIAN 3)
-  shiftSummary: {
+   // 🧮 Shift Cash Calculator State
+  shiftCalc: {
+    modalAwal: 0,
+    totalPenjualanTunai: 0,
+    pengeluaranTunai: 0,
+    uangFisik: 0,
+    notes: ''
+  },
+  showShiftCalcModal: false,
+   
+    shiftSummary: {
     totalSales: 2450000,
     cashSales: 980000,
     qrisSales: 1120000,
@@ -164,6 +201,35 @@ window.kasirApp = () => ({
     startCash: 200000,
     startTime: '08:00 WIB'
   },
+
+  /**
+   * GETTER: Saldo Kas Laci Aktual
+   * = Modal Awal + Penjualan Tunai − Pengeluaran Tunai (dari jurnal hari ini)
+   */
+  get saldoKasLaci() {
+    const modalAwal = Number(this.shiftSummary?.startCash) || 0;
+    const penjualanTunai = Number(this.shiftSummary?.cashSales) || 0;
+    
+    // Hitung pengeluaran tunai dari jurnal hari ini
+    const today = new Date().toISOString().slice(0, 10);
+    let pengeluaranTunai = 0;
+    const list = Array.isArray(this.accountingJournalList) ? this.accountingJournalList : [];
+    
+    list.forEach(j => {
+      if (j.date !== today) return;
+      if (j.status === 'rejected') return;
+      (j.lines || []).forEach(l => {
+        const acc = String(l.acc || '').trim();
+        // Kredit ke Kas = uang keluar
+        if ((acc === '1001' || acc === '101') && Number(l.credit) > 0) {
+          pengeluaranTunai += Number(l.credit) || 0;
+        }
+      });
+    });
+    
+    return Math.max(0, modalAwal + penjualanTunai - pengeluaranTunai);
+  },
+
   shiftData: {
     startTime: '08:00 WIB',
     duration: '5 jam 30 menit',
@@ -187,8 +253,59 @@ window.kasirApp = () => ({
   shiftClosingNotes: '',
   inventoryList: [],
   inventorySearch: '',
-  inventoryTab: 'ingredients', // 'ingredients' | 'products'
+  inventoryTab: 'ingredients', // 'ingredients' | 'products' | 'pembelian'
   todayTotalRevenue: 2450000,
+
+  // Riwayat Transaksi & Recall Struk State
+  showTxHistoryModal: false,
+  txHistoryList: [],
+  txHistoryLoading: false,
+  txHistoryDate: new Date().toISOString().slice(0, 10),
+  txHistorySearch: '',
+  txHistoryPaymentFilter: 'all',
+
+  // Edit Stok & Tambah Inventori Enhanced State
+  editStockModal: false,
+  addInventoryModal: false,
+  newInventoryForm: {
+    nama: '',
+    category: 'Bahan Baku',
+    stok: 10,
+    min: 5,
+    unit: 'kg',
+    purchasePrice: 0,
+    isCountable: true
+  },
+  insufficientCashModal: false,
+  insufficientCashInfo: {
+    totalCost: 0,
+    availableCash: 0,
+    shortfall: 0,
+    itemName: ''
+  },
+  selectedStockItem: { id: '', name: '', category: 'Bahan Baku', stock: 0, minStock: 0, unit: 'unit', purchasePrice: 0, isCountable: true },
+  newStockValue: 0,
+  stockChangeType: 'adjustment', // 'adjustment' | 'purchase' | 'waste' | 'opname'
+  stockChangePaymentMethod: 'cash', // 'cash' | 'transfer' | 'payable'
+  stockChangeReason: '',
+
+  // Pembelian Bahan Baku State
+  pembelianForm: {
+    date: new Date().toISOString().slice(0, 10),
+    supplier: '',
+    itemId: '',
+    qty: 1,
+    unit: '',
+    purchasePrice: 0,
+    total: 0,
+    paymentMethod: 'cash',
+    notes: '',
+    receiptImage: ''
+  },
+  pembelianList: [],
+  loadingPembelian: false,
+  pembelianSearch: '',
+  pembelianDateFilter: '',
 
   // Logout Confirmation Modal
   confirmLogoutModal: false,
@@ -303,6 +420,27 @@ window.kasirApp = () => ({
   approvalFilter: 'all',  // all | pending | approved | rejected
   approvalSearch: '',
 
+   // 🏢 Info Bisnis dari Admin Panel (/site_config) — untuk PDF & laporan
+  siteInfo: {
+    brandName: 'Dapur Kuliner Viral & Catering Rumahan',
+    address: 'Jl. Kuliner Viral No. 88, Jakarta Selatan',
+    phone: '0812-3456-7890'
+  },
+ 
+ // State Payment Config dari Admin Panel (/site_config/paymentConfig)
+  paymentConfig: {
+    bankName: 'BCA',
+    bankAccountNumber: '-',
+    bankAccountHolder: '-',
+    bankInstructions: 'Transfer sesuai nominal, konfirmasi ke WhatsApp admin.',
+    qrisImage: '',
+    qrisInstructions: 'Scan QRIS dan bayar sesuai nominal.',
+    qrisMerchantName: 'Dapur Kuliner Viral',
+    qrisType: 'both',
+    ewalletPhone: '',
+    ewalletInstructions: ''
+  },
+ 
   // State accounting summary (P&L Ledger Realtime)
   accountingSummaryData: null,  // hasil fetch terakhir
   accountingSummaryLoading: false,
@@ -311,7 +449,17 @@ window.kasirApp = () => ({
 
   // Inventory Modals & Recipe State
   editStockModal: false,
-  selectedStockItem: null,
+  selectedStockItem: {
+    id: '',
+    name: '',
+    category: 'Bahan Baku',
+    stock: 0,
+    stok: 0,
+    minStock: 0,
+    unit: 'unit',
+    purchasePrice: 0,
+    isCountable: true
+  },
   newStockValue: 0,
   stockChangeReason: '',
   addInventoryModal: false,
@@ -344,7 +492,12 @@ window.kasirApp = () => ({
     ingredients: []
   },
   menuRecipes: {}, // { menuId: { ingredients: [...] } }
-  postponedReconcileIds: [], // Daftar orderId yang ditunda rekonsiliasinya
+  postponedReconcileIds: (() => {
+    try {
+      return JSON.parse(localStorage.getItem('dapur_postponed_reconcile') || '[]');
+    } catch (e) { return []; }
+  })(),
+ // Daftar orderId yang ditunda rekonsiliasinya
 
   // Chart References & Timers
   _topMenuChart: null,
@@ -425,12 +578,49 @@ window.kasirApp = () => ({
 
     // 4. Inisialisasi Koneksi Firebase Realtime Database
     await this.initFirebaseSDK();
+// Load custom kasir title & payment config dari Firebase site_config
+try {
+  if (this._fbRef && this._fbDb) {
+    const configRef = this._fbRef(this._fbDb, 'site_config');
+    this._fbOnValue(configRef, (snapshot) => {
+      const val = snapshot.val();
+      if (val) {
+        if (val.kasirTitle) this.customKasirTitle = val.kasirTitle;
+        if (val.kasirSubtitle) this.customKasirSubtitle = val.kasirSubtitle;
+        console.log('[KASIR] Custom title loaded:', val.kasirTitle);
+
+               // 🏢 Sync info bisnis (brand, alamat, telepon)
+        if (val.brandName) this.siteInfo.brandName = val.brandName;
+        if (val.address) this.siteInfo.address = val.address;
+        if (val.phone) this.siteInfo.phone = val.phone;
+        console.log('[KASIR] Site info loaded:', this.siteInfo.brandName);
+ 
+       // ✅ Sync payment config (bank, QRIS, ewallet)
+        if (val.paymentConfig) {
+          this.paymentConfig = {
+            ...this.paymentConfig,
+            ...val.paymentConfig
+          };
+          console.log('[KASIR] Payment config loaded:', this.paymentConfig.bankName);
+           // 🔒 Load Supervisor PIN dari /site_config/supervisorPin
+        if (val.supervisorPin) {
+          this.supervisorPin = String(val.supervisorPin).trim();
+          console.log('[KASIR-SEC] ✅ Supervisor PIN loaded from Firebase');
+        }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.warn('[KASIR] Load custom title error:', e);
+}
 
     // 5. Sinkronkan Kategori dengan Toko Utama & Muat Menu dari Firebase
     this.syncCategoriesWithMainStore();
     this.listenMenuItems();
     this.loadPrinterConfig();
     this.loadAccountingSummary(true);
+    await this.loadCOAListFromBackend();
 
     // 6. Muat Inventory Realtime, Resep Bahan Baku & Riwayat Shift (BAGIAN 3)
     this.loadInventory();
@@ -480,8 +670,12 @@ window.kasirApp = () => ({
     // 12. Watcher navigasi tab (aktifkan chart saat buka tab Laporan, refresh shift/inventory)
     if (this.$watch) {
       this.$watch('activeTab', (val) => {
-        if (val === 'laporan') {
-          this.$nextTick(() => {
+          if (val === 'laporan') {
+          this.$nextTick(async () => {
+            // Refresh data real sebelum render chart
+            await this.loadLaporanHariIni();
+            await this.loadTopMenuBulanIni();
+            await this.loadPenjualanPerJam();
             this.initCharts();
           });
         } else if (val === 'shift') {
@@ -521,10 +715,10 @@ window.kasirApp = () => ({
           apiKey: "AIzaSyB08og0350ZhwX9LYqxwyFuEppbdKEXAEg",
           authDomain: "digitalculinary-app.firebaseapp.com",
           databaseURL: "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app",
-          projectId: "digitalculinary-app",
-          storageBucket: "digitalculinary-app.firebasestorage.app",
-          messagingSenderId: "650221083781",
-          appId: "1:650221083781:web:e44211db213b81ae19ddec"
+          projectId: "dapurkulinerviral",
+          storageBucket: "dapurkulinerviral.firebasestorage.app",
+          messagingSenderId: "321264279924",
+          appId: "1:321264279924:web:90291c9fecb93de1aacc21"
         };
         console.log('[FB-INIT] Menggunakan fallback config hardcoded');
       }
@@ -595,14 +789,14 @@ window.kasirApp = () => ({
     // Timeout safety 5 detik: jangan sampai loading spinner stuck selamanya
     const menuTimeout = setTimeout(() => {
       if (this.isLoadingMenu) {
-        console.warn('Firebase menu listener timeout 10s, using fallback menu');
+        console.warn('Firebase menu listener timeout 5s, using fallback menu');
         if (!this.menuList || this.menuList.length === 0) {
           this.menuList = fallbackMenu;
         }
         this.syncCategoriesWithMainStore();
         this.isLoadingMenu = false;
       }
-    }, 10000);
+    }, 5000);
 
     if (this._fbDb && this._fbOnValue && this._fbRef) {
       try {
@@ -612,8 +806,21 @@ window.kasirApp = () => ({
           const val = snapshot.val();
           console.log('[FB-MENU] Menu listener:', val ? Object.keys(val).length + ' items' : 'kosong');
           if (val) {
-            this.menuList = Array.isArray(val) ? JSON.parse(JSON.stringify(val)) : Object.values(val);
-          } else {
+  const rawList = Array.isArray(val) ? val : Object.values(val);
+  // Dedupe by ID — hindari duplicate key x-for
+  const seen = new Map();
+  rawList.forEach(m => {
+    if (m && m.id) {
+      seen.set(m.id, m);
+    } else if (m && m.name) {
+      // Fallback: generate ID dari name kalau kosong
+      m.id = 'menu_' + m.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      seen.set(m.id, m);
+    }
+  });
+  this.menuList = Array.from(seen.values());
+  console.log(`[FB-MENU] Loaded ${this.menuList.length} unique items (raw: ${rawList.length})`);
+} else {
             this.menuList = fallbackMenu;
           }
           this.syncCategoriesWithMainStore();
@@ -1314,6 +1521,7 @@ window.kasirApp = () => ({
   async bayarQris() {
     this.selectedPaymentMethod = 'qris';
     this.qrisModal = true;
+    this.qrisDisplayMode = 'dynamic';
     this.playSound('click');
 
     const txId = 'T' + Date.now();
@@ -1498,7 +1706,7 @@ window.kasirApp = () => ({
   /**
    * Simpan Transaksi Lengkap ke Firebase Cloud & Jalankan Otomasi POS
    */
-  async simpanTransaksi(paymentData = {}) {
+    async simpanTransaksi(paymentData = {}) {
     const txId = paymentData.txId || ('T' + Date.now());
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -1509,22 +1717,55 @@ window.kasirApp = () => ({
     const isReconciliation = !!paymentData.isReconciliation || !!paymentData.orderData;
     const orderData = paymentData.orderData || null;
 
-    const grandTotal = orderData ? (Number(orderData.total || orderData.gross_amount) || 0) : this.getCartGrandTotal();
-    const subtotal = orderData ? (orderData.subtotal || Math.round(grandTotal / 1.11)) : this.getCartSubtotal();
-    const tax = orderData ? (orderData.tax || (grandTotal - subtotal)) : this.getCartTax();
-    const serviceCharge = orderData ? (orderData.serviceCharge || 0) : this.getCartServiceCharge();
-    const disc = orderData ? (orderData.discount || 0) : (Number(this.discountAmount) || 0);
-    const pm = (paymentData.method || (orderData && (orderData.paymentMethod || orderData.payment_type)) || this.selectedPaymentMethod || 'cash').toLowerCase();
+    // ✅ FIX #1: Normalize field — Firebase pakai short-form (tot, sub, sc, disc)
+    const grandTotal = orderData 
+      ? (Number(orderData.total || orderData.tot || orderData.totalAmount) || 0) 
+      : this.getCartGrandTotal();
+    const subtotal = orderData 
+      ? (Number(orderData.subtotal || orderData.sub) || Math.round(grandTotal / 1.11)) 
+      : this.getCartSubtotal();
+    const tax = orderData 
+      ? (Number(orderData.tax) || (grandTotal - subtotal)) 
+      : this.getCartTax();
+    const serviceCharge = orderData 
+      ? (Number(orderData.serviceCharge || orderData.sc) || 0) 
+      : this.getCartServiceCharge();
+    const disc = orderData 
+      ? (Number(orderData.discount || orderData.disc) || 0) 
+      : (Number(this.discountAmount) || 0);
+    const pm = (paymentData.method || (orderData && (orderData.paymentMethod || orderData.payment_type || orderData.pm)) || this.selectedPaymentMethod || 'cash').toLowerCase();
 
-    // Mapping items
-    const rawItems = (orderData && orderData.items && orderData.items.length > 0) ? orderData.items : this.cart;
-    const mappedItems = rawItems.length > 0 ? rawItems.map(item => [
-      item.id || 'm1',
-      Number(item.qty) || 1,
-      Number(item.price) || 0
-    ]) : [['m1', 1, grandTotal]];
+    // ✅ FIX #2: Normalize items — handle object / array / array-of-arrays
+    let rawItems = [];
+    if (orderData && orderData.items) {
+      if (Array.isArray(orderData.items)) {
+        rawItems = orderData.items;
+      } else if (typeof orderData.items === 'object') {
+        rawItems = Object.values(orderData.items).filter(Boolean);
+      }
+    }
+    if (rawItems.length === 0) {
+      rawItems = Array.isArray(this.cart) ? this.cart.slice() : [];
+    }
 
-    // 1. Format transaksi hemat (numeric / concise keys):
+    // ✅ FIX #3: Normalize ke format uniform {id, qty, price} untuk backend
+    const normalizedItems = rawItems.map(item => {
+      if (Array.isArray(item)) {
+        return { id: item[0] || 'm1', qty: Number(item[1]) || 1, price: Number(item[2]) || 0 };
+      }
+      return {
+        id: item.id || item.menuId || 'm1',
+        qty: Number(item.qty || item.quantity) || 1,
+        price: Number(item.price || item.harga) || 0
+      };
+    });
+
+    const mappedItems = normalizedItems.map(i => [i.id, i.qty, i.price]);
+    if (mappedItems.length === 0) {
+      mappedItems.push(['m1', 1, grandTotal]);
+    }
+
+    // 1. Format transaksi hemat
     const txRecord = {
       t: Date.now(),
       items: mappedItems,
@@ -1546,12 +1787,11 @@ window.kasirApp = () => ({
       }
     };
 
-    // Objek ramah cetak struk & UI
     this.currentOrder = {
       id: txId,
       date: this.formatDate(Date.now()),
       time: this.formatTime(Date.now()),
-      items: rawItems.length > 0 ? JSON.parse(JSON.stringify(rawItems)) : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal }],
+      items: normalizedItems.length > 0 ? JSON.parse(JSON.stringify(normalizedItems)) : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal }],
       subtotal: subtotal,
       tax: tax,
       serviceCharge: serviceCharge,
@@ -1584,61 +1824,94 @@ window.kasirApp = () => ({
       console.warn('Firebase save warning:', err);
     }
 
-    // 3. Tangani Offline Mode: simpan ke antrian localStorage
+    // 3. Offline queue
     if (!savedToFirebase) {
       try {
         const pendingQueue = JSON.parse(localStorage.getItem('dapur_pending_tx') || '[]');
-        pendingQueue.push({
-          path: `pos/transactions/${dateStr}/${txId}`,
-          data: txRecord,
-          createdAt: Date.now()
-        });
+        pendingQueue.push({ path: `pos/transactions/${dateStr}/${txId}`, data: txRecord, createdAt: Date.now() });
         localStorage.setItem('dapur_pending_tx', JSON.stringify(pendingQueue));
-        if (!isReconciliation) {
-          this.showToast('Transaksi tersimpan lokal, akan sync otomatis saat online', 'notify');
-        }
-      } catch (e) {
-        console.warn('LocalStorage queue error:', e);
-      }
+      } catch (e) {}
     }
 
-    // 4. Panggil endpoint /aggregate (Update summary di server)
+    // 4. ✅ AWAIT: Inventory deduct
     try {
-      fetch('/aggregate', {
+      console.log('[INV-DEDUCT] Sending:', { orderId: txId, items: normalizedItems });
+      const invRes = await fetch('/inventory/deduct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateStr, tx: txRecord })
-      }).catch(e => console.warn('Aggregate endpoint note:', e));
-    } catch (e) {}
-
-    // 5. Kurangi inventory untuk bahan baku & kemasan
-    try {
-      fetch('/inventory/deduct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: rawItems })
-      }).catch(e => console.warn('Inventory deduct note:', e));
-    } catch (e) {}
-
-    // 6. Panggil /receipt endpoint
-    try {
-      fetch('/receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.currentOrder)
-      }).catch(e => console.warn('Receipt endpoint note:', e));
-    } catch (e) {}
-
-    // 6.2 Trigger Auto-Jurnal Akuntansi (Double-Entry Hook)
-    try {
-      if (typeof window.recordAccountingEntry === 'function') {
-        window.recordAccountingEntry(this.currentOrder);
+        body: JSON.stringify({
+          orderId: txId,
+          date: dateStr,
+          kasir: this.kasirInfo?.name || this.kasirInfo?.username || 'kasir',
+          items: normalizedItems
+        })
+      });
+      const invJson = await invRes.json();
+      if (invJson.success && Array.isArray(invJson.deducted)) {
+        invJson.deducted.forEach(d => {
+          const it = this.inventoryList.find(i => i.id === d.itemId);
+          if (it) { it.stock = d.after; it.stok = d.after; }
+        });
+        console.log('[INV-DEDUCT] ✅', invJson.deducted.length, 'items updated');
+      } else {
+        console.warn('[INV-DEDUCT] ⚠️', invJson.error || 'No deducted array');
       }
-    } catch (accErr) {
-      console.warn('Accounting entry trigger note:', accErr);
+    } catch (e) {
+      console.warn('[INV-DEDUCT] ❌', e.message);
     }
 
-    // 7. Update ringkasan shift kasir aktif
+    // 5. ✅ AWAIT: Auto-Jurnal Akuntansi
+    try {
+      const acctBody = {
+        orderId: txId,
+        date: dateStr,
+        pm: pm,
+        total: grandTotal,
+        items: normalizedItems
+      };
+      console.log('[KASIR→ACCT] Sending:', acctBody);
+
+      const acctRes = await fetch('/accounting/journal/pos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(acctBody)
+      });
+      const acctJson = await acctRes.json();
+      
+      if (acctJson.success) {
+        console.log('[KASIR→ACCT] ✅ Revenue:', acctJson.totalRev, '| HPP:', acctJson.totalHpp);
+      } else {
+        console.warn('[KASIR→ACCT] ⚠️', acctJson.error);
+      }
+    } catch (e) {
+      console.warn('[KASIR→ACCT] ❌', e.message);
+    }
+
+    // 6. ✅ Refresh accounting summary SETELAH semua selesai
+    try {
+      if (typeof this.loadAccountingSummary === 'function') {
+        await this.loadAccountingSummary(true);
+      }
+      if (typeof this.loadCOAListFromBackend === 'function') {
+        await this.loadCOAListFromBackend();
+      }
+    } catch (e) {}
+
+    // 7. Aggregate endpoint (background, no await)
+    fetch('/aggregate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: dateStr, tx: txRecord })
+    }).catch(() => {});
+
+    // 8. Receipt endpoint (background)
+    fetch('/receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.currentOrder)
+    }).catch(() => {});
+
+    // 9. Update shift summary
     if (this.shiftSummary) {
       this.shiftSummary.transactionCount = (this.shiftSummary.transactionCount || 0) + 1;
       this.shiftSummary.totalSales = (this.shiftSummary.totalSales || 0) + grandTotal;
@@ -1652,12 +1925,12 @@ window.kasirApp = () => ({
     }
     this.todayTotalRevenue = (this.todayTotalRevenue || 0) + grandTotal;
 
-    // 8. Auto-download struk PDF (hanya untuk kasir langsung)
+    // 10. Auto-download struk (hanya kasir langsung)
     if (!paymentData.skipReceiptModal) {
       this.downloadStrukPDF(this.currentOrder);
     }
 
-    // 9. Kosongkan keranjang & bersihkan draft tersimpan jika checkout reguler
+    // 11. Clear cart
     if (!isReconciliation) {
       this.cart = [];
       this.orderNote = '';
@@ -1665,11 +1938,10 @@ window.kasirApp = () => ({
       localStorage.removeItem('dapur_pos_draft_cart');
     }
 
-    // 10. Sound & Toast Feedback
+    // 12. Sound & Toast
     this.playSound('success');
     if (!isReconciliation) {
       this.showToast('Transaksi berhasil!', 'success');
-      // 11. Tampilkan modal preview struk
       this.receiptModal = true;
     }
   },
@@ -1721,8 +1993,65 @@ window.kasirApp = () => ({
   /**
    * Preview struk modal
    */
-  previewStruk(txData) {
-    if (txData) this.currentOrder = txData;
+    previewStruk(txData) {
+    if (txData) {
+      const d = txData.t ? new Date(txData.t) : (txData.timestamp ? new Date(txData.timestamp) : new Date());
+      let parsedItems = [];
+      
+      if (Array.isArray(txData.items)) {
+        parsedItems = txData.items.map(it => {
+          if (Array.isArray(it)) {
+            // ✅ FIX C1: Lookup nama menu dari menuList
+            const menuId = it[0];
+            const menu = (this.menuList || []).find(m => m.id === menuId);
+            return {
+              id: menuId,
+              name: menu ? menu.name : menuId,
+              qty: Number(it[1]) || 1,
+              price: Number(it[2]) || 0
+            };
+          }
+          return {
+            id: it.id || it.menuId || ('it_' + Math.random()),
+            name: it.name || it.menuName || it.id || 'Menu Pesanan',
+            qty: Number(it.qty || it.quantity || 1),
+            price: Number(it.price || it.harga || 0)
+          };
+        });
+      } else {
+        parsedItems = this.cart || [];
+      }
+
+      // ✅ FIX C2: Baca total dari field yang benar (tot || total || amount)
+      const grandTotal = txData.tot !== undefined ? Number(txData.tot)
+                       : txData.total !== undefined ? Number(txData.total)
+                       : txData.amount !== undefined ? Number(txData.amount) : 0;
+      const subtotal = txData.sub !== undefined ? Number(txData.sub)
+                     : txData.subtotal !== undefined ? Number(txData.subtotal) : grandTotal;
+      const tax = txData.tax !== undefined ? Number(txData.tax) : 0;
+      const serviceCharge = txData.sc !== undefined ? Number(txData.sc) : (txData.serviceCharge !== undefined ? Number(txData.serviceCharge) : 0);
+      const discount = txData.disc !== undefined ? Number(txData.disc) : (txData.discount !== undefined ? Number(txData.discount) : 0);
+      const pm = txData.pm || txData.paymentMethod || 'tunai';
+
+      this.currentOrder = {
+        id: txData.id || txData.orderId || ('ORD-' + Date.now()),
+        date: txData.date || (d.toLocaleDateString('id-ID') + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })),
+        time: txData.time || d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        items: parsedItems,
+        subtotal: subtotal,
+        tax: tax,
+        serviceCharge: serviceCharge,
+        discount: discount,
+        total: grandTotal,
+        paymentMethod: pm,
+        cashReceived: txData.cashReceived || (pm === 'tunai' || pm === 'cash' ? grandTotal : 0),
+        cashChange: txData.cashChange || 0,
+        customer: txData.customer || txData.cust || 'Pelanggan',
+        note: txData.note || txData.notes || ''
+      };
+      this.selectedPaymentMethod = pm;
+      this.cashReceived = this.currentOrder.cashReceived;
+    }
     this.receiptModal = true;
     this.playSound('click');
   },
@@ -1759,7 +2088,7 @@ window.kasirApp = () => ({
 
       doc.setFont('courier', 'bold');
       doc.setFontSize(11);
-      doc.text('Digital Culinary', 40, 9, { align: 'center' });
+      doc.text('DAPUR KULINER VIRAL', 40, 9, { align: 'center' });
       doc.setFont('courier', 'normal');
       doc.setFontSize(7.5);
       doc.text('Jl. Kuliner Viral No. 88, Jaksel', 40, 13, { align: 'center' });
@@ -1775,15 +2104,26 @@ window.kasirApp = () => ({
       doc.text(`Metode    : ${(order.paymentMethod || order.pm || 'CASH').toUpperCase()}`, 5, y); y += 4;
       doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
 
-      (order.items || []).forEach(it => {
+              (order.items || []).forEach(it => {
         const name = it.name || (Array.isArray(it) ? it[0] : 'Menu');
         const qty = it.qty || (Array.isArray(it) ? it[1] : 1);
         const price = it.price || (Array.isArray(it) ? it[2] : 0);
+        const itemTotal = qty * price;
+
+        // ✅ Nama menu wrap max 50mm (sisakan ruang untuk harga kanan)
         doc.setFont('courier', 'bold');
-        doc.text(String(name).slice(0, 26), 5, y); y += 3.5;
+        const nameLines = doc.splitTextToSize(String(name), 50);
+        nameLines.forEach((line, idx) => {
+          doc.text(line, 5, y);
+          if (idx === nameLines.length - 1) {
+            // Baris terakhir → harga di kanan
+            doc.text(`${qty}x = ${this.formatRupiah(itemTotal)}`, 75, y, { align: 'right' });
+          }
+          y += 3.5;
+        });
+
         doc.setFont('courier', 'normal');
-        doc.text(`  ${qty} x ${this.formatRupiah(price)} = ${this.formatRupiah(qty * price)}`, 5, y);
-        y += 4;
+        y += 1; // spacing kecil antar item
       });
 
       doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
@@ -1836,7 +2176,7 @@ window.kasirApp = () => ({
 
         doc.setFont('courier', 'bold');
         doc.setFontSize(11);
-        doc.text('Digital Culinary', 40, 9, { align: 'center' });
+        doc.text('DAPUR KULINER VIRAL', 40, 9, { align: 'center' });
         doc.setFont('courier', 'normal');
         doc.setFontSize(7.5);
         doc.text('Jl. Kuliner Viral No. 88, Jaksel', 40, 13, { align: 'center' });
@@ -1848,9 +2188,16 @@ window.kasirApp = () => ({
         doc.text(`Kasir     : ${this.kasirInfo.name}`, 5, y); y += 4;
         doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
 
-        (order.items || []).forEach(it => {
-          doc.text(`${it.name || 'Menu'} x${it.qty || 1}`, 5, y); y += 4;
-          doc.text(`   = ${this.formatRupiah((it.price || 0) * (it.qty || 1))}`, 5, y); y += 4;
+          (order.items || []).forEach(it => {
+          // ✅ FIX: Wrap nama menu (bukan truncate)
+          const itemName = it.name || 'Menu';
+          const nameLines = doc.splitTextToSize(itemName, 50);
+          nameLines.forEach((line, idx) => {
+            doc.text(line + (idx === nameLines.length - 1 ? ` x${it.qty || 1}` : ''), 5, y);
+            y += 4;
+          });
+          doc.text(`   = ${this.formatRupiah((it.price || 0) * (it.qty || 1))}`, 5, y);
+          y += 4;
         });
 
         doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
@@ -1904,7 +2251,7 @@ window.kasirApp = () => ({
     if (tax > 0) details += `Pajak (11%): ${this.formatRupiah(tax)}\n`;
     if (disc > 0) details += `Diskon: -${this.formatRupiah(disc)}\n`;
 
-    const text = `*Digital Culinary - STRUK TRANSAKSI*\n\n` +
+    const text = `*DAPUR KULINER VIRAL - STRUK TRANSAKSI*\n\n` +
       `No. Order: *${order.id}*\n` +
       `Tanggal: ${order.date || this.formatDate(Date.now())}\n` +
       `Kasir: ${this.kasirInfo.name}\n` +
@@ -1914,7 +2261,7 @@ window.kasirApp = () => ({
       `--------------------------------\n` +
       details +
       `*TOTAL: ${this.formatRupiah(order.total || order.tot || this.getCartGrandTotal())}*\n\n` +
-      `Terima kasih telah berbelanja di Digital Culinary!`;
+      `Terima kasih telah berbelanja di Dapur Kuliner Viral!`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   },
@@ -2069,7 +2416,120 @@ window.kasirApp = () => ({
   /**
    * Tampilkan toast notification
    */
-  showToast(message, type = 'success') {
+   /**
+   * Handler saat user pilih periode berbeda
+   */
+  async onReportPeriodChange() {
+    console.log(`[REPORT] Period changed → ${this.reportPeriod}`);
+    // Set default date untuk custom
+    if (this.reportPeriod === 'custom') {
+      const { start, end } = this.getReportDateRange();
+      if (!this.reportStartDate) this.reportStartDate = start;
+      if (!this.reportEndDate) this.reportEndDate = end;
+    }
+    // Reload semua data laporan
+    await this.loadLaporanHariIni();
+    await this.loadTopMenuBulanIni();
+    await this.loadPenjualanPerJam();
+  },
+
+   // =========================================================================
+  // 🧮 SHIFT CASH CALCULATOR (Serah Terima Kas Tunai)
+  // =========================================================================
+
+  openShiftCalculator() {
+    const startCash = Number(this.shiftSummary?.startCash || 0);
+    const cashSales = Number(this.shiftSummary?.cashSales || 0);
+    this.shiftCalc = {
+      modalAwal: startCash,
+      totalPenjualanTunai: cashSales,
+      pengeluaranTunai: 0,
+      uangFisik: startCash + cashSales,
+      notes: ''
+    };
+    this.showShiftCalcModal = true;
+    this.playSound('notify');
+  },
+
+  closeShiftCalculator() {
+    this.showShiftCalcModal = false;
+    this.playSound('click');
+  },
+
+  get shiftCalcExpected() {
+    const modal = Number(this.shiftCalc.modalAwal || 0);
+    const tunai = Number(this.shiftCalc.totalPenjualanTunai || 0);
+    const keluar = Number(this.shiftCalc.pengeluaranTunai || 0);
+    return modal + tunai - keluar;
+  },
+
+  get shiftCalcDifference() {
+    const fisik = Number(this.shiftCalc.uangFisik || 0);
+    return fisik - this.shiftCalcExpected;
+  },
+
+  get shiftCalcStatus() {
+    const diff = this.shiftCalcDifference;
+    if (Math.abs(diff) < 1) return { label: 'SESUAI', key: 'balance' };
+    if (diff > 0) return { label: 'LEBIH', key: 'over' };
+    return { label: 'KURANG', key: 'under' };
+  },
+
+  resetShiftCalculator() {
+    this.openShiftCalculator();
+    this.showToast('Kalkulator direset ke nilai awal', 'notify');
+  },
+
+  async saveShiftHandover() {
+    const expected = this.shiftCalcExpected;
+    const fisik = Number(this.shiftCalc.uangFisik || 0);
+    const diff = this.shiftCalcDifference;
+
+    const entry = {
+      at: Date.now(),
+      iso: new Date().toISOString(),
+      shiftId: this.kasirInfo?.shiftId || '-',
+      user: this.kasirInfo?.username || 'kasir',
+      userName: this.kasirInfo?.name || 'Kasir Utama',
+      modalAwal: Number(this.shiftCalc.modalAwal || 0),
+      totalTunai: Number(this.shiftCalc.totalPenjualanTunai || 0),
+      pengeluaran: Number(this.shiftCalc.pengeluaranTunai || 0),
+      expected: expected,
+      fisik: fisik,
+      difference: diff,
+      status: Math.abs(diff) < 1 ? 'sesuai' : (diff > 0 ? 'lebih' : 'kurang'),
+      notes: String(this.shiftCalc.notes || '').trim()
+    };
+
+    try {
+      // 1. Simpan ke Firebase
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        const key = `handover_${Date.now()}`;
+        const ref = this._fbRef(this._fbDb, `pos/shift_handovers/${this.kasirInfo?.shiftId || 'unknown'}/${key}`);
+        await this._fbSet(ref, entry);
+        console.log('[SHIFT-CALC] ✅ Saved to Firebase:', entry);
+      }
+
+      // 2. Backup ke localStorage (max 50 entries)
+      try {
+        const list = JSON.parse(localStorage.getItem('dapur_shift_handovers') || '[]');
+        list.push(entry);
+        localStorage.setItem('dapur_shift_handovers', JSON.stringify(list.slice(-50)));
+      } catch (e) {}
+
+      this.showToast(
+        `Serah terima tersimpan. Selisih: ${this.formatRupiah(diff)}`,
+        Math.abs(diff) < 1 ? 'success' : 'notify'
+      );
+      this.playSound('success');
+      this.closeShiftCalculator();
+    } catch (err) {
+      console.error('[SHIFT-CALC] ❌ Error:', err);
+      this.showToast('Gagal menyimpan: ' + (err.message || err), 'error');
+    }
+  },
+
+ showToast(message, type = 'success') {
     this.toast.message = message;
     this.toast.type = type;
     this.toast.show = true;
@@ -2086,7 +2546,218 @@ window.kasirApp = () => ({
   /**
    * Format Rupiah IDR
    */
-  formatRupiah(num) {
+   /**
+   * Hitung Rata-rata Nilai Transaksi (AOV) hari ini
+   */
+  getAOV() {
+    const total = Number(this.laporanHariIni?.totalSales || 0);
+    const tx = Number(this.laporanHariIni?.totalTx || 0);
+    if (tx <= 0) return 0;
+    return Math.round(total / tx);
+  },
+
+  /**
+   * Hitung metode pembayaran terpopuler hari ini
+   */
+  getTopPaymentMethod() {
+    const b = this.laporanHariIni?.breakdown || {};
+    const cash = Number(b.cash || 0);
+    const qris = Number(b.qris || 0);
+    const transfer = Number(b.transfer || 0);
+    const ewallet = Number(b.ewallet || 0);
+    const total = cash + qris + transfer + ewallet;
+
+    if (total <= 0) return '-';
+
+    const methods = [
+      { name: 'Tunai', amount: cash },
+      { name: 'QRIS', amount: qris },
+      { name: 'Transfer', amount: transfer },
+      { name: 'E-Wallet', amount: ewallet }
+    ].sort((a, b) => b.amount - a.amount);
+
+    const top = methods[0];
+    const pct = Math.round((top.amount / total) * 100);
+    return `${top.name} (${pct}%)`;
+  },
+
+   // =========================================================================
+  // 📊 REPORT PERIOD HELPERS
+  // =========================================================================
+
+  /**
+   * Format Date ke YYYY-MM-DD pakai LOCAL timezone (WIB)
+   * PENTING: jangan pakai toISOString() karena itu UTC
+   */
+  getLocalDateStr(d = new Date()) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  },
+
+  /**
+   * Hitung range tanggal berdasarkan reportPeriod
+   */
+  getReportDateRange() {
+    const today = new Date();
+    const fmt = (d) => this.getLocalDateStr(d);
+
+    if (this.reportPeriod === 'today') {
+      return { start: fmt(today), end: fmt(today) };
+    }
+
+    if (this.reportPeriod === 'week') {
+      // Minggu ini = Senin s/d hari ini
+      const day = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      const diffToMonday = (day === 0 ? -6 : 1 - day);
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + diffToMonday);
+      return { start: fmt(monday), end: fmt(today) };
+    }
+
+    if (this.reportPeriod === 'month') {
+      // Bulan ini = tgl 1 s/d hari ini
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: fmt(firstDay), end: fmt(today) };
+    }
+
+    if (this.reportPeriod === 'custom') {
+      const start = this.reportStartDate || fmt(today);
+      const end = this.reportEndDate || fmt(today);
+      // Pastikan urutan benar
+      return start <= end ? { start, end } : { start: end, end: start };
+    }
+
+    return { start: fmt(today), end: fmt(today) };
+  },
+
+  /**
+   * Label periode untuk UI
+   */
+  getReportPeriodLabel() {
+    const labels = {
+      today: 'Hari Ini',
+      week: 'Minggu Ini',
+      month: 'Bulan Ini',
+      custom: 'Custom'
+    };
+    return labels[this.reportPeriod] || 'Hari Ini';
+  },
+
+  /**
+   * Fetch transaksi dalam rentang tanggal — dengan 3 strategi fallback
+   * Return: Array<transaksi>
+   */
+    /**
+   * Ambil tanggal efektif dari transaksi (untuk filter)
+   */
+  getTxDate(tx) {
+    if (!tx) return null;
+    // Priority 1: __date yang diinjeksi (dari loop harian)
+    if (tx.__date) return tx.__date;
+    // Priority 2: timestamp Unix (field 't' = short-form)
+    if (tx.t) {
+      const d = new Date(Number(tx.t));
+      if (!isNaN(d.getTime())) return this.getLocalDateStr(d);
+    }
+    // Priority 3: timestamp ISO
+    if (tx.timestamp) {
+      const d = new Date(Number(tx.timestamp) || tx.timestamp);
+      if (!isNaN(d.getTime())) return this.getLocalDateStr(d);
+    }
+    // Priority 4: field date (YYYY-MM-DD)
+    if (tx.date && /^\d{4}-\d{2}-\d{2}$/.test(tx.date)) return tx.date;
+    return null;
+  },
+
+  /**
+   * Fetch transaksi dalam rentang tanggal — dengan 3 strategi fallback
+   * ✅ FIX: Selalu filter client-side by date (defensive terhadap backend yang mengabaikan param)
+   */
+  async fetchTransactionsInRange(startDate, endDate) {
+    console.log(`[REPORT] Fetch range: ${startDate} → ${endDate}`);
+
+    // Helper: filter data by date range
+    const filterByDate = (list) => {
+      if (!Array.isArray(list)) return [];
+      return list.filter(tx => {
+        const d = this.getTxDate(tx);
+        if (!d) return false;
+        return d >= startDate && d <= endDate;
+      });
+    };
+
+    // === Strategi 1: Endpoint range (?start=&end=) ===
+    try {
+      const url = `/pos/transactions?start=${startDate}&end=${endDate}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const json = await res.json();
+          if (Array.isArray(json.data)) {
+            const filtered = filterByDate(json.data);
+            console.log(`[REPORT] ✅ Range endpoint: raw ${json.data.length} → filter ${filtered.length} tx`);
+            return filtered;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[REPORT] Range endpoint error, coba fallback...');
+    }
+
+    // === Strategi 2: Kalau 1 bulan yang sama → pakai ?month= ===
+    const startM = startDate.slice(0, 7);
+    const endM = endDate.slice(0, 7);
+    if (startM === endM) {
+      try {
+        const res = await fetch(`/pos/transactions?month=${startM}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.data)) {
+            const filtered = filterByDate(json.data);
+            console.log(`[REPORT] ✅ Month endpoint: raw ${json.data.length} → filter ${filtered.length} tx`);
+            return filtered;
+          }
+        }
+      } catch (e) {
+        console.log('[REPORT] Month endpoint error, coba loop harian...');
+      }
+    }
+
+    // === Strategi 3: Loop per hari (paling lambat tapi pasti) ===
+    const days = [];
+    const cur = new Date(startDate + 'T00:00:00');
+    const endD = new Date(endDate + 'T00:00:00');
+    while (cur <= endD) {
+      days.push(this.getLocalDateStr(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    console.log(`[REPORT] Loop ${days.length} hari: ${startDate} → ${endDate}`);
+
+    const results = await Promise.all(days.map(async (d) => {
+      try {
+        const res = await fetch(`/pos/transactions/${d}`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        if (Array.isArray(json.data)) {
+          return json.data.map(tx => ({ ...tx, __date: d }));
+        }
+        return [];
+      } catch (e) {
+        return [];
+      }
+    }));
+
+    const all = results.flat();
+    const filtered = filterByDate(all);
+    console.log(`[REPORT] ✅ Loop harian: raw ${all.length} → filter ${filtered.length} tx`);
+    return filtered;
+  },
+
+ formatRupiah(num) {
     const val = Number(num) || 0;
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -2147,8 +2818,11 @@ window.kasirApp = () => ({
     try {
       const res = await fetch('/inventory');
       if (res.ok) {
-        const json = await res.json();
-        if (json.data) this.inventoryList = json.data;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const json = await res.json();
+          if (json && json.data) this.inventoryList = json.data;
+        }
       }
     } catch (e) {
       console.warn('Fetch inventory note:', e);
@@ -2194,22 +2868,6 @@ window.kasirApp = () => ({
   /**
    * Filter daftar rekonsiliasi sesuai filter tab aktif
    */
-  filteredReconciliationList() {
-    const f = (this.reconcileFilter || this.reconciliationFilter || 'semua').toLowerCase();
-    if (f === 'semua' || f === 'all') return this.reconciliationList;
-    return this.reconciliationList.filter(item => {
-      if (f === 'berhasil' || f === 'settlement') {
-        return item.status === 'berhasil' || item.rawStatus === 'settlement';
-      }
-      if (f === 'menggantung' || f === 'pending') {
-        return item.status === 'menggantung' || item.rawStatus === 'pending';
-      }
-      if (f === 'gagal' || f === 'expired') {
-        return item.status === 'gagal' || item.rawStatus === 'expired';
-      }
-      return item.status === f;
-    });
-  },
 
   /**
    * Toggle pilih semua checkbox transaksi
@@ -2232,35 +2890,37 @@ window.kasirApp = () => ({
     const list = Array.isArray(this.reconciliationList) ? this.reconciliationList : [];
     const activeList = list.filter(item => !item.archived);
 
-    // Transaksi menggantung yang butuh verifikasi (status menggantung/pending dan belum direkonsiliasi)
     const menggantung = activeList.filter(i => 
-      !i.reconciled && (i.status === 'menggantung' || i.status === 'pending')
+      !i.reconciled && 
+      (i.status === 'menggantung' || i.status === 'pending') && 
+      !this.postponedReconcileIds.includes(i.orderId)
     );
 
     const berhasil = activeList.filter(i => 
-      i.status === 'berhasil' || i.status === 'settlement'
+      (i.status === 'berhasil' || i.status === 'settlement') && 
+      !this.postponedReconcileIds.includes(i.orderId)
+    );
+
+    const ditunda = activeList.filter(i => 
+      this.postponedReconcileIds.includes(i.orderId) || i.status === 'ditunda'
     );
 
     const gagal = activeList.filter(i => 
       i.status === 'gagal' || i.status === 'expired' || i.status === 'cancel'
     );
 
-    // Update state pendingReconcile murni berdasarkan jumlah transaksi menggantung yang butuh verifikasi
     this.pendingReconcile = menggantung.length;
-    if (this.pendingReconcile === 0) {
-      this.pendingReconcileModal = false;
-    }
+    if (this.pendingReconcile === 0) this.pendingReconcileModal = false;
 
     this.reconcileSummary = {
-      berhasil,
-      menggantung,
-      gagal,
+      berhasil, menggantung, ditunda, gagal,
       berhasilCount: berhasil.length,
       menggantungCount: menggantung.length,
+      ditundaCount: ditunda.length,
       gagalCount: gagal.length
     };
 
-    return { berhasil, menggantung, gagal };
+    return { berhasil, menggantung, ditunda, gagal };
   },
 
   /**
@@ -2270,10 +2930,16 @@ window.kasirApp = () => ({
     if (!this.reconciliationList || this.reconciliationList.length === 0) return 0;
     const list = this.reconciliationList.filter(item => !item.archived);
     if (type === 'semua' || type === 'all') return list.length;
-    if (type === 'berhasil') return list.filter(i => i.status === 'berhasil' || i.status === 'settlement').length;
-    if (type === 'menggantung' || type === 'pending') return list.filter(i => i.status === 'menggantung' || i.status === 'pending').length;
-    if (type === 'ditunda') return (this.postponedReconcileIds || []).length;
-    if (type === 'gagal' || type === 'expired') return list.filter(i => i.status === 'gagal' || i.status === 'expired' || i.status === 'cancel').length;
+    if (type === 'berhasil') return list.filter(i => 
+      (i.status === 'berhasil' || i.status === 'settlement') && !this.isPostponed(i.orderId)
+    ).length;
+    if (type === 'menggantung' || type === 'pending') return list.filter(i => 
+      (i.status === 'menggantung' || i.status === 'pending') && !this.isPostponed(i.orderId)
+    ).length;
+    if (type === 'ditunda') return list.filter(i => this.isPostponed(i.orderId) || i.status === 'ditunda').length;
+    if (type === 'gagal' || type === 'expired') return list.filter(i => 
+      i.status === 'gagal' || i.status === 'expired' || i.status === 'cancel'
+    ).length;
     return 0;
   },
 
@@ -2303,59 +2969,89 @@ window.kasirApp = () => ({
 
     let rawList = [];
     try {
-      const res = await fetch('/pending-orders');
+      // Ambil data langsung dari Firebase
+      const dbUrl = (this._fbConfig && this._fbConfig.databaseURL) 
+        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+      const res = await fetch(`${dbUrl.replace(/\/$/, '')}/orders.json`);
       if (res.ok) {
-        const json = await res.json();
-        rawList = json.orders || json.data || (Array.isArray(json) ? json : []);
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          rawList = Object.entries(data).map(([id, v]) => ({ id, orderId: id, ...(v || {}) }));
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat /orders:', e);
     }
 
-    // Fallback seed data berkualitas jika server belum memiliki order sama sekali
-      if (!rawList || rawList.length === 0) {
-      rawList = [];
-      console.log('Tidak ada order pending. Rekonsiliasi kosong.');
-    }
-    // Mapping ke struktur kolom tabel
     const mapped = rawList
       .filter(o => !o.archived)
       .map(o => {
         const st = (o.status || '').toLowerCase();
         let normalizedStatus = 'menggantung';
-        if (['settlement', 'berhasil', 'success', 'dibayar', 'capture'].includes(st)) {
+        if (['settlement', 'berhasil', 'success', 'dibayar', 'capture', 'selesai'].includes(st)) {
           normalizedStatus = 'berhasil';
         } else if (['expired', 'gagal', 'cancel', 'batal', 'ditolak', 'denied'].includes(st)) {
           normalizedStatus = 'gagal';
+        } else if (st === 'ditunda') {
+          normalizedStatus = 'ditunda';
         }
 
-        const formattedTime = this.formatTimeWib(o.createdAt);
+        const isPostponedFromBackend = o.postponed === true || st === 'ditunda';
+        if (isPostponedFromBackend && !this.postponedReconcileIds.includes(o.orderId || o.id)) {
+          this.postponedReconcileIds.push(o.orderId || o.id);
+        }
+
+        // Pastikan items selalu jadi array (bukan object)
+        let itemsArr = [];
+        if (Array.isArray(o.items)) {
+          itemsArr = o.items;
+        } else if (o.items && typeof o.items === 'object') {
+          itemsArr = Object.values(o.items).filter(Boolean);
+        }
+        itemsArr = itemsArr.map(it => {
+          if (Array.isArray(it)) {
+            return { id: it[0], name: it[0], qty: Number(it[1]) || 1, price: Number(it[2]) || 0 };
+          }
+          return {
+            id: it.id || it.menuId,
+            name: it.name || it.menuName || it.id,
+            qty: Number(it.qty || it.quantity) || 1,
+            price: Number(it.price || it.harga) || 0
+          };
+        });
 
         return {
           orderId: o.orderId || o.id,
-          waktu: formattedTime,
-          time: formattedTime,
-          pemesan: o.customer || o.customerName || o.pemesan || 'Pelanggan Umum',
-          customer: o.customer || o.customerName || o.pemesan || 'Pelanggan Umum',
-          total: Number(o.total || o.gross_amount || 0),
-          status: normalizedStatus,
+          waktu: this.formatTimeWib(o.createdAt),
+          time: this.formatTimeWib(o.createdAt),
+          pemesan: o.customer?.name || o.customerName || o.pemesan || 'Pelanggan Umum',
+          customer: o.customer?.name || o.customerName || o.pemesan || 'Pelanggan Umum',
+          customerPhone: o.customer?.phone || o.customerPhone || '',
+          customerAddress: o.customer?.address || o.customerAddress || '',
+          total: Number(o.total || o.totalAmount || o.tot || o.gross_amount || 0),
+          status: isPostponedFromBackend ? 'ditunda' : normalizedStatus,
           rawStatus: o.status || normalizedStatus,
-          paymentMethod: o.paymentMethod || o.payment_type || 'QRIS',
+          paymentMethod: o.paymentMethod || o.pm || o.payment_type || 'QRIS',
           midtransId: o.midtransId || o.transaction_id || '-',
           buktiTransfer: o.buktiTransfer || null,
-          items: o.items || [],
+          items: itemsArr,
           createdAt: Number(o.createdAt) || Date.now(),
           reconciled: !!o.reconciled,
           archived: !!o.archived,
+          postponed: isPostponedFromBackend,
+          postponedReason: o.postponedReason || '',
           note: o.note || '',
           rawOrder: o
         };
       });
 
-    // Sort by waktu DESC
     mapped.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
     this.reconciliationList = mapped;
+
+    try {
+      localStorage.setItem('dapur_postponed_reconcile', JSON.stringify(this.postponedReconcileIds));
+    } catch (e) {}
+
     this.cekPendingRekonsiliasi();
     return mapped;
   },
@@ -2398,18 +3094,10 @@ window.kasirApp = () => ({
   /**
    * 4. Aksi Rekonsiliasi: rekamTransaksi(orderId)
    */
-  async rekamTransaksi(orderId) {
+   async rekamTransaksi(orderId, skipStockCheck = false) {
     if (!orderId) return false;
 
-    // 1. Anti-Duplikat Check
-    const duplicate = await this.checkDuplicateTransaction(orderId);
-    if (duplicate && duplicate.exists) {
-      alert(`Transaksi sudah direkam di shift ${duplicate.shiftId || this.kasirInfo.shiftId || 'sebelumnya'}`);
-      this.showToast(`Transaksi ${orderId} sudah pernah direkam`, 'notify');
-      return false;
-    }
-
-    // 2. Ambil detail order dari /orders/{orderId}
+    // 1. Ambil detail order dari /orders/{orderId} — DULU
     let orderData = null;
     try {
       const res = await fetch(`/orders/${encodeURIComponent(orderId)}`);
@@ -2421,7 +3109,7 @@ window.kasirApp = () => ({
       console.warn('Fetch order detail warning:', err);
     }
 
-    // Fallback ambil dari item di reconciliationList
+    // Fallback ambil dari reconciliationList
     if (!orderData) {
       const found = this.reconciliationList.find(i => i.orderId === orderId);
       if (found) {
@@ -2441,7 +3129,91 @@ window.kasirApp = () => ({
       return false;
     }
 
-    // 3. Konversi ke format POS & panggil simpanTransaksi()
+      // 3. ✅ VALIDASI STOK — Cek kesiapan semua item
+    if (!skipStockCheck) {
+      // Guard: kalau order tidak punya data items sama sekali
+      if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+        const confirmNoItems = confirm(
+          `⚠️ Transaksi ${orderId} tidak memiliki detail menu.\n\n` +
+          `Sistem tidak dapat memverifikasi ketersediaan stok.\n\n` +
+          `Pilih OK untuk tetap merekam (HPP tidak akan dihitung otomatis), ` +
+          `atau Cancel untuk membatalkan.`
+        );
+        if (!confirmNoItems) {
+          this.showToast(`Approve dibatalkan — order tidak punya detail menu`, 'notify');
+          return false;
+        }
+      }
+      const itemsToCheck = Array.isArray(orderData.items) 
+        ? orderData.items 
+        : Object.values(orderData.items || {}).filter(Boolean);
+      const stockCheck = this.checkStockForOrder(itemsToCheck);
+      
+      if (!stockCheck.allReady) {
+        const missingList = stockCheck.notReady
+          .map(x => `${x.name} (butuh ${x.required}, tersedia ${x.available}, kurang: ${x.missing})`)
+          .join('; ');
+        
+        // Tandai postponed di state lokal
+          if (!this.postponedReconcileIds.includes(orderId)) {
+          this.postponedReconcileIds.push(orderId);
+          try {
+            localStorage.setItem('dapur_postponed_reconcile', JSON.stringify(this.postponedReconcileIds));
+          } catch (e) {}
+        }
+        
+        // Update status di reconciliationList lokal
+        const item = this.reconciliationList.find(i => i.orderId === orderId);
+        if (item) {
+          item.postponed = true;
+          item.postponedReason = `Stok kurang: ${missingList}`;
+          item.status = 'ditunda';
+        }
+        this.reconciliationList = [...this.reconciliationList];
+        
+        // PATCH ke backend: status = ditunda
+        try {
+          await fetch(`/orders/${encodeURIComponent(orderId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'ditunda',
+              postponed: true,
+              postponedAt: Date.now(),
+              postponedBy: this.kasirInfo.username,
+              postponedReason: `Stok kurang: ${missingList}`
+            })
+          });
+        } catch (e) {
+          console.warn('Patch postpone error:', e);
+        }
+        
+        // Notifikasi
+        this.showToast(
+          `Transaksi ${orderId} belum dapat disetujui — stok menu belum ready, otomatis DITUNDA`,
+          'error'
+        );
+        
+        // Buka modal detail jika sedang di halaman rekonsiliasi
+        this.activeReconcileItem = item || null;
+        this.reconcileModal = false;
+        
+        this.playSound('error');
+        return false;
+      }
+    }
+
+    // 3. ✅ Anti-Duplikat Check — SETELAH validasi stok
+    const duplicate = await this.checkDuplicateTransaction(orderId);
+    if (duplicate && duplicate.exists) {
+      // Kalau order ini sudah "reconciled" (pernah direkam sukses), beri tahu user
+      alert(`Transaksi sudah direkam di shift ${duplicate.shiftId || this.kasirInfo.shiftId || 'sebelumnya'}`);
+      this.showToast(`Transaksi ${orderId} sudah pernah direkam`, 'notify');
+      return false;
+    }
+
+    // 4. ✅ STOK READY — Lanjutkan rekam transaksi
+    //    → simpanTransaksi() akan trigger auto-deduct inventory + auto-jurnal accounting
     const txId = orderData.orderId || ('T' + Date.now());
     await this.simpanTransaksi({
       txId: txId,
@@ -2451,7 +3223,7 @@ window.kasirApp = () => ({
       skipReceiptModal: true
     });
 
-    // 4. Tandai PATCH /orders/{orderId}
+    // 5. Tandai PATCH /orders/{orderId} — status settlement
     try {
       await fetch(`/orders/${encodeURIComponent(orderId)}`, {
         method: 'PATCH',
@@ -2467,27 +3239,38 @@ window.kasirApp = () => ({
       console.warn('Patch order error:', e);
     }
 
-    // Simpan ke cache anti-duplicate lokal
+    // 6. Simpan ke cache anti-duplicate lokal
     try {
       const cached = JSON.parse(localStorage.getItem('dapur_reconciled_orders') || '{}');
       cached[orderId] = { reconciledAt: Date.now(), shiftId: this.kasirInfo.shiftId };
       localStorage.setItem('dapur_reconciled_orders', JSON.stringify(cached));
     } catch (e) {}
 
-    // Update item di reconciliationList lokal
+    // 7. Update item di reconciliationList lokal
     const itemInList = this.reconciliationList.find(i => i.orderId === orderId);
     if (itemInList) {
       itemInList.reconciled = true;
       itemInList.status = 'berhasil';
       itemInList.rawStatus = 'settlement';
+      itemInList.postponed = false;
+      itemInList.postponedReason = null;
     }
     this.reconciliationList = [...this.reconciliationList];
 
-    // Update count pending
+    // 8. Update count pending
     await this.cekPendingRekonsiliasi();
 
-    // Toast feedback
+    // 9. Refresh inventory + accounting summary (sudah di-handle di simpanTransaksi)
+    try {
+      await this.loadInventory();
+      await this.loadAccountingSummary(true);
+    } catch (e) {
+      console.warn('[RECON] Refresh warning:', e);
+    }
+
+    // 10. Feedback sukses
     this.showToast(`Transaksi ${orderId} berhasil diverifikasi & direkam`, 'success');
+    this.playSound('success');
     return true;
   },
 
@@ -2676,8 +3459,11 @@ window.kasirApp = () => ({
     if (filter === 'berhasil' || filter === 'settlement') {
       return list.filter(item => item.status === 'berhasil' || item.status === 'settlement');
     }
-    if (filter === 'menggantung' || filter === 'pending') {
-      return list.filter(item => item.status === 'menggantung' || item.status === 'pending');
+        if (filter === 'menggantung' || filter === 'pending') {
+      return list.filter(item => 
+        (item.status === 'menggantung' || item.status === 'pending') && 
+        !this.isPostponed(item.orderId)
+      );
     }
     if (filter === 'gagal' || filter === 'expired') {
       return list.filter(item => item.status === 'gagal' || item.status === 'expired');
@@ -2735,7 +3521,7 @@ window.kasirApp = () => ({
   /**
    * Tunda / Postpone Rekonsiliasi (Order dipertahankan & ditandai kedip aktif)
    */
-  postponeReconciliation(orderId) {
+    postponeReconciliation(orderId) {
     if (!orderId) return;
     if (this.postponedReconcileIds.includes(orderId)) {
       this.postponedReconcileIds = this.postponedReconcileIds.filter(id => id !== orderId);
@@ -2744,6 +3530,10 @@ window.kasirApp = () => ({
       this.postponedReconcileIds.push(orderId);
       this.showToast(`Rekonsiliasi ${orderId} ditunda sementara`, 'notify');
     }
+    // ✅ Persist ke localStorage
+    try {
+      localStorage.setItem('dapur_postponed_reconcile', JSON.stringify(this.postponedReconcileIds));
+    } catch (e) {}
     if (this.reconcileModal) this.reconcileModal = false;
   },
 
@@ -2930,7 +3720,17 @@ window.kasirApp = () => ({
    * PATCH /pos/shifts/{shiftId}
    * Auto-download PDF, clear session, redirect ke /
    */
-  async submitCloseShift() {
+    async submitCloseShift() {
+    // 🔒 PIN GATE
+    const pinOk = await this.requestSupervisorPin(
+      'TUTUP SHIFT',
+      `Shift: ${this.kasirInfo.shiftId || 'aktif'}`
+    );
+    if (!pinOk) {
+      this.showToast('Penutupan shift dibatalkan', 'notify');
+      return;
+    }
+
     const shiftId = this.kasirInfo.shiftId || 'S-2026-09-18-01';
     const expectedCash = (this.shiftSummary.startCash || 0) + (this.shiftSummary.cashSales || 0);
     const inputUangFisik = Number(this.physicalCashCount) || 0;
@@ -3024,10 +3824,10 @@ window.kasirApp = () => ({
     // Timeout safety 5 detik agar state loading tidak gantung
     const invTimeout = setTimeout(() => {
       if (this.loadingStates && this.loadingStates.inventory) {
-        console.warn('Inventory loading timeout 10s, unlocking loading state');
+        console.warn('Inventory loading timeout 5s, unlocking loading state');
         this.loadingStates.inventory = false;
       }
-    }, 10000);
+    }, 5000);
 
     try {
       if (this._fbDb && this._fbOnValue && this._fbRef) {
@@ -3055,9 +3855,16 @@ window.kasirApp = () => ({
 
       const res = await fetch('/inventory');
       if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json.data) && json.data.length > 0) {
-          this.inventoryList = json.data;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          try {
+            const json = await res.json();
+            if (Array.isArray(json.data) && json.data.length > 0) {
+              this.inventoryList = json.data;
+            }
+          } catch (jsonErr) {
+            console.warn('Gagal parse JSON dari /inventory:', jsonErr);
+          }
         }
       }
 
@@ -3107,7 +3914,7 @@ window.kasirApp = () => ({
   /**
    * Update stok & harga beli item inventori & catat log aktivitas
    */
-  async updateStok(itemId, newStok, keterangan) {
+  async updateStok(itemId, newStok, keterangan, changeType = 'adjustment') {
     const numStok = Number(newStok);
     if (isNaN(numStok) || numStok < 0) {
       this.showToast('Jumlah stok harus angka valid >= 0', 'error');
@@ -3128,7 +3935,8 @@ window.kasirApp = () => ({
       new: numStok,
       diff: numStok - oldStok,
       by: kasirUsername,
-      note: keterangan || 'Penyesuaian stok kasir'
+      reason: keterangan || 'Penyesuaian stok kasir',
+      changeType: changeType || 'adjustment'
     };
 
     try {
@@ -3147,7 +3955,7 @@ window.kasirApp = () => ({
       });
 
       // 3. Realtime database sync
-        if (this._fbDb && this._fbSet && this._fbRef) {
+      if (this._fbDb && this._fbSet && this._fbRef) {
         try {
           const stockRef = this._fbRef(this._fbDb, `inventory/${itemId}`);
           await this._fbSet(stockRef, JSON.parse(JSON.stringify({
@@ -3188,111 +3996,514 @@ window.kasirApp = () => ({
   },
 
   /**
-   * Tambah item inventori baru dengan validasi dan status countable/uncountable
+   * Helper auto-jurnal pembelian bahan
    */
-  async tambahItemInventory(form) {
-    const nama = form.nama || form.name;
-    const stok = form.stok !== undefined ? form.stok : form.stock;
-    const min = form.min !== undefined ? form.min : form.minStock;
-    const unit = form.unit;
-    const purchasePrice = form.purchasePrice !== undefined ? form.purchasePrice : (form.hargaBeli || 0);
-    const isCountable = form.isCountable !== undefined ? form.isCountable : true;
+  async autoCreatePurchaseJournal({ date, desc, amount, paymentMethod = 'cash', ref = '' }) {
+    if (!amount || amount <= 0) return;
+    const dateStr = date || new Date().toISOString().slice(0, 10);
+    const journalId = 'JRN-' + Date.now();
+    const refStr = ref || ('INV-' + dateStr.replace(/-/g, '') + '-' + Math.random().toString(36).substring(2, 6).toUpperCase());
 
-    if (!nama || stok === undefined || min === undefined || !unit) {
-      this.showToast('Nama, Stok, Batas Minimum, dan Satuan wajib diisi', 'error');
-      return false;
+    let creditAcc = '1001';
+    let creditAccName = 'Kas di Tangan';
+    const pm = String(paymentMethod).toLowerCase();
+    if (pm === 'transfer' || pm === 'bank' || pm === 'bca') {
+      creditAcc = '1002';
+      creditAccName = 'Kas di Bank BCA';
+    } else if (pm === 'payable' || pm === 'hutang' || pm === 'kredit') {
+      creditAcc = '2001';
+      creditAccName = 'Hutang Usaha Supplier';
     }
 
-    const itemId = 'inv_' + Date.now();
-    const newItem = {
-      id: itemId,
-      name: String(nama).trim(),
-      category: form.category || 'Bahan Baku',
-      stock: Number(stok) || 0,
-      minStock: Number(min) || 5,
-      unit: String(unit).trim(),
-      purchasePrice: Number(purchasePrice) || 0,
-      isCountable: Boolean(isCountable)
+    const journalPayload = {
+      id: journalId,
+      date: dateStr,
+      category: 'pembelian',
+      desc: desc || `Pembelian bahan baku`,
+      ref: refStr,
+      status: 'approved',
+      timestamp: Date.now(),
+      lines: [
+        { acc: '1004', name: 'Persediaan Bahan Baku', debit: Number(amount), credit: 0 },
+        { acc: creditAcc, name: creditAccName, debit: 0, credit: Number(amount) }
+      ]
     };
 
     try {
-      // POST /inventory/{itemId}
-      await fetch(`/inventory/${encodeURIComponent(itemId)}`, {
+      await fetch(`/accounting/journal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem)
+        body: JSON.stringify(journalPayload)
       });
-
-      if (this._fbDb && this._fbSet && this._fbRef) {
-        try {
-          const cleanItem = JSON.parse(JSON.stringify(newItem));
-          const itemRef = this._fbRef(this._fbDb, `inventory/${itemId}`);
-          await this._fbSet(itemRef, cleanItem);
-        } catch (fbErr) {
-          console.warn('Firebase item sync warning:', fbErr);
-        }
-      }
-
-      this.inventoryList.unshift(newItem);
-      try {
-        localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
-      } catch (e) {}
-
-      this.showToast(`Item "${newItem.name}" berhasil ditambahkan ke inventori`, 'success');
-      this.addInventoryModal = false;
-      this.newInventoryForm = { nama: '', category: 'Bahan Baku', stok: 10, min: 5, unit: 'kg', purchasePrice: 0, isCountable: true };
-      return true;
-    } catch (err) {
-      console.error('Gagal tambah item inventory:', err);
-      this.showToast('Gagal menambahkan item inventori', 'error');
-      return false;
+      console.log('[KASIR-APP] Auto-generated purchase journal:', journalPayload);
+    } catch (e) {
+      console.warn('[KASIR-APP] Auto purchase journal note:', e);
     }
   },
 
   /**
-   * Hapus item inventori
+   * Helper auto-jurnal bahan rusak / expired (waste)
    */
-  async hapusItemInventory(itemId) {
-    const item = this.inventoryList.find(i => i.id === itemId);
-    const itemName = item ? item.name : itemId;
-    if (!confirm(`Hapus item inventori "${itemName}"? Tindakan ini tidak dapat dibatalkan.`)) {
+  async autoCreateWasteJournal({ date, desc, amount, ref = '' }) {
+    if (!amount || amount <= 0) return;
+    const dateStr = date || new Date().toISOString().slice(0, 10);
+    const journalId = 'JRN-' + Date.now();
+    const refStr = ref || ('WST-' + dateStr.replace(/-/g, '') + '-' + Math.random().toString(36).substring(2, 6).toUpperCase());
+
+    const journalPayload = {
+      id: journalId,
+      date: dateStr,
+      category: 'penyesuaian',
+      desc: desc || `Bahan baku rusak / expired (waste)`,
+      ref: refStr,
+      status: 'approved',
+      timestamp: Date.now(),
+      lines: [
+        { acc: '6005', name: 'Beban Operasional & Kerugian Bahan', debit: Number(amount), credit: 0 },
+        { acc: '1004', name: 'Persediaan Bahan Baku', debit: 0, credit: Number(amount) }
+      ]
+    };
+
+    try {
+      await fetch(`/accounting/journal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(journalPayload)
+      });
+      console.log('[KASIR-APP] Auto-generated waste journal:', journalPayload);
+    } catch (e) {
+      console.warn('[KASIR-APP] Auto waste journal note:', e);
+    }
+  },
+
+  /**
+   * Riwayat Transaksi Modal Helpers
+   */
+  async openTransactionHistoryModal() {
+    this.showTxHistoryModal = true;
+    await this.loadTransactionHistory(this.txHistoryDate || new Date().toISOString().slice(0, 10));
+  },
+
+  async loadTransactionHistory(dateStr) {
+    const targetDate = dateStr || this.txHistoryDate || new Date().toISOString().slice(0, 10);
+    this.txHistoryDate = targetDate;
+    this.txHistoryLoading = true;
+    try {
+      const res = await fetch(`/pos/transactions/${targetDate}`);
+      if (res.ok) {
+        const json = await res.json();
+        this.txHistoryList = Array.isArray(json.data) ? json.data : (json.transactions ? Object.values(json.transactions) : []);
+      } else {
+        this.txHistoryList = [];
+      }
+    } catch (e) {
+      console.warn('Load tx history note:', e);
+      this.txHistoryList = [];
+    } finally {
+      this.txHistoryLoading = false;
+    }
+  },
+
+      /**
+   * Helper: Resolve nama menu dari array [id, qty, price] atau object
+   */
+  getTxItemName(item) {
+    if (!item) return 'Item';
+    // Kalau sudah object dengan name
+    if (item.name) return item.name;
+    if (item.menuName) return item.menuName;
+    // Kalau array [id, qty, price] — lookup dari menuList
+    const id = Array.isArray(item) ? item[0] : (item.id || item.menuId);
+    if (!id) return 'Menu';
+    const menu = (this.menuList || []).find(m => m.id === id);
+    return menu ? menu.name : id;
+  },
+
+  /**
+   * Helper: Ambil qty dari item
+   */
+  getTxItemQty(item) {
+    if (!item) return 1;
+    if (Array.isArray(item)) return Number(item[1]) || 1;
+    return Number(item.qty || item.quantity) || 1;
+  },
+    filteredTxHistory() {
+    let list = this.txHistoryList || [];
+
+    // ✅ FIX C3: Tampilkan transaksi POS langsung (T*) DAN order customer yang sudah reconciled (ORD-*)
+    // Beda penanganan karena POS langsung selalu sah, order customer perlu direkonsiliasi
+    list = list.filter(t => {
+      const id = String(t.id || t.orderId || '').toUpperCase();
+      // Transaksi POS langsung (T-prefix): selalu tampil
+      if (id.startsWith('T')) return true;
+      // Order dari customer (ORD-prefix): tampil hanya kalau sudah reconciled
+      if (id.startsWith('ORD-')) return t.reconciled === true;
+      // Fallback: kalau reconciled bukan false, tampilkan
+      return t.reconciled !== false;
+    });
+
+    if (this.txHistoryPaymentFilter && this.txHistoryPaymentFilter !== 'all') {
+  const filterVal = this.txHistoryPaymentFilter.toLowerCase();
+  list = list.filter(t => {
+    const pm = (t.pm || t.paymentMethod || '').toLowerCase();
+    // ✅ Handle alias: "tunai" = "cash"
+    if (filterVal === 'tunai' || filterVal === 'cash') {
+      return pm === 'tunai' || pm === 'cash' || pm === '';  // empty pm = cash default
+    }
+    return pm === filterVal;
+  });
+}
+
+    if (this.txHistorySearch) {
+      const q = this.txHistorySearch.toLowerCase().trim();
+      list = list.filter(t => 
+        (t.id || t.orderId || '').toLowerCase().includes(q) ||
+        (t.customer || t.cust || '').toLowerCase().includes(q) ||
+        String(t.tot || t.total || t.amount || '').includes(q)
+      );
+    }
+    return list;
+  },
+
+  /**
+   * Pembelian Bahan Baku Module Methods
+   */
+  onPembelianItemChange() {
+    const it = this.inventoryList.find(i => i.id === this.pembelianForm.itemId);
+    if (it) {
+      this.pembelianForm.unit = it.unit || 'kg';
+      this.pembelianForm.purchasePrice = Number(it.purchasePrice || it.hargaBeli || 0);
+    }
+  },
+
+  async submitPembelianBahan() {
+    const { date, supplier, itemId, qty, purchasePrice, paymentMethod, notes } = this.pembelianForm;
+    if (!itemId) {
+      this.showToast('Pilih bahan baku yang dibeli', 'error');
+      return;
+    }
+    const numQty = Number(qty) || 0;
+    if (numQty <= 0) {
+      this.showToast('Jumlah qty masuk harus lebih dari 0', 'error');
+      return;
+    }
+    const numPrice = Number(purchasePrice) || 0;
+    if (numPrice <= 0) {
+      this.showToast('Harga beli per unit harus valid (> 0)', 'error');
+      return;
+    }
+    const reasonNotes = String(notes || '').trim();
+    if (reasonNotes.length < 5) {
+      this.showToast('Catatan/Alasan pembelian wajib diisi (minimal 5 karakter)', 'error');
       return;
     }
 
+    const item = this.inventoryList.find(i => i.id === itemId);
+    if (!item) {
+      this.showToast('Item inventori tidak ditemukan', 'error');
+      return;
+    }
+
+    const totalBeli = numQty * numPrice;
+    const oldStock = Number(item.stock || item.stok || 0);
+    const newStock = oldStock + numQty;
+    const dateStr = date || new Date().toISOString().slice(0, 10);
+    const refNumber = 'INV-' + dateStr.replace(/-/g, '') + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const logId = 'log_' + Date.now();
+    const kasirName = this.kasirInfo?.name || this.kasirInfo?.username || 'kasir';
+
     try {
-      // DELETE /inventory/{itemId}
+      // 1. Update /inventory/{itemId}
       await fetch(`/inventory/${encodeURIComponent(itemId)}`, {
-        method: 'DELETE'
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stock: newStock,
+          stok: newStock,
+          purchasePrice: numPrice,
+          lastUpdate: Date.now()
+        })
       });
+
+      // 2. Log ke /inventory_logs/{itemId}/{logId}
+      const logPayload = {
+        t: Date.now(),
+        old: oldStock,
+        new: newStock,
+        diff: numQty,
+        by: `${kasirName} (Beli: ${supplier || 'Supplier'})`,
+        reason: reasonNotes,
+        changeType: 'purchase'
+      };
+
+      await fetch(`/inventory_logs/${encodeURIComponent(itemId)}/${encodeURIComponent(logId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logPayload)
+      });
+
+      // 3. Simpan record riwayat pembelian
+      const purchaseRecord = {
+        id: refNumber,
+        date: dateStr,
+        timestamp: Date.now(),
+        itemId: item.id,
+        itemName: item.name,
+        category: item.category,
+        supplier: supplier || 'Supplier Umum',
+        qty: numQty,
+        unit: item.unit,
+        purchasePrice: numPrice,
+        total: totalBeli,
+        paymentMethod: paymentMethod || 'cash',
+        notes: reasonNotes,
+        kasir: kasirName
+      };
 
       if (this._fbDb && this._fbSet && this._fbRef) {
         try {
-          const itemRef = this._fbRef(this._fbDb, `inventory/${itemId}`);
-          await this._fbSet(itemRef, null);
-        } catch (fbErr) {
-          console.warn('Firebase delete item warning:', fbErr);
-        }
+          const pRef = this._fbRef(this._fbDb, `purchases/${dateStr.slice(0, 7)}/${refNumber}`);
+          await this._fbSet(pRef, purchaseRecord);
+        } catch (e) {}
       }
 
-      this.inventoryList = this.inventoryList.filter(i => i.id !== itemId);
-      this.showToast(`Item "${itemName}" berhasil dihapus`, 'notify');
+      // 4. Auto create Accounting Journal
+      await this.autoCreatePurchaseJournal({
+        date: dateStr,
+        desc: `Pembelian ${item.name} ${numQty} ${item.unit} dari ${supplier || 'Supplier'}`,
+        amount: totalBeli,
+        paymentMethod: paymentMethod,
+        ref: refNumber
+      });
+
+      // Update local item
+      item.stock = newStock;
+      item.stok = newStock;
+      item.purchasePrice = numPrice;
+
+      // Update pembelian list
+      this.pembelianList.unshift(purchaseRecord);
+      try {
+        localStorage.setItem('dapur_purchases_' + dateStr.slice(0, 7), JSON.stringify(this.pembelianList));
+      } catch (e) {}
+
+      this.showToast(`Pembelian ${item.name} (${numQty} ${item.unit}) berhasil dicatat & jurnal terbit!`, 'success');
+
+      // Reset form
+      this.pembelianForm = {
+        date: new Date().toISOString().slice(0, 10),
+        supplier: '',
+        itemId: '',
+        qty: 1,
+        unit: '',
+        purchasePrice: 0,
+        total: 0,
+        paymentMethod: 'cash',
+        notes: '',
+        receiptImage: ''
+      };
+
+      await this.loadInventory();
     } catch (err) {
-      console.error('Gagal hapus item inventory:', err);
-      this.showToast('Gagal menghapus item inventori', 'error');
+      console.error('Gagal simpan pembelian:', err);
+      this.showToast('Gagal memproses pembelian bahan', 'error');
     }
+  },
+
+  async loadRiwayatPembelian() {
+    this.loadingPembelian = true;
+    try {
+      const month = (this.pembelianDateFilter || new Date().toISOString().slice(0, 7)).slice(0, 7);
+      if (this._fbDb && this._fbRef && this._fbGet) {
+        const pRef = this._fbRef(this._fbDb, `purchases/${month}`);
+        const snap = await this._fbGet(pRef);
+        if (snap.exists()) {
+          const val = snap.val();
+          this.pembelianList = Object.values(val).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        } else {
+          this.pembelianList = [];
+        }
+      } else {
+        const saved = localStorage.getItem('dapur_purchases_' + month);
+        if (saved) {
+          this.pembelianList = JSON.parse(saved);
+        } else {
+          this.pembelianList = [];
+        }
+      }
+    } catch (e) {
+      console.warn('Load pembelian note:', e);
+    } finally {
+      this.loadingPembelian = false;
+    }
+  },
+
+  filteredPembelianList() {
+    let list = this.pembelianList || [];
+    if (this.pembelianDateFilter) {
+      list = list.filter(p => p.date === this.pembelianDateFilter);
+    }
+    if (this.pembelianSearch) {
+      const q = this.pembelianSearch.toLowerCase().trim();
+      list = list.filter(p => 
+        (p.itemName || '').toLowerCase().includes(q) ||
+        (p.supplier || '').toLowerCase().includes(q) ||
+        (p.notes || '').toLowerCase().includes(q) ||
+        (p.id || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  },
+
+  exportPembelianCSV() {
+    const list = this.filteredPembelianList();
+    if (list.length === 0) {
+      this.showToast('Tidak ada data pembelian untuk diexport', 'notify');
+      return;
+    }
+    let csv = 'ID,Tanggal,Bahan Baku,Kategori,Supplier,Qty,Satuan,Harga Beli (Rp),Total (Rp),Metode Bayar,Catatan,Kasir\n';
+    list.forEach(p => {
+      csv += `"${p.id}","${p.date}","${p.itemName}","${p.category}","${p.supplier}",${p.qty},"${p.unit}",${p.purchasePrice},${p.total},"${p.paymentMethod}","${(p.notes || '').replace(/"/g, '""')}","${p.kasir}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `pembelian_bahan_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    this.showToast('CSV riwayat pembelian berhasil didownload', 'success');
   },
 
   openEditStockModal(item) {
     if (!item) return;
-    this.selectedStockItem = item;
+    this.selectedStockItem = {
+      id: item.id || '',
+      name: item.name || '',
+      category: item.category || 'Bahan Baku',
+      stock: Number(item.stock || item.stok || 0),
+      minStock: Number(item.minStock || 0),
+      unit: item.unit || 'unit',
+      purchasePrice: item.purchasePrice !== undefined ? Number(item.purchasePrice) : 0,
+      isCountable: item.isCountable !== false
+    };
     this.newStockValue = Number(item.stock || item.stok || 0);
-    this.stockChangeReason = 'Penyesuaian stok harian';
+    this.stockChangeType = 'adjustment';
+    this.stockChangePaymentMethod = 'cash';
+    this.stockChangeReason = '';
     this.editStockModal = true;
   },
+ 
+    /**
+     * Hapus item inventory dari Firebase + lokal
+     * (Destructive action — butuh konfirmasi user)
+     */
+        async hapusItemInventory(itemId) {
+      if (!itemId) {
+        this.showToast('ID item tidak valid', 'error');
+        return false;
+      }
 
-  submitEditStock() {
+      const item = this.inventoryList.find(i => i.id === itemId);
+      const itemName = item ? item.name : itemId;
+
+      // 🔒 PIN GATE
+      const pinOk = await this.requestSupervisorPin(
+        'HAPUS INVENTORY',
+        `Item: ${itemName}`
+      );
+      if (!pinOk) {
+        this.showToast('Aksi dibatalkan', 'notify');
+        return false;
+      }
+
+      const ok = confirm(
+        `⚠️ HAPUS ITEM DARI INVENTORI\n\n` +
+        `Nama: ${itemName}\n` +
+        `ID: ${itemId}\n\n` +
+        `Item akan dihapus PERMANEN dari Firebase & lokal.\n` +
+        `Tindakan ini TIDAK bisa dibatalkan.\n\n` +
+        `Lanjutkan?`
+      );
+      if (!ok) return false;
+
+      try {
+        // 1. Hapus dari Firebase
+        if (this._fbDb && this._fbSet && this._fbRef) {
+          const itemRef = this._fbRef(this._fbDb, `inventory/${itemId}`);
+          await this._fbSet(itemRef, null);
+          console.log(`[INV-DELETE] Firebase inventory/${itemId} dihapus`);
+        }
+
+        // 2. Hapus dari state lokal
+        this.inventoryList = this.inventoryList.filter(i => i.id !== itemId);
+
+        // 3. Update localStorage
+        try {
+          localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
+        } catch (e) {}
+
+        // 4. Tutup modal & reset
+        this.selectedStockItem = { id: '', name: '', category: 'Bahan Baku', stock: 0, minStock: 0, unit: 'unit', purchasePrice: 0, isCountable: true };
+        this.editStockModal = false;
+
+        this.showToast(`✅ Item "${itemName}" berhasil dihapus`, 'success');
+        this.playSound('success');
+        return true;
+
+      } catch (err) {
+        console.error('[INV-DELETE] Error:', err);
+        this.showToast(`Gagal hapus: ${err.message}`, 'error');
+        this.playSound('error');
+        return false;
+      }
+    },
+
+    async submitEditStock() {
     if (!this.selectedStockItem) return;
-    return this.updateStok(this.selectedStockItem.id, this.newStockValue, this.stockChangeReason);
+
+    // 🔒 PIN GATE (khusus untuk koreksi manual / waste / edit harga)
+    const isDestructive = ['adjustment', 'waste', 'opname'].includes(this.stockChangeType);
+    if (isDestructive) {
+      const pinOk = await this.requestSupervisorPin(
+        'EDIT STOK',
+        `${this.selectedStockItem.name} (${this.stockChangeType})`
+      );
+      if (!pinOk) {
+        this.showToast('Edit stok dibatalkan', 'notify');
+        return;
+      }
+    }
+
+    const reason = String(this.stockChangeReason || '').trim();
+    if (reason.length < 5) {
+      this.showToast('Alasan perubahan stok wajib diisi minimal 5 karakter', 'error');
+      return;
+    }
+
+    const item = this.inventoryList.find(i => i.id === this.selectedStockItem.id);
+    const oldStok = item ? Number(item.stock || item.stok || 0) : 0;
+    const diff = Number(this.newStockValue) - oldStok;
+    const price = Number(this.selectedStockItem.purchasePrice || item?.purchasePrice || 0);
+    const totalValue = Math.abs(diff) * price;
+
+    if (this.stockChangeType === 'purchase' && diff > 0 && totalValue > 0) {
+      await this.autoCreatePurchaseJournal({
+        date: new Date().toISOString().slice(0, 10),
+        desc: `Restock/Pembelian: ${this.selectedStockItem.name} ${diff} ${this.selectedStockItem.unit}`,
+        amount: totalValue,
+        paymentMethod: this.stockChangePaymentMethod || 'cash'
+      });
+    } else if (this.stockChangeType === 'waste' && diff < 0 && totalValue > 0) {
+      await this.autoCreateWasteJournal({
+        date: new Date().toISOString().slice(0, 10),
+        desc: `Bahan rusak/expired: ${this.selectedStockItem.name} ${Math.abs(diff)} ${this.selectedStockItem.unit}`,
+        amount: totalValue
+      });
+    }
+
+    return this.updateStok(this.selectedStockItem.id, this.newStockValue, reason, this.stockChangeType);
   },
 
   async toggleCountable(item) {
@@ -3311,6 +4522,23 @@ window.kasirApp = () => ({
     }
   },
 
+  /**
+   * Ambil saldo kas tunai aktif saat ini
+   */
+ getCashInHand() {
+  // Priority 1: Accounting Summary (data ledger real-time dari backend)
+  if (this.accountingSummaryData && this.accountingSummaryData.saldoKas != undefined) {
+    const acctKas = Math.max(0, Number(this.accountingSummaryData.saldoKas));
+    if (acctKas > 0) return acctKas;
+  }
+
+  // Priority 2: Fallback hitung dari shiftSummary (kalau summary belum ke-load)
+  const startCash = Number(this.shiftSummary?.startCash) || 0;
+  const cashSales = Number(this.shiftSummary?.cashSales) || 0;
+  const cashExpenses = Number(this.shiftSummary?.cashExpenses) || 0;
+  return Math.max(0, startCash + cashSales - cashExpenses);
+},
+
   openAddInventoryModal() {
     this.newInventoryForm = {
       nama: '',
@@ -3318,13 +4546,142 @@ window.kasirApp = () => ({
       stok: 10,
       min: 5,
       unit: 'kg',
+      purchasePrice: 0,
       isCountable: true
     };
     this.addInventoryModal = true;
   },
 
-  submitAddInventory() {
-    return this.tambahItemInventory(this.newInventoryForm);
+  async submitAddInventory() {
+    return await this.tambahItemInventory(this.newInventoryForm);
+  },
+
+  /**
+   * Tambah item inventori baru dengan validasi saldo kas tunai otomatis
+   */
+  async tambahItemInventory(form) {
+    if (!form || !form.nama || !form.nama.trim()) {
+      this.showToast('Nama item/bahan baku wajib diisi', 'error');
+      return false;
+    }
+
+    const itemName = form.nama.trim();
+    const stokAwal = Math.max(0, Number(form.stok) || 0);
+    const minStok = Math.max(0, Number(form.min) || 0);
+    const hargaBeli = Math.max(0, Number(form.purchasePrice) || 0);
+    const totalCost = Math.round(stokAwal * hargaBeli);
+    const availableCash = this.getCashInHand();
+
+    // 1. Validasi saldo kas tunai jika ada nilai modal pembelian (> 0)
+    if (totalCost > 0 && availableCash < totalCost) {
+      this.insufficientCashInfo = {
+        itemName: itemName,
+        totalCost: totalCost,
+        availableCash: availableCash,
+        shortfall: totalCost - availableCash
+      };
+      this.insufficientCashModal = true;
+      this.playSound('error');
+      return false;
+    }
+
+    // 2. Jika dana kas tunai cukup & totalCost > 0: Kurangi saldo kas tunai dan catat jurnal
+    if (totalCost > 0) {
+      this.shiftSummary.cashExpenses = (this.shiftSummary.cashExpenses || 0) + totalCost;
+      if (this.accountingSummaryData && this.accountingSummaryData.saldoKas !== undefined) {
+        this.accountingSummaryData.saldoKas = Math.max(0, Number(this.accountingSummaryData.saldoKas) - totalCost);
+      }
+      
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const refNumber = 'INV-' + dateStr.replace(/-/g, '') + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      
+      await this.autoCreatePurchaseJournal({
+        date: dateStr,
+        desc: `Pembelian Bahan Baru: ${itemName} (${stokAwal} ${form.unit || 'kg'})`,
+        amount: totalCost,
+        paymentMethod: 'cash',
+        ref: refNumber
+      });
+    }
+
+    // 3. Buat objek item inventori baru
+    const newItemId = 'inv_' + Date.now();
+    const newItem = {
+      id: newItemId,
+      name: itemName,
+      category: form.category || 'Bahan Baku',
+      stock: stokAwal,
+      stok: stokAwal,
+      minStock: minStok,
+      unit: form.unit || 'kg',
+      purchasePrice: hargaBeli,
+      isCountable: form.isCountable !== false,
+      lastUpdate: Date.now(),
+      createdAt: Date.now()
+    };
+
+    try {
+      // Simpan lokal
+      this.inventoryList.push(newItem);
+      try {
+        localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
+      } catch (e) {}
+
+      // Simpan ke server
+      fetch(`/inventory/${encodeURIComponent(newItemId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem)
+      }).catch(e => console.warn('POST /inventory note:', e));
+
+      // Simpan ke Firebase
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const itemRef = this._fbRef(this._fbDb, `inventory/${newItemId}`);
+          await this._fbSet(itemRef, newItem);
+
+          const logId = 'log_' + Date.now();
+          const logRef = this._fbRef(this._fbDb, `inventory_logs/${newItemId}/${logId}`);
+          await this._fbSet(logRef, {
+            t: Date.now(),
+            old: 0,
+            new: stokAwal,
+            diff: stokAwal,
+            by: this.kasirInfo?.name || this.kasirInfo?.username || 'kasir',
+            reason: totalCost > 0 ? `Input bahan baru (Total beli: Rp ${this.formatNumber(totalCost)})` : 'Input bahan baru awal',
+            changeType: totalCost > 0 ? 'purchase' : 'adjustment'
+          });
+        } catch (fbErr) {
+          console.warn('Firebase inventory save note:', fbErr);
+        }
+      }
+
+      if (totalCost > 0) {
+        this.showToast(`Bahan "${itemName}" berhasil ditambah! Kas terpotong ${this.formatRupiah(totalCost)}`, 'success');
+      } else {
+        this.showToast(`Bahan "${itemName}" berhasil ditambahkan ke inventori`, 'success');
+      }
+      this.playSound('success');
+
+      // Tutup modal form & reset
+      this.addInventoryModal = false;
+      this.newInventoryForm = {
+        nama: '',
+        category: 'Bahan Baku',
+        stok: 10,
+        min: 5,
+        unit: 'kg',
+        purchasePrice: 0,
+        isCountable: true
+      };
+
+      await this.loadInventory();
+      return true;
+    } catch (err) {
+      console.error('Gagal menambah inventory:', err);
+      this.showToast('Gagal menambahkan item inventori', 'error');
+      return false;
+    }
   },
 
   filteredInventoryList() {
@@ -3343,17 +4700,59 @@ window.kasirApp = () => ({
   /**
    * Muat formulasi resep menu dari backend
    */
-  async loadMenuRecipes() {
+    async loadMenuRecipes() {
+    let recipesData = null;
+
+    // 1. Coba fetch dari endpoint /inventory/recipes
     try {
       const res = await fetch('/inventory/recipes');
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
-          this.menuRecipes = json.data;
+          recipesData = json.data;
+          console.log('[MENU-RECIPES] Loaded from /inventory/recipes:', Object.keys(recipesData).length);
         }
       }
     } catch (e) {
-      console.warn('Gagal memuat resep menu:', e);
+      console.warn('[MENU-RECIPES] Endpoint /inventory/recipes error:', e.message);
+    }
+
+    // 2. Fallback: fetch langsung dari Firebase REST API
+    if (!recipesData) {
+      try {
+        const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+          || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        const res = await fetch(`${fbUrl.replace(/\/$/, '')}/recipes.json`);
+        if (res.ok) {
+          recipesData = await res.json();
+          console.log('[MENU-RECIPES] Loaded from Firebase fallback:', Object.keys(recipesData || {}).length);
+        }
+      } catch (e) {
+        console.warn('[MENU-RECIPES] Firebase fallback error:', e.message);
+      }
+    }
+
+    // 3. Normalize ingredients: object → array
+    if (recipesData && typeof recipesData === 'object') {
+      const normalized = {};
+      Object.entries(recipesData).forEach(([menuId, recipe]) => {
+        if (recipe && typeof recipe === 'object') {
+          const rawIngredients = recipe.ingredients;
+          const ingredientsArray = Array.isArray(rawIngredients)
+            ? rawIngredients
+            : Object.values(rawIngredients || {}).filter(Boolean);
+
+          normalized[menuId] = {
+            ...recipe,
+            ingredients: ingredientsArray
+          };
+        }
+      });
+      this.menuRecipes = normalized;
+      console.log(`[MENU-RECIPES] ✅ Total ${Object.keys(normalized).length} recipes siap`);
+    } else {
+      console.warn('[MENU-RECIPES] ⚠️ Tidak ada resep ter-load');
+      this.menuRecipes = {};
     }
   },
 
@@ -3367,7 +4766,11 @@ window.kasirApp = () => ({
     
     this.recipeForm = {
       menuId: menu.id,
-      menuName: menu.name,
+      menuName: menu.name || '',
+      category: menu.category || 'rice_bowl',
+      price: Number(menu.price) || 0,
+      desc: menu.desc || '',
+      showOnMain: menu.showOnMain !== false,
       ingredients: JSON.parse(JSON.stringify(existingRecipe.ingredients || []))
     };
     this.productModal = true;
@@ -3377,11 +4780,11 @@ window.kasirApp = () => ({
    * Tambah baris bahan baku ke formulasi produk
    */
   addIngredientRow() {
-    const firstItem = this.inventoryList[0] || { id: 'inv1', unit: 'gram' };
+    const firstItem = (this.inventoryList && this.inventoryList[0]) ? this.inventoryList[0] : { id: 'inv1', unit: 'kg' };
     this.recipeForm.ingredients.push({
       itemId: firstItem.id,
-      amount: 100,
-      unit: firstItem.unit || 'gram'
+      amount: firstItem.unit === 'kg' ? 0.1 : 1,
+      unit: firstItem.unit || 'kg'
     });
   },
 
@@ -3393,41 +4796,106 @@ window.kasirApp = () => ({
   },
 
   /**
+   * Helper auto-set unit saat item bahan baku diganti
+   */
+  onRecipeItemChange(ing) {
+    if (!ing || !ing.itemId) return;
+    const item = (this.inventoryList || []).find(i => i.id === ing.itemId);
+    if (item && item.unit) {
+      ing.unit = item.unit;
+    }
+  },
+
+  /**
    * Simpan formulasi resep produk ke server
    */
   async saveProductRecipe() {
     if (!this.recipeForm.menuId) return;
     try {
-      this.menuRecipes[this.recipeForm.menuId] = {
-        menuId: this.recipeForm.menuId,
-        ingredients: this.recipeForm.ingredients
+      const menuId = this.recipeForm.menuId;
+      const updatedName = (this.recipeForm.menuName || '').trim() || 'Menu';
+      const updatedCategory = this.recipeForm.category || 'rice_bowl';
+      const updatedPrice = Number(this.recipeForm.price) || 0;
+      const updatedDesc = this.recipeForm.desc || '';
+      const updatedShowOnMain = this.recipeForm.showOnMain !== false;
+
+      // 1. Update menu item in local menuList
+      const menuObj = this.menuList.find(m => m.id === menuId);
+      if (menuObj) {
+        menuObj.name = updatedName;
+        menuObj.category = updatedCategory;
+        menuObj.price = updatedPrice;
+        menuObj.desc = updatedDesc;
+        menuObj.showOnMain = updatedShowOnMain;
+      }
+
+      // 2. Filter & format ingredients
+      const rawIngs = Array.isArray(this.recipeForm.ingredients) ? this.recipeForm.ingredients : [];
+      const validIngredients = rawIngs
+        .filter(ing => ing && ing.itemId && Number(ing.amount) > 0)
+        .map(ing => {
+          const invItem = (this.inventoryList || []).find(i => i.id === ing.itemId);
+          return {
+            itemId: ing.itemId,
+            amount: Number(ing.amount) || 0.1,
+            unit: ing.unit || (invItem ? invItem.unit : 'kg')
+          };
+        });
+
+      this.menuRecipes[menuId] = {
+        menuId: menuId,
+        menuName: updatedName,
+        ingredients: validIngredients
       };
 
+      // 3. LocalStorage persistence
       try {
+        localStorage.setItem('dapur_menu_list', JSON.stringify(this.menuList));
+        localStorage.setItem('dapur_menu_items', JSON.stringify(this.menuList));
         localStorage.setItem('dapur_menu_recipes', JSON.stringify(this.menuRecipes));
       } catch (e) {}
 
+      // 4. API & Firebase persistence
+      fetch(`/menu/${encodeURIComponent(menuId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: updatedName,
+          category: updatedCategory,
+          price: updatedPrice,
+          desc: updatedDesc,
+          showOnMain: updatedShowOnMain
+        })
+      }).catch(e => console.warn('Server menu update note:', e));
+
+      fetch(`/inventory/recipes/${encodeURIComponent(menuId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients: validIngredients })
+      }).catch(e => console.warn('Server recipe save note:', e));
+
       if (this._fbDb && this._fbRef && this._fbSet) {
         try {
-          const recipeRef = this._fbRef(this._fbDb, `recipes/${this.recipeForm.menuId}`);
+          const recipeRef = this._fbRef(this._fbDb, `recipes/${menuId}`);
           await this._fbSet(recipeRef, {
-            menuId: this.recipeForm.menuId,
-            ingredients: this.recipeForm.ingredients,
+            menuId: menuId,
+            menuName: updatedName,
+            ingredients: validIngredients,
             updatedAt: new Date().toISOString()
           });
+
+          const menuRef = this._fbRef(this._fbDb, `menu_items/${menuId}`);
+          if (menuObj) {
+            await this._fbSet(menuRef, menuObj);
+          }
         } catch (fbErr) {
           console.warn('Firebase recipe save warning:', fbErr);
         }
       }
 
-      fetch(`/inventory/recipes/${encodeURIComponent(this.recipeForm.menuId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients: this.recipeForm.ingredients })
-      }).catch(e => console.warn('Server recipe save failover:', e));
-
-      this.showToast(`Bahan baku "${this.recipeForm.menuName}" berhasil disimpan!`, 'success');
+      this.showToast(`Menu & Resep "${updatedName}" berhasil diperbarui!`, 'success');
       this.productModal = false;
+      await this.loadInventory();
     } catch (e) {
       console.error('Save recipe error:', e);
       this.showToast('Gagal menyimpan resep', 'error');
@@ -3508,6 +4976,74 @@ window.kasirApp = () => ({
     return null;
   },
 
+   /**
+   * Cek kesiapan stok untuk seluruh item dalam satu order
+   * Return: { allReady: boolean, notReady: [{id, name, required, available, missing}] }
+   */
+    checkStockForOrder(items) {
+    const notReady = [];
+    
+    if (!items) {
+      return { allReady: true, notReady };
+    }
+    
+    // Normalize items: object→array, array-of-arrays→array-of-objects
+    let itemsArr;
+    if (Array.isArray(items)) {
+      itemsArr = items;
+    } else {
+      itemsArr = Object.values(items).filter(Boolean);
+    }
+    
+    for (const rawItem of itemsArr) {
+      let menuId, menuName, requiredQty;
+      
+      // Handle format array [id, qty, price] (format hemat dari POS)
+      if (Array.isArray(rawItem)) {
+        menuId = rawItem[0];
+        requiredQty = Number(rawItem[1]) || 1;
+        menuName = menuId;
+      } else {
+        // Format object {id, name, qty, price}
+        menuId = rawItem.id || rawItem.menuId;
+        requiredQty = Number(rawItem.qty || rawItem.quantity) || 1;
+        menuName = rawItem.name || rawItem.menuName || menuId;
+      }
+      
+      if (!menuId) continue;
+      
+      // Cek apakah ada resep untuk menu ini
+      const recipe = this.menuRecipes[menuId];
+      
+      // Case A: Menu TIDAK punya resep → tidak bisa dijual (stok = 0 by default)
+      if (!recipe || !Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
+        notReady.push({
+          id: menuId,
+          name: menuName,
+          required: requiredQty,
+          available: 0,
+          missing: 'Resep belum diset'
+        });
+        continue;
+      }
+      
+      // Case B: Menu punya resep, cek stok
+      const currentStock = this.getMenuCalculatedStock(menuId);
+      if (currentStock < requiredQty) {
+        const missing = this.getMenuMissingIngredient(menuId);
+        notReady.push({
+          id: menuId,
+          name: menuName,
+          required: requiredQty,
+          available: currentStock,
+          missing: missing ? missing.name : 'Bahan kurang'
+        });
+      }
+    }
+    
+    return { allReady: notReady.length === 0, notReady };
+  },
+
   /**
    * Filter daftar produk menu di inventory berdasarkan input pencarian
    */
@@ -3527,8 +5063,12 @@ window.kasirApp = () => ({
    */
   addNewMenuIngredientRow() {
     if (!this.newMenuForm.ingredients) this.newMenuForm.ingredients = [];
-    const defaultItem = (this.inventoryList && this.inventoryList[0]) ? this.inventoryList[0].id : '';
-    this.newMenuForm.ingredients.push({ itemId: defaultItem, amount: 0.1 });
+    const defaultItem = (this.inventoryList && this.inventoryList[0]) ? this.inventoryList[0] : null;
+    this.newMenuForm.ingredients.push({ 
+      itemId: defaultItem ? defaultItem.id : '', 
+      amount: defaultItem && defaultItem.unit === 'kg' ? 0.1 : 1,
+      unit: defaultItem ? defaultItem.unit : 'kg'
+    });
   },
 
   removeNewMenuIngredientRow(idx) {
@@ -3537,12 +5077,22 @@ window.kasirApp = () => ({
     }
   },
 
-  getIngredientCost(itemId, amount) {
+  getIngredientCost(itemId, amount, ingUnit) {
     if (!itemId) return 0;
     const item = (this.inventoryList || []).find(i => i.id === itemId);
     if (!item) return 0;
     const price = Number(item.purchasePrice || item.hargaBeli) || 0;
-    return Math.round((Number(amount) || 0) * price);
+    const numAmount = Number(amount) || 0;
+    const itemUnit = (item.unit || 'kg').toLowerCase().trim();
+    const unit = (ingUnit || item.unit || 'kg').toLowerCase().trim();
+
+    let normalizedAmount = numAmount;
+    if (itemUnit === 'kg' && (unit === 'gram' || unit === 'g' || unit === 'gr')) normalizedAmount = numAmount / 1000;
+    else if ((itemUnit === 'gram' || itemUnit === 'g' || itemUnit === 'gr') && unit === 'kg') normalizedAmount = numAmount * 1000;
+    else if (itemUnit === 'liter' && (unit === 'ml' || unit === 'mililiter')) normalizedAmount = numAmount / 1000;
+    else if ((itemUnit === 'ml' || itemUnit === 'mililiter') && unit === 'liter') normalizedAmount = numAmount * 1000;
+
+    return Math.round(normalizedAmount * price);
   },
 
   calculateNewMenuHPP(ingredients) {
@@ -3550,7 +5100,7 @@ window.kasirApp = () => ({
     let totalHPP = 0;
     for (const ing of ingredients) {
       if (ing && ing.itemId) {
-        totalHPP += this.getIngredientCost(ing.itemId, ing.amount);
+        totalHPP += this.getIngredientCost(ing.itemId, ing.amount, ing.unit);
       }
     }
     return totalHPP;
@@ -3608,7 +5158,7 @@ window.kasirApp = () => ({
     this.syncCategoriesWithMainStore();
     const availCats = this.getAvailableMenuCategories();
     const defaultCat = (availCats && availCats.length > 0) ? availCats[0].id : 'rice_bowl';
-    const defaultBahan = (this.inventoryList && this.inventoryList[0]) ? this.inventoryList[0].id : '';
+    const defaultItem = (this.inventoryList && this.inventoryList[0]) ? this.inventoryList[0] : null;
     this.newMenuForm = {
       name: '',
       category: defaultCat,
@@ -3617,7 +5167,11 @@ window.kasirApp = () => ({
       desc: '',
       image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
       showOnMain: true,
-      ingredients: defaultBahan ? [{ itemId: defaultBahan, amount: 0.1 }] : []
+      ingredients: defaultItem ? [{ 
+        itemId: defaultItem.id, 
+        amount: defaultItem.unit === 'kg' ? 0.1 : 1,
+        unit: defaultItem.unit || 'kg'
+      }] : []
     };
     this.newMenuModal = true;
   },
@@ -3788,9 +5342,20 @@ window.kasirApp = () => ({
   /**
    * Hapus menu dari katalog POS & Inventory
    */
-  async hapusMenu(menuId) {
+    async hapusMenu(menuId) {
     const item = (this.menuList || []).find(m => m.id === menuId);
     const itemName = item ? item.name : menuId;
+
+    // 🔒 PIN GATE
+    const pinOk = await this.requestSupervisorPin(
+      'HAPUS MENU',
+      `Menu: ${itemName}`
+    );
+    if (!pinOk) {
+      this.showToast('Hapus menu dibatalkan', 'notify');
+      return;
+    }
+
     if (!confirm(`Hapus menu "${itemName}" dari kasir dan inventori?`)) {
       return;
     }
@@ -3821,66 +5386,58 @@ window.kasirApp = () => ({
    * Kalau belum ada, hitung dari /pos/transactions/{today}
    * Return ringkasan: { totalSales, totalTx, breakdown: {cash, qris, transfer, ewallet} }
    */
-  async loadLaporanHariIni() {
+    async loadLaporanHariIni() {
     this.loadingStates.laporan = true;
-    const today = new Date().toISOString().slice(0, 10);
+    this.reportLoading = true;
+
     try {
-      let summary = null;
-      const res = await fetch(`/pos/summary/daily/${today}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          summary = {
-            totalSales: json.totalSales || 0,
-            totalTx: json.totalTx || 0,
-            breakdown: json.breakdown || { cash: 0, qris: 0, transfer: 0, ewallet: 0 }
-          };
-        }
+      const { start, end } = this.getReportDateRange();
+      console.log(`[REPORT] Loading periode: ${start} → ${end} (${this.reportPeriod})`);
+
+      // Fetch semua transaksi dalam range
+      const txList = await this.fetchTransactionsInRange(start, end);
+
+      let totalSales = 0;
+      const breakdown = { cash: 0, qris: 0, transfer: 0, ewallet: 0 };
+
+      for (const tx of txList) {
+        // ✅ Pakai field short-form 'tot'
+        const amt = Number(tx.tot || tx.total || tx.amount || 0);
+        totalSales += amt;
+
+        const pm = String(tx.pm || tx.paymentMethod || '').toLowerCase();
+        if (pm.includes('tunai') || pm.includes('cash')) breakdown.cash += amt;
+        else if (pm.includes('qris')) breakdown.qris += amt;
+        else if (pm.includes('transfer') || pm.includes('bca') || pm.includes('mandiri')) breakdown.transfer += amt;
+        else if (pm.includes('ewallet') || pm.includes('gopay') || pm.includes('ovo')) breakdown.ewallet += amt;
+        else breakdown.cash += amt;
       }
 
-      // Kalau belum ada, hitung dari /pos/transactions/{today}
-      if (!summary || summary.totalSales === 0) {
-        const txRes = await fetch(`/pos/transactions/${today}`);
-        if (txRes.ok) {
-          const txJson = await txRes.json();
-          const txList = txJson.data || [];
-          let totalSales = 0;
-          const breakdown = { cash: 0, qris: 0, transfer: 0, ewallet: 0 };
-          for (const tx of txList) {
-            const amt = Number(tx.total || tx.amount || 0);
-            totalSales += amt;
-            const pm = String(tx.pm || tx.paymentMethod || '').toLowerCase();
-            if (pm.includes('tunai') || pm.includes('cash')) breakdown.cash += amt;
-            else if (pm.includes('qris')) breakdown.qris += amt;
-            else if (pm.includes('transfer') || pm.includes('bca') || pm.includes('mandiri')) breakdown.transfer += amt;
-            else if (pm.includes('ewallet') || pm.includes('gopay') || pm.includes('ovo')) breakdown.ewallet += amt;
-            else breakdown.cash += amt;
-          }
-          summary = {
-            totalSales,
-            totalTx: txList.length,
-            breakdown
-          };
-        }
-      }
+      const summary = {
+        totalSales,
+        totalTx: txList.length,
+        breakdown,
+        periodStart: start,
+        periodEnd: end,
+        period: this.reportPeriod
+      };
 
-      if (summary) {
-        this.laporanHariIni = summary;
-        this.todayTotalRevenue = summary.totalSales;
-        this.shiftSummary.totalSales = summary.totalSales;
-        this.shiftSummary.cashSales = summary.breakdown.cash;
-        this.shiftSummary.qrisSales = summary.breakdown.qris;
-        this.shiftSummary.transferSales = summary.breakdown.transfer;
-        this.shiftSummary.ewalletSales = summary.breakdown.ewallet || 0;
-        this.shiftSummary.transactionCount = summary.totalTx;
-      }
+      this.laporanHariIni = summary;
+      this.todayTotalRevenue = totalSales;
+      this.shiftSummary.totalSales = totalSales;
+      this.shiftSummary.cashSales = breakdown.cash;
+      this.shiftSummary.qrisSales = breakdown.qris;
+      this.shiftSummary.transferSales = breakdown.transfer;
+      this.shiftSummary.ewalletSales = breakdown.ewallet;
+      this.shiftSummary.transactionCount = summary.totalTx;
 
-      return summary || this.laporanHariIni;
+      return summary;
     } catch (e) {
-      console.warn('loadLaporanHariIni exception:', e);
+      console.warn('[REPORT] loadLaporanHariIni exception:', e);
       return this.laporanHariIni;
     } finally {
       this.loadingStates.laporan = false;
+      this.reportLoading = false;
     }
   },
 
@@ -3888,38 +5445,43 @@ window.kasirApp = () => ({
    * Ambil transaksi bulan ini, agregasi per menuId, sort DESC top N
    * Return array untuk Chart.js bar chart
    */
-  async loadTopMenuBulanIni(limit = 10) {
+    async loadTopMenuBulanIni(limit = 10) {
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const res = await fetch(`/pos/transactions?month=${currentMonth}`);
-      let transactions = [];
-      if (res.ok) {
-        const json = await res.json();
-        transactions = json.data || [];
-      }
+      const { start, end } = this.getReportDateRange();
+
+      // Fetch transaksi dalam range
+      const transactions = await this.fetchTransactionsInRange(start, end);
 
       const qtyMap = {};
       const revenueMap = {};
       const nameMap = {};
 
       for (const tx of transactions) {
-        if (Array.isArray(tx.items)) {
-          for (const it of tx.items) {
-            const mId = it.id || it.menuId || 'm0';
-            const mQty = Number(it.qty || 1);
-            const mPrice = Number(it.price || 0);
-            qtyMap[mId] = (qtyMap[mId] || 0) + mQty;
-            revenueMap[mId] = (revenueMap[mId] || 0) + (mQty * mPrice);
-            if (it.name) nameMap[mId] = it.name;
+        if (!Array.isArray(tx.items)) continue;
+        for (const it of tx.items) {
+          let mId, mQty, mPrice;
+          if (Array.isArray(it)) {
+            mId = it[0];
+            mQty = Number(it[1]) || 1;
+            mPrice = Number(it[2]) || 0;
+          } else {
+            mId = it.id || it.menuId;
+            mQty = Number(it.qty || it.quantity) || 1;
+            mPrice = Number(it.price || it.harga) || 0;
           }
+          if (!mId) continue;
+
+          qtyMap[mId] = (qtyMap[mId] || 0) + mQty;
+          revenueMap[mId] = (revenueMap[mId] || 0) + (mQty * mPrice);
         }
       }
 
+      // Lookup nama menu dari menuList
       for (const m of this.menuList) {
         if (!nameMap[m.id]) nameMap[m.id] = m.name;
-        if (!qtyMap[m.id]) qtyMap[m.id] = 10 + (m.price % 15);
       }
 
+      // ✅ NO DUMMY — kalau kosong, ya kosong
       const sorted = Object.keys(qtyMap).map(mId => ({
         id: mId,
         name: nameMap[mId] || mId,
@@ -3940,24 +5502,19 @@ window.kasirApp = () => ({
    * Group transaksi bulan ini by jam (0-23)
    * Return array 24 angka untuk line chart
    */
-  async loadPenjualanPerJam() {
+    async loadPenjualanPerJam() {
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/pos/transactions/${today}`);
-      let transactions = [];
-      if (res.ok) {
-        const json = await res.json();
-        transactions = json.data || [];
-      }
+      const { start, end } = this.getReportDateRange();
+
+      const transactions = await this.fetchTransactionsInRange(start, end);
 
       const hourlyTotals = new Array(24).fill(0);
       for (const tx of transactions) {
-        if (tx.t) {
-          const d = new Date(tx.t);
-          const hour = d.getHours();
-          if (hour >= 0 && hour < 24) {
-            hourlyTotals[hour] += Number(tx.total || tx.amount || 0);
-          }
+        if (!tx.t) continue;
+        const d = new Date(Number(tx.t) || tx.t);
+        const hour = d.getHours();
+        if (hour >= 0 && hour < 24) {
+          hourlyTotals[hour] += Number(tx.tot || tx.total || tx.amount || 0);
         }
       }
 
@@ -4070,22 +5627,24 @@ window.kasirApp = () => ({
       doc.rect(14, y, 182, 3, 'F');
       y += 9;
 
+            // 🏢 Header brand + alamat + telepon (dari Admin Panel)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(26, 26, 26);
-      doc.text('Digital Culinary & CATERING RUMAHAN', 14, y);
+      doc.text(String(this.siteInfo.brandName || 'Dapur Kuliner Viral').toUpperCase(), 14, y);
       y += 6;
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(115, 115, 115);
-      doc.text('POS Pintar System - Jl. Kuliner No. 88, Jakarta Selatan - Telp: 0812-3456-7890', 14, y);
+      const addrLine = `POS Pintar System - ${this.siteInfo.address || '-'} - Telp: ${this.siteInfo.phone || '-'}`;
+      doc.text(addrLine, 14, y);
       y += 9;
 
       // Judul Laporan
       const titleText = type === 'shift'
         ? 'LAPORAN REKONSILIASI PENUTUPAN SHIFT KASIR'
-        : (type === 'monthly' ? 'LAPORAN KEUANGAN & LABA RUGI BULANAN (P&L)' : 'LAPORAN PENJUALAN HARIAN (DAILY SALES REPORT)');
+        : (type === 'monthly' ? 'LAPORAN KEUANGAN & LABA RUGI BULANAN (P&L)' : 'LAPORAN PENJUALAN (SALES REPORT)');
 
       doc.setFillColor(243, 244, 246);
       doc.roundedRect(14, y, 182, 11, 2, 2, 'F');
@@ -4093,7 +5652,23 @@ window.kasirApp = () => ({
       doc.setFontSize(11);
       doc.setTextColor(17, 24, 39);
       doc.text(titleText, 18, y + 7.5);
-      y += 17;
+      y += 13;
+
+      // 📅 Periode laporan (start - end)
+      const { start: pStart, end: pEnd } = this.getReportDateRange();
+      const fmtID = (ds) => {
+        try {
+          return new Date(ds + 'T00:00:00').toLocaleDateString('id-ID', {
+            day: 'numeric', month: 'long', year: 'numeric'
+          });
+        } catch (e) { return ds; }
+      };
+      const periodLabel = this.getReportPeriodLabel ? this.getReportPeriodLabel() : '';
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Periode: ${fmtID(pStart)} s/d ${fmtID(pEnd)}  (${periodLabel})`, 105, y, { align: 'center' });
+      y += 10;
 
       // Metadata Baris
       doc.setFont('helvetica', 'normal');
@@ -4125,56 +5700,59 @@ window.kasirApp = () => ({
       doc.setFontSize(9);
       doc.setTextColor(55, 65, 81);
 
-      const startCash = this.shiftSummary.startCash || 200000;
-      const cashSales = this.shiftSummary.cashSales || 0;
+            const cashSales = this.shiftSummary.cashSales || 0;
       const qrisSales = this.shiftSummary.qrisSales || 0;
       const transferSales = this.shiftSummary.transferSales || 0;
       const ewalletSales = this.shiftSummary.ewalletSales || 0;
       const totalSales = this.shiftSummary.totalSales || (cashSales + qrisSales + transferSales + ewalletSales);
       const txCount = this.shiftSummary.transactionCount || 0;
 
-      doc.text('Modal Awal Kas Laci:', 18, y + 17);
-      doc.text(this.formatRupiah(startCash), 90, y + 17, { align: 'right' });
+      // Kiri: breakdown per metode (MURNI penjualan, TANPA modal awal)
+      doc.text('Penjualan Tunai (Cash):', 18, y + 17);
+      doc.text(this.formatRupiah(cashSales), 90, y + 17, { align: 'right' });
 
-      doc.text('Penjualan Tunai (Cash):', 18, y + 24);
-      doc.text(this.formatRupiah(cashSales), 90, y + 24, { align: 'right' });
+      doc.text('Penjualan QRIS Dinamis:', 18, y + 24);
+      doc.text(this.formatRupiah(qrisSales), 90, y + 24, { align: 'right' });
 
-      doc.text('Penjualan QRIS Dinamis:', 18, y + 31);
-      doc.text(this.formatRupiah(qrisSales), 90, y + 31, { align: 'right' });
+      doc.text('Penjualan Transfer Bank:', 18, y + 31);
+      doc.text(this.formatRupiah(transferSales), 90, y + 31, { align: 'right' });
 
-      doc.text('Penjualan Transfer Bank:', 18, y + 38);
-      doc.text(this.formatRupiah(transferSales), 90, y + 38, { align: 'right' });
+      doc.text('Penjualan E-Wallet:', 18, y + 38);
+      doc.text(this.formatRupiah(ewalletSales), 90, y + 38, { align: 'right' });
 
+      // Kanan: ringkasan transaksi & omset
       doc.text('Total Transaksi Sukses:', 110, y + 17);
       doc.text(`${txCount} transaksi`, 190, y + 17, { align: 'right' });
 
       doc.setFont('helvetica', 'bold');
-      doc.text('Total Omset Kotor:', 110, y + 24);
-      doc.setTextColor(5, 150, 105); // emerald-600
+      doc.text('TOTAL OMSET PENJUALAN:', 110, y + 24);
+      doc.setTextColor(5, 150, 105);
       doc.text(this.formatRupiah(totalSales), 190, y + 24, { align: 'right' });
       doc.setTextColor(55, 65, 81);
 
+      // Untuk laporan shift, tambahkan info uang fisik (opsional, masih pakai shiftSummary)
       if (type === 'shift') {
-        const expected = startCash + cashSales;
+        const expected = cashSales; // tanpa modal awal (info ini hanya untuk internal)
         const physical = Number(this.physicalCashCount) || expected;
         const diff = physical - expected;
 
-        doc.text('Ekspektasi Uang Tunai Laci:', 110, y + 31);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Kas Tunai Diharapkan:', 110, y + 31);
         doc.text(this.formatRupiah(expected), 190, y + 31, { align: 'right' });
 
-        doc.text('Uang Fisik Aktual di Kasir:', 110, y + 38);
+        doc.text('Kas Fisik Aktual:', 110, y + 38);
         doc.text(this.formatRupiah(physical), 190, y + 38, { align: 'right' });
 
-        y += 54;
+        y += 48;
         // Banner Selisih Kas
         doc.setFillColor(diff === 0 ? 236 : 254, diff === 0 ? 253 : 242, diff === 0 ? 245 : 242);
         doc.roundedRect(14, y, 182, 10, 2, 2, 'F');
         doc.setTextColor(diff === 0 ? 6 : 185, diff === 0 ? 95 : 28, diff === 0 ? 70 : 28);
         doc.setFont('helvetica', 'bold');
-        doc.text(`Status Selisih Kas: ${this.formatRupiah(diff)} ${diff === 0 ? '(SESUAI - BALANCE)' : (diff > 0 ? '(LEBIH)' : '(KURANG)')}`, 18, y + 6.5);
+        doc.text(`Status Selisih Kas: ${this.formatRupiah(diff)} ${diff === 0 ? '(SESUAI)' : (diff > 0 ? '(LEBIH)' : '(KURANG)')}`, 18, y + 6.5);
         y += 16;
       } else {
-        y += 54;
+        y += 48;
       }
 
       // Top Menu Table
@@ -4326,15 +5904,17 @@ window.kasirApp = () => ({
       this._topMenuChart = null;
     }
 
-    const items = this.topMenuData.length > 0 ? this.topMenuData : [
-      { name: 'Chicken Katsu Curry', qty: 38 },
-      { name: 'Beef Teriyaki', qty: 29 },
-      { name: 'Dimsum Mozzarella', qty: 25 },
-      { name: 'Mie Pedas Viral', qty: 22 },
-      { name: 'Honey Chicken Wings', qty: 18 },
-      { name: 'Es Lemon Tea Segar', qty: 45 },
-      { name: 'Es Cincau Susu Aren', qty: 31 }
-    ];
+    const items = Array.isArray(this.topMenuData) ? this.topMenuData : [];
+
+    // Kalau tidak ada data, tampilkan chart kosong (bukan dummy)
+    if (items.length === 0) {
+      if (this._topMenuChart) {
+        this._topMenuChart.destroy();
+        this._topMenuChart = null;
+      }
+      // Optional: render pesan "Belum ada data" via callback atau biarkan kosong
+      return;
+    }
 
     const labels = items.map(i => i.name.length > 18 ? i.name.slice(0, 16) + '…' : i.name);
     const data = items.map(i => i.qty);
@@ -4389,8 +5969,8 @@ window.kasirApp = () => ({
 
     const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
     let data = this.jamSibukData;
-    if (!data || data.every(v => v === 0)) {
-      data = [0, 0, 0, 0, 0, 0, 0, 50000, 180000, 320000, 540000, 980000, 1250000, 720000, 410000, 320000, 480000, 890000, 1140000, 920000, 610000, 240000, 80000, 0];
+      if (!data || !Array.isArray(data) || data.length !== 24) {
+      data = new Array(24).fill(0);
     }
 
     const ctx = canvas.getContext('2d');
@@ -4665,9 +6245,33 @@ window.kasirApp = () => ({
           }
         }
 
+                // ✅ Persist ke localStorage
         try {
           localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
         } catch (err) {}
+
+        // ✅ Persist ke Firebase — pakai Promise.all + .then() (TIDAK pakai await)
+        if (this._fbDb && this._fbSet && this._fbRef) {
+          const listToSync = JSON.parse(JSON.stringify(this.inventoryList));
+          const promises = listToSync
+            .filter(item => item && item.id)
+            .map(item => {
+              const itemRef = this._fbRef(this._fbDb, `inventory/${item.id}`);
+              return this._fbSet(itemRef, item).catch(err => {
+                console.warn(`[IMPORT-CSV] Gagal sync ${item.id}:`, err);
+              });
+            });
+
+          Promise.all(promises)
+            .then(() => {
+              console.log(`[IMPORT-CSV] ✅ Firebase sync selesai untuk ${promises.length} item`);
+            })
+            .catch(err => {
+              console.warn('[IMPORT-CSV] Firebase sync error:', err);
+            });
+        } else {
+          console.warn('[IMPORT-CSV] Firebase tidak siap, skip persist');
+        }
 
         this.showToast(`Import Berhasil! (${updatedCount} stok diperbarui, ${addedCount} bahan baru)`, 'success');
         this.playSound('success');
@@ -4956,27 +6560,47 @@ window.kasirApp = () => ({
   },
 
   getAccountName(accCode) {
-    const coa = {
-      '101': 'Kas di Tangan',
-      '102': 'Bank',
-      '103': 'Piutang',
-      '105': 'Persediaan Bahan Baku',
-      '111': 'Akum. Penyusutan',
-      '201': 'Hutang Supplier',
-      '301': 'Modal Pemilik',
-      '302': 'Prive',
-      '401': 'Pendapatan Penjualan',
-      '402': 'Pendapatan Catering',
-      '501': 'HPP',
-      '601': 'Beban Gaji',
-      '602': 'Beban Sewa',
-      '603': 'Beban Listrik & Air',
-      '604': 'Beban Marketing',
-      '605': 'Beban Kurir',
-      '606': 'Beban Penyusutan'
-    };
-    return coa[accCode] || ('Akun ' + accCode);
-  },
+  const coa = {
+    // 4-digit (primary — kode standar sekarang)
+    '1001': 'Kas di Tangan',
+    '1002': 'Bank BCA',
+    '1003': 'Piutang Usaha',
+    '1004': 'Persediaan Bahan Baku',
+    '1005': 'Peralatan & Mesin Dapur',
+    '2001': 'Hutang Dagang / Supplier',
+    '2002': 'Hutang Beban & Operasional',
+    '3001': 'Modal Pemilik',
+    '3002': 'Laba Ditahan',
+    '3003': 'Prive Pemilik',
+    '4001': 'Pendapatan Penjualan POS',
+    '4002': 'Pendapatan Pesanan Catering',
+    '5001': 'Harga Pokok Penjualan (HPP)',
+    '6001': 'Beban Gaji Karyawan',
+    '6002': 'Beban Sewa Tempat & Outlet',
+    '6003': 'Beban Listrik, Air & Gas',
+    '6004': 'Beban Marketing & Iklan',
+    '6005': 'Beban Operasional & Kurir',
+    '6006': 'Beban Penyusutan',
+    // Legacy 3-digit untuk kompatibilitas
+    '101': 'Kas di Tangan',
+    '102': 'Bank',
+    '103': 'Piutang Usaha',
+    '105': 'Persediaan Bahan Baku',
+    '201': 'Hutang Supplier',
+    '301': 'Modal Pemilik',
+    '302': 'Prive Pemilik',
+    '401': 'Pendapatan Penjualan',
+    '402': 'Pendapatan Catering',
+    '501': 'HPP',
+    '601': 'Beban Gaji',
+    '602': 'Beban Sewa',
+    '603': 'Beban Listrik & Air',
+    '604': 'Beban Marketing',
+    '605': 'Beban Kurir',
+    '606': 'Beban Penyusutan'
+  };
+  return coa[String(accCode)] || ('Akun ' + accCode);
+},
 
   async submitJournalEntry() {
     // Validasi balance
@@ -5004,18 +6628,19 @@ window.kasirApp = () => ({
     // Prepare payload
     const bulan = this.journalForm.date.slice(0, 7); // YYYY-MM
     const payload = {
-  category: this.journalForm.category,
-  date: this.journalForm.date,
-  desc: desc,
-  ref: this.journalForm.ref || '',
-  lampiran: this.journalForm.lampiran || '',
-  lines: validLines.map(l => ({
-    acc: l.acc,
-    debit: Number(l.debit) || 0,
-    credit: Number(l.credit) || 0
-  })),
-  createdBy: this.kasirInfo?.username || this.kasirInfo?.name || 'kasir'  // ← TAMBAH
-};
+      category: this.journalForm.category,
+      date: this.journalForm.date,
+      desc: desc,
+      ref: this.journalForm.ref || '',
+      lampiran: this.journalForm.lampiran || '',
+      lines: validLines.map(l => ({
+        acc: l.acc,
+        debit: Number(l.debit) || 0,
+        credit: Number(l.credit) || 0
+      })),
+            createdBy: this.kasirInfo?.name || 'kasir',
+      status: 'pending'  // ✅ Default: menunggu approval, bukan draft
+    };
     
     try {
       this.isLoading = true;
@@ -5270,6 +6895,261 @@ window.kasirApp = () => ({
     } finally {
       this.isProcessingApproval = false;
       this.isLoading = false;
+    }
+  },
+
+   // =========================================================================
+  // 🔒 SUPERVISOR PIN SECURITY LAYER
+  // =========================================================================
+
+  /**
+   * Minta PIN supervisor — return Promise<boolean>
+   * - resolve(true)  → PIN benar, aksi boleh lanjut
+   * - resolve(false) → user batal / salah 3x tidak ada lock
+   */
+  requestSupervisorPin(actionLabel, targetLabel, opts = {}) {
+    return new Promise((resolve) => {
+      this.pinContext = { actionLabel, targetLabel, opts, resolve };
+      this.pinInput = '';
+      this.pinErrorMessage = '';
+      this.showPinModal = true;
+      this.playSound('notify');
+
+      // Auto-focus ke input setelah modal render
+      this.$nextTick(() => {
+        setTimeout(() => {
+          const el = document.getElementById('supervisorPinInput');
+          if (el) el.focus();
+        }, 100);
+      });
+    });
+  },
+
+  /**
+   * Submit PIN — cek ke this.supervisorPin
+   */
+  submitSupervisorPin() {
+    const pin = String(this.pinInput || '').trim();
+
+    if (!pin || pin.length !== 6) {
+      this.pinErrorMessage = '⚠️ PIN harus 6 digit angka';
+      this.playSound('error');
+      return;
+    }
+
+    if (pin === String(this.supervisorPin || '').trim()) {
+      // ✅ PIN BENAR
+      const ctx = this.pinContext;
+      this.showPinModal = false;
+      this.pinErrorMessage = '';
+      this.pinInput = '';
+      this.pinContext = null;
+
+      this.logAudit(ctx?.actionLabel || 'UNKNOWN', ctx?.targetLabel || '-', 'granted');
+      this.playSound('success');
+
+      if (ctx && typeof ctx.resolve === 'function') {
+        ctx.resolve(true);
+      }
+    } else {
+      // ❌ PIN SALAH — tidak lock, kasih pesan
+      this.pinErrorMessage = '❌ PIN salah. Silakan coba lagi.';
+      this.pinInput = '';
+      this.playSound('error');
+
+      this.logAudit(
+        this.pinContext?.actionLabel || 'UNKNOWN',
+        this.pinContext?.targetLabel || '-',
+        'denied_wrong_pin'
+      );
+
+      this.$nextTick(() => {
+        const el = document.getElementById('supervisorPinInput');
+        if (el) el.focus();
+      });
+    }
+  },
+
+  /**
+   * Cancel — resolve(false)
+   */
+  cancelSupervisorPin() {
+    const ctx = this.pinContext;
+    this.showPinModal = false;
+    this.pinInput = '';
+    this.pinErrorMessage = '';
+    this.pinContext = null;
+    this.playSound('click');
+
+    if (ctx) {
+      this.logAudit(ctx.actionLabel || 'UNKNOWN', ctx.targetLabel || '-', 'cancelled');
+      if (typeof ctx.resolve === 'function') ctx.resolve(false);
+    }
+  },
+
+  /**
+   * Log semua aksi destructive ke /audit_logs/
+   */
+  async logAudit(action, target, status, note = '') {
+    try {
+      const entry = {
+        at: Date.now(),
+        iso: new Date().toISOString(),
+        user: this.kasirInfo?.username || 'kasir',
+        userName: this.kasirInfo?.name || 'Kasir Utama',
+        shiftId: this.kasirInfo?.shiftId || '',
+        action: String(action || 'unknown'),
+        target: String(target || ''),
+        status: String(status || 'unknown'), // granted | denied_wrong_pin | cancelled | executed | failed
+        note: String(note || '')
+      };
+
+      console.log('[AUDIT]', entry);
+
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        const logKey = 'audit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const logRef = this._fbRef(this._fbDb, `audit_logs/${logKey}`);
+        await this._fbSet(logRef, entry);
+      }
+    } catch (e) {
+      console.warn('[AUDIT] Log error:', e);
+    }
+  },
+ 
+ async loadCOAListFromBackend() {
+    try {
+      this.coaListBackendLoading = true;
+      const bulan = new Date().toISOString().slice(0, 7);
+
+      // ============================================================
+      // 1. Fetch COA list — coba endpoint dulu, fallback hardcoded
+      // ============================================================
+      let list = [];
+      try {
+        const res = await fetch('/accounting/coa');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            if (Array.isArray(json.data)) {
+              list = json.data;
+            } else {
+              list = Object.entries(json.data).map(([code, v]) => ({
+                code,
+                name: v.n || v.name || code,
+                type: v.t || v.type || 'Aset'
+              }));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[KASIR-COA] Endpoint /coa gagal, pakai fallback:', e.message);
+      }
+
+      // Fallback hardcoded kalau endpoint gagal / kosong
+      if (!Array.isArray(list) || list.length === 0) {
+        list = [
+          { code: '101', name: 'Kas di Tangan', type: 'Aset' },
+          { code: '102', name: 'Bank', type: 'Aset' },
+          { code: '103', name: 'Piutang Usaha', type: 'Aset' },
+          { code: '105', name: 'Persediaan Bahan Baku', type: 'Aset' },
+          { code: '111', name: 'Akum. Penyusutan', type: 'Aset' },
+          { code: '201', name: 'Hutang Supplier', type: 'Kewajiban' },
+          { code: '301', name: 'Modal Pemilik', type: 'Ekuitas' },
+          { code: '302', name: 'Prive Pemilik', type: 'Ekuitas' },
+          { code: '401', name: 'Pendapatan Penjualan', type: 'Pendapatan' },
+          { code: '402', name: 'Pendapatan Catering', type: 'Pendapatan' },
+          { code: '501', name: 'HPP Bahan Baku', type: 'HPP' },
+          { code: '601', name: 'Beban Gaji Karyawan', type: 'Beban' },
+          { code: '602', name: 'Beban Sewa Tempat', type: 'Beban' },
+          { code: '603', name: 'Beban Listrik, Air & Gas', type: 'Beban' },
+          { code: '604', name: 'Beban Pemasaran & Promosi', type: 'Beban' },
+          { code: '605', name: 'Beban Kurir & Ekspedisi', type: 'Beban' },
+          { code: '606', name: 'Beban Penyusutan', type: 'Beban' }
+        ];
+      }
+
+      // ============================================================
+      // 2. ✅ FIX: Fetch ALL ledger dari Firebase REST API
+      //    STRUKTUR: /accounting/ledger/{accCode}/{bulan}
+      //    Jadi fetch .json TANPA bulan, dapat semua akun
+      // ============================================================
+      const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+      const saldoMap = {};
+
+      try {
+        const ledgerRes = await fetch(`${fbUrl.replace(/\/$/, '')}/accounting/ledger.json`);
+        if (ledgerRes.ok) {
+          const ledgerData = await ledgerRes.json();
+          console.log('[KASIR-COA] Ledger raw:', ledgerData);
+
+          if (ledgerData && typeof ledgerData === 'object') {
+            // ledgerData = { "1001": { "2026-09": {closing,...} }, "1002": {...}, ... }
+            Object.entries(ledgerData).forEach(([accCode, months]) => {
+              if (!months || typeof months !== 'object') return;
+              const monthData = months[bulan];
+              if (monthData && typeof monthData === 'object') {
+                const closing = Number(monthData.closing);
+                const d = Number(monthData.debit) || 0;
+                const c = Number(monthData.credit) || 0;
+                // Prioritas: closing, fallback: debit - credit
+                saldoMap[String(accCode)] = isNaN(closing) ? (d - c) : closing;
+              }
+            });
+          }
+          console.log(`[KASIR-COA] ✅ Ledger: ${Object.keys(saldoMap).length} accounts`);
+          console.log('[KASIR-COA] Ledger saldo:', saldoMap);
+        } else {
+          console.warn('[KASIR-COA] Ledger fetch failed:', ledgerRes.status);
+        }
+      } catch (e) {
+        console.warn('[KASIR-COA] Firebase ledger error:', e.message);
+      }
+
+      // ============================================================
+      // 3. Legacy mapping 3-digit → 4-digit
+      //    (COA list biasanya 3-digit, ledger 4-digit)
+      // ============================================================
+      const legacyMap = {
+        '101': '1001', '102': '1002', '103': '1003',
+        '105': '1004', '111': '1005',
+        '201': '2001', '202': '2002',
+        '301': '3001', '302': '3003', '303': '3002',
+        '401': '4001', '402': '4002',
+        '501': '5001',
+        '601': '6001', '602': '6002', '603': '6003',
+        '604': '6004', '605': '6005', '606': '6006'
+      };
+
+      // ============================================================
+      // 4. Merge saldo ke COA list
+      // ============================================================
+      list.forEach(item => {
+        const rawCode = String(item.code || '').trim();
+        const canonCode = legacyMap[rawCode] || rawCode;
+
+        // Kalau saldo dari backend COA kosong/0, override dengan ledger
+        if (item.saldo === null || item.saldo === undefined || Number(item.saldo) === 0) {
+          if (saldoMap[canonCode] !== undefined) {
+            item.saldo = saldoMap[canonCode];
+          } else if (item.saldo === null || item.saldo === undefined) {
+            item.saldo = 0;
+          }
+        }
+      });
+
+      list.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+      this.coaListBackend = list;
+
+      console.log(`[KASIR-COA] ✅ Final: ${list.length} accounts`);
+      console.log('[KASIR-COA] Non-zero:', list
+        .filter(x => Number(x.saldo) > 0)
+        .map(x => `${x.code}: Rp ${x.saldo}`));
+
+    } catch (err) {
+      console.error('[KASIR-COA] ❌ Error:', err);
+    } finally {
+      this.coaListBackendLoading = false;
     }
   },
 
