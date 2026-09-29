@@ -870,7 +870,7 @@ try {
         this.syncCategoriesWithMainStore();
         this.isLoadingMenu = false;
       }
-    }, 5000);
+    }, 15000);
 
     if (this._fbDb && this._fbOnValue && this._fbRef) {
       try {
