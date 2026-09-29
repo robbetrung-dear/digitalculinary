@@ -147,10 +147,9 @@ window.accountingApp = function() {
     dataPreview: { journals: 0, ledgers: 0, orders: 0, transactions: 0 },
     isNeracaBalanced: false,
     // State: simpan status per-periode yang sudah ditutup (contoh: {"2026-09": true})
-closedPeriods: {},
-
-// Helper: dipanggil dari HTML untuk cek apakah suatu bulan sudah ditutup
     closedPeriods: {},
+
+    // Helper: dipanggil dari HTML untuk cek apakah suatu bulan sudah ditutup
     isPeriodClosed(bulan) {
     if (!bulan) return false;
     return !!this.closedPeriods[bulan];
@@ -378,12 +377,21 @@ closedPeriods: {},
     /**
      * Inisialisasi Firebase Config
      */
-        async loadSiteName() {
+      async loadSiteName() {
       try {
         if (!this._fbConfig || !this._fbConfig.databaseURL) {
           await this.initFirebaseConfig();
         }
-        const dbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
+        let dbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
+        // Fallback: derive dari hostname kalau endpoint gagal
+        if (!dbUrl && typeof window !== 'undefined' && window.location) {
+          const host = window.location.hostname || '';
+          if (host.includes('digitalculinary')) {
+            dbUrl = 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+          } else if (host.includes('dapurkulinerviral')) {
+            dbUrl = 'https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app';
+          }
+        }
         if (!dbUrl) return;
         const res = await fetch(`${dbUrl}/site_config/brandName.json`);
         if (res.ok) {
