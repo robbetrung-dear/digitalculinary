@@ -283,11 +283,81 @@ window.kasirApp = () => ({
     shortfall: 0,
     itemName: ''
   },
-  selectedStockItem: { id: '', name: '', category: 'Bahan Baku', stock: 0, minStock: 0, unit: 'unit', purchasePrice: 0, isCountable: true },
+  selectedStockItem: { id: '', name: '', category: 'Bahan Baku', stock: 0, minStock: 0, unit: 'unit', purchasePrice: 0, isCountable: true, sku: '', skuSource: 'internal', barcodeFormat: 'CODE128', barcode: '', supplierId: '', supplierName: '', isReadyToSell: false, linkedMenuId: null },
   newStockValue: 0,
   stockChangeType: 'adjustment', // 'adjustment' | 'purchase' | 'waste' | 'opname'
   stockChangePaymentMethod: 'cash', // 'cash' | 'transfer' | 'payable'
   stockChangeReason: '',
+
+  // =========================================================================
+  // STATE R&D: SKU, SCANNER, SUPPLIER, KONSINYASI & NOTIFIKASI WA
+  // =========================================================================
+  scanModal: {
+    open: false,
+    target: '',
+    mode: 'camera',
+    result: '',
+    manualInput: '',
+    error: '',
+    _scanner: null,
+    _onScanned: null
+  },
+  suppliersList: [],
+  loadingSuppliers: false,
+  supplierModal: false,
+  supplierForm: { id: '', name: '', contact: '', address: '', active: true },
+  supplierSearch: '',
+  preRegisterModal: false,
+  preRegisterForm: {
+    name: '',
+    supplierId: '',
+    supplierName: '',
+    purchasePrice: 0,
+    sellingPrice: 0,
+    category: 'rice_bowl',
+    unit: 'porsi',
+    initialStock: 0,
+    minStock: 5,
+    sku: '',
+    barcode: '',
+    autoPrintBarcode: true
+  },
+  scanReceiveModal: false,
+  scanReceiveForm: {
+    skuQuery: '',
+    matchedItem: null,
+    supplierId: '',
+    supplierName: '',
+    qty: 1,
+    purchasePrice: 0,
+    paymentMethod: 'payable',
+    notes: ''
+  },
+  receiveReceiptModal: false,
+  currentReceiveRecord: null,
+  settlementModal: false,
+  settlementDate: new Date().toISOString().slice(0, 10),
+  settlementSupplierFilter: 'all',
+  settlementSummary: [],
+  settlementTotalHutang: 0,
+  settlementTotalSoldQty: 0,
+  settlementTotalReturnQty: 0,
+  loadingSettlement: false,
+  settlementReceiptModal: false,
+  currentSettlementRecord: null,
+  generateMenuModal: false,
+  generateMenuForm: {
+    inventoryId: '',
+    name: '',
+    price: 0,
+    category: 'rice_bowl',
+    desc: '',
+    image: ''
+  },
+  barcodeLabelModal: false,
+  barcodeLabelItem: null,
+  barcodeLabelSize: '25x15', // '25x15' | '20x10' | '30x20'
+  barcodeLabelCount: 30,
 
   // Pembelian Bahan Baku State
   pembelianForm: {
@@ -627,6 +697,7 @@ try {
 
     // 6. Muat Inventory Realtime, Resep Bahan Baku & Riwayat Shift (BAGIAN 3)
     this.loadInventory();
+    this.loadSuppliers();
     this.loadMenuRecipes();
     this.loadInventoryLogs();
     this.loadRiwayatShift();
@@ -1913,6 +1984,15 @@ try {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(this.currentOrder)
     }).catch(() => {});
+
+    // 8.1. Notifikasi WhatsApp Otomatis (Fitur 6C)
+    const custPhone = (orderData && (orderData.customerPhone || orderData.phone || orderData.telepon)) || this.customerPhone || '';
+    if (custPhone) {
+      const custName = (orderData && (orderData.customerName || orderData.name)) || this.customerName || 'Pelanggan';
+      const itemsSummary = (this.currentOrder.items || []).map(it => `- ${it.name || it.id} x${it.qty}`).join('\n');
+      const waMsg = `Halo Kak ${custName}, terima kasih sudah bertransaksi di ${this.customKasirTitle || 'Dapur Kuliner Viral'}! ✨\n\nNo. Order: #${txId}\nTotal: ${this.formatRupiah(grandTotal)}\nMetode: ${pm.toUpperCase()}\nTanggal: ${dateStr}\n\nPesanan:\n${itemsSummary}\n\nStruk transaksi Anda telah berhasil diproses. Semoga puas dengan hidangan kami! 🙏`;
+      this.sendWhatsAppNotification(custPhone, waMsg, 'pos_receipt');
+    }
 
     // 9. Update shift summary
     if (this.shiftSummary) {
@@ -3238,6 +3318,14 @@ try {
           status: 'settlement'
         })
       });
+
+      // Notifikasi WA Order Dikonfirmasi (Fitur 6C)
+      const phone = orderData.customerPhone || orderData.phone || orderData.customer_phone || '';
+      if (phone) {
+        const custName = orderData.customerName || orderData.customer_name || 'Pelanggan';
+        const confMsg = `Halo Kak ${custName}, pesanan Anda #${orderId} telah kami KONFIRMASI dan sedang disiapkan di dapur! 🍳 Terima kasih telah memesan di ${this.customKasirTitle || 'Dapur Kuliner Viral'}.`;
+        this.sendWhatsAppNotification(phone, confMsg, 'order_confirmed');
+      }
     } catch (e) {
       console.warn('Patch order error:', e);
     }
@@ -4389,7 +4477,15 @@ try {
       minStock: Number(item.minStock || 0),
       unit: item.unit || 'unit',
       purchasePrice: item.purchasePrice !== undefined ? Number(item.purchasePrice) : 0,
-      isCountable: item.isCountable !== false
+      isCountable: item.isCountable !== false,
+      sku: item.sku || '',
+      skuSource: item.skuSource || 'internal',
+      barcodeFormat: item.barcodeFormat || 'CODE128',
+      barcode: item.barcode || item.sku || '',
+      supplierId: item.supplierId || '',
+      supplierName: item.supplierName || '',
+      isReadyToSell: Boolean(item.isReadyToSell),
+      linkedMenuId: item.linkedMenuId || null
     };
     this.newStockValue = Number(item.stock || item.stok || 0);
     this.stockChangeType = 'adjustment';
@@ -4506,6 +4602,32 @@ try {
       });
     }
 
+    if (item && this.selectedStockItem) {
+      if (this.selectedStockItem.sku !== undefined) item.sku = this.selectedStockItem.sku;
+      if (this.selectedStockItem.skuSource !== undefined) item.skuSource = this.selectedStockItem.skuSource;
+      if (this.selectedStockItem.barcode !== undefined) item.barcode = this.selectedStockItem.barcode;
+      if (this.selectedStockItem.barcodeFormat !== undefined) item.barcodeFormat = this.selectedStockItem.barcodeFormat;
+      if (this.selectedStockItem.supplierId !== undefined) item.supplierId = this.selectedStockItem.supplierId;
+      if (this.selectedStockItem.supplierName !== undefined) item.supplierName = this.selectedStockItem.supplierName;
+      if (this.selectedStockItem.isReadyToSell !== undefined) item.isReadyToSell = Boolean(this.selectedStockItem.isReadyToSell);
+      if (this.selectedStockItem.linkedMenuId !== undefined) item.linkedMenuId = this.selectedStockItem.linkedMenuId;
+
+      fetch(`/inventory/${encodeURIComponent(item.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: item.sku,
+          skuSource: item.skuSource,
+          barcode: item.barcode,
+          barcodeFormat: item.barcodeFormat,
+          supplierId: item.supplierId,
+          supplierName: item.supplierName,
+          isReadyToSell: item.isReadyToSell,
+          linkedMenuId: item.linkedMenuId
+        })
+      }).catch(() => {});
+    }
+
     return this.updateStok(this.selectedStockItem.id, this.newStockValue, reason, this.stockChangeType);
   },
 
@@ -4609,6 +4731,11 @@ try {
 
     // 3. Buat objek item inventori baru
     const newItemId = 'inv_' + Date.now();
+    const skuSource = form.skuSource || 'internal';
+    const skuCode = form.sku || (skuSource === 'external' ? (form.barcode || '') : this.generateSKU(form.category, skuSource, form.supplierName || ''));
+    const barcodeCode = form.barcode || skuCode || '';
+    const barcodeFormat = form.barcodeFormat || (barcodeCode.length === 13 ? 'EAN13' : 'CODE128');
+
     const newItem = {
       id: newItemId,
       name: itemName,
@@ -4619,6 +4746,14 @@ try {
       unit: form.unit || 'kg',
       purchasePrice: hargaBeli,
       isCountable: form.isCountable !== false,
+      sku: skuCode,
+      skuSource: skuSource,
+      barcode: barcodeCode,
+      barcodeFormat: barcodeFormat,
+      supplierId: form.supplierId || '',
+      supplierName: form.supplierName || '',
+      isReadyToSell: Boolean(form.isReadyToSell),
+      linkedMenuId: form.linkedMenuId || null,
       lastUpdate: Date.now(),
       createdAt: Date.now()
     };
@@ -7219,8 +7354,1396 @@ try {
     return list;
   },
 
+  // =========================================================================
+  // 🎯 R&D FITUR 1: SKU + BARCODE + SCANNER EXTERNAL (JsBarcode + Html5-QRCode)
+  // =========================================================================
+
+  /**
+   * Helper: Generate Barcode Data URL (PNG) dari teks SKU atau barcode string
+   * Mendukung auto-detect EAN13 (13 digit), UPC (12 digit), dan default CODE128
+   */
+  generateBarcodeDataURL(text, format) {
+    if (!text) return '';
+    try {
+      if (typeof window.JsBarcode === 'undefined') return '';
+      const canvas = document.createElement('canvas');
+      const cleanText = String(text).trim();
+      let fmt = format;
+      if (!fmt) {
+        if (/^\d{13}$/.test(cleanText)) fmt = 'EAN13';
+        else if (/^\d{12}$/.test(cleanText)) fmt = 'UPC';
+        else fmt = 'CODE128';
+      }
+      window.JsBarcode(canvas, cleanText, {
+        format: fmt,
+        width: 1.8,
+        height: 42,
+        displayValue: true,
+        fontSize: 12,
+        font: 'monospace',
+        margin: 5,
+        background: '#ffffff'
+      });
+      return canvas.toDataURL('image/png');
+    } catch (e) {
+      console.warn('generateBarcodeDataURL note:', e.message);
+      return '';
+    }
+  },
+
+  /**
+   * Helper: Format SKU Final: SKU-{KATEGORI}-{URUT}-{TAHUN}-{SUPPLIER}
+   * Contoh: SKU-BHN-0001-2026-PAKDE
+   */
+  generateSKU(category, skuSource, supplierName, sequentialNum) {
+    if (skuSource === 'external') return null;
+    const cat = String(category || '').toLowerCase();
+    let catCode = 'BHN';
+    if (cat.includes('bumbu') || cat.includes('saus')) catCode = 'BMB';
+    else if (cat.includes('kemasan') || cat.includes('box') || cat.includes('pack')) catCode = 'KMS';
+    else if (cat.includes('minuman') || cat.includes('drink')) catCode = 'MNM';
+    else if (cat.includes('menu') || cat.includes('rice') || cat.includes('bento') || cat.includes('mie')) catCode = 'MNU';
+    else if (cat.includes('frozen')) catCode = 'FRZ';
+    else if (cat.includes('snack') || cat.includes('dimsum')) catCode = 'SNK';
+
+    const year = new Date().getFullYear();
+    const sup = String(supplierName || 'PAKDE').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'PAKDE';
+
+    let num = sequentialNum;
+    if (!num) {
+      num = (this.inventoryList ? this.inventoryList.length : 0) + 1;
+    }
+    const numPadded = String(num).padStart(4, '0');
+    return `SKU-${catCode}-${numPadded}-${year}-${sup}`;
+  },
+
+  /**
+   * Generate ulang SKU untuk item yang dipilih
+   */
+  regenerateSKUForItem(item) {
+    if (!item) return;
+    const newSku = this.generateSKU(item.category, 'internal', item.supplierName);
+    item.sku = newSku;
+    item.barcode = newSku;
+    item.skuSource = 'internal';
+    item.barcodeFormat = 'CODE128';
+    this.showToast(`SKU baru berhasil dibuat: ${newSku}`, 'success');
+  },
+
+  /**
+   * Regenerate SKU untuk semua item inventori lama yang belum punya SKU
+   */
+  async regenSKUForExistingItems() {
+    if (!this.inventoryList || this.inventoryList.length === 0) return;
+    let count = 0;
+    for (let idx = 0; idx < this.inventoryList.length; idx++) {
+      const item = this.inventoryList[idx];
+      if (!item.sku) {
+        const sku = this.generateSKU(item.category, 'internal', item.supplierName || 'UMUM', idx + 1);
+        item.sku = sku;
+        item.skuSource = 'internal';
+        item.barcode = sku;
+        item.barcodeFormat = 'CODE128';
+        count++;
+
+        // Simpan ke server
+        fetch(`/inventory/${encodeURIComponent(item.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sku, skuSource: 'internal', barcode: sku, barcodeFormat: 'CODE128' })
+        }).catch(() => {});
+
+        // Simpan ke Firebase jika aktif
+        if (this._fbDb && this._fbSet && this._fbRef) {
+          try {
+            const itemRef = this._fbRef(this._fbDb, `inventory/${item.id}`);
+            await this._fbSet(itemRef, item);
+          } catch(e){}
+        }
+      }
+    }
+    try {
+      localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
+    } catch(e){}
+    this.showToast(`Berhasil men-generate SKU untuk ${count} item lama`, 'success');
+  },
+
+  /**
+   * Buka modal scanner kamera Html5-QRCode dengan fallback manual input
+   */
+  openScanModal(target = 'inventory_edit', mode = 'camera', onScanned = null) {
+    this.scanModal = {
+      open: true,
+      target: target,
+      mode: mode || 'camera',
+      result: '',
+      manualInput: '',
+      error: '',
+      _scanner: null,
+      _onScanned: onScanned
+    };
+
+    if (this.scanModal.mode === 'camera') {
+      this.$nextTick(() => {
+        this._startScanner();
+      });
+    }
+  },
+
+  /**
+   * Inisialisasi & jalankan Html5Qrcode kamera scanner
+   */
+  _startScanner() {
+    if (typeof Html5Qrcode === 'undefined') {
+      this.scanModal.error = 'Modul kamera scanner belum siap. Silakan ketik kode manual di bawah.';
+      this.scanModal.mode = 'manual';
+      return;
+    }
+    try {
+      const elId = "html5qr-code-full-region";
+      const regionEl = document.getElementById(elId);
+      if (!regionEl) {
+        setTimeout(() => this._startScanner(), 150);
+        return;
+      }
+      this.scanModal._scanner = new Html5Qrcode(elId);
+      const qrConfig = { fps: 12, qrbox: { width: 260, height: 180 } };
+      this.scanModal._scanner.start(
+        { facingMode: "environment" },
+        qrConfig,
+        (decodedText) => this._onScanSuccess(decodedText),
+        () => { /* ignore normal frame misses */ }
+      ).catch(err => {
+        console.warn('Html5Qrcode start error:', err);
+        this.scanModal.error = 'Akses kamera tidak diizinkan atau tidak ditemukan. Gunakan input manual.';
+        this.scanModal.mode = 'manual';
+      });
+    } catch (e) {
+      this.scanModal.error = 'Gagal membuka kamera: ' + e.message;
+      this.scanModal.mode = 'manual';
+    }
+  },
+
+  /**
+   * Callback scan berhasil
+   */
+  _onScanSuccess(decodedText) {
+    const text = String(decodedText || '').trim();
+    if (!text) return;
+    this.playSound('success');
+    this.scanModal.result = text;
+    if (typeof this.scanModal._onScanned === 'function') {
+      this.scanModal._onScanned(text);
+    }
+    this.closeScanModal();
+  },
+
+  /**
+   * Submit scan via input manual (fallback ketika tanpa kamera)
+   */
+  submitManualScan() {
+    const code = String(this.scanModal.manualInput || '').trim();
+    if (!code) {
+      this.showToast('Masukkan kode SKU atau barcode terlebih dahulu', 'error');
+      return;
+    }
+    this._onScanSuccess(code);
+  },
+
+  /**
+   * Tutup modal scan dan hentikan stream kamera
+   */
+  closeScanModal() {
+    if (this.scanModal._scanner) {
+      try {
+        this.scanModal._scanner.stop().then(() => {
+          try { this.scanModal._scanner.clear(); } catch(e){}
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    this.scanModal.open = false;
+    this.scanModal.mode = 'camera';
+    this.scanModal.error = '';
+    this.scanModal.result = '';
+    this.scanModal.manualInput = '';
+    this.scanModal._scanner = null;
+    this.scanModal._onScanned = null;
+  },
+
+  /**
+   * 1H. Quick Scan Bahan Baku untuk Jurnal Manual
+   */
+  handleJournalScanBahan(code) {
+    const targetCode = String(code || '').trim().toLowerCase();
+    const item = (this.inventoryList || []).find(i => 
+      (i.sku && i.sku.toLowerCase() === targetCode) ||
+      (i.barcode && i.barcode.toLowerCase() === targetCode) ||
+      (i.id && i.id.toLowerCase() === targetCode)
+    );
+    if (!item) {
+      this.showToast(`Bahan dengan kode "${code}" tidak ditemukan di inventori`, 'error');
+      return;
+    }
+
+    const price = Number(item.purchasePrice || item.hargaBeli || 0);
+    this.journalForm.desc = `Pembelian ${item.name}`;
+    this.journalForm.ref = item.sku || code;
+    this.journalForm.category = 'pembelian';
+    this.journalForm.lines = [
+      { acc: '1004', debit: price, credit: 0, hint: 'Persediaan Bahan Baku' },
+      { acc: '1001', debit: 0, credit: price, hint: 'Kas Tunai' }
+    ];
+    this.showToast(`Form jurnal otomatis terisi untuk "${item.name}"`, 'success');
+  },
+
+  /**
+   * 1I. Cetak Label Barcode Grid PDF (3 ukuran: 25×15mm, 20×10mm, 30×20mm)
+   * Grid 3×10 = 30 label per halaman A4
+   */
+  openBarcodeLabelModal(item) {
+    if (!item) return;
+    this.barcodeLabelItem = item;
+    this.barcodeLabelSize = '25x15';
+    this.barcodeLabelCount = 30;
+    this.barcodeLabelModal = true;
+  },
+
+  printBarcodeLabel(item, size = '25x15', count = 30) {
+    if (!item) return;
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+      this.showToast('Pustaka jsPDF belum termuat', 'error');
+      return;
+    }
+
+    try {
+      const code = item.sku || item.barcode || item.id;
+      const barcodeDataUrl = this.generateBarcodeDataURL(code, item.barcodeFormat || 'CODE128');
+      if (!barcodeDataUrl) {
+        this.showToast('Gagal membentuk data barcode', 'error');
+        return;
+      }
+
+      const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const cols = 3;
+      const rows = 10;
+      const labelW = 60;
+      const labelH = 26;
+      const startX = (pageWidth - (cols * labelW)) / 2;
+      const startY = 12;
+
+      let printed = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (printed >= count) break;
+          const x = startX + (c * labelW);
+          const y = startY + (r * labelH);
+
+          // Kotak label
+          doc.setDrawColor(220, 220, 220);
+          doc.setLineWidth(0.2);
+          doc.roundedRect(x + 1, y + 1, labelW - 2, labelH - 2, 2, 2, 'S');
+
+          // Header teks nama produk
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(30, 30, 30);
+          const title = item.name.length > 24 ? item.name.slice(0, 22) + '...' : item.name;
+          doc.text(title, x + (labelW / 2), y + 5, { align: 'center' });
+
+          // Gambar barcode
+          doc.addImage(barcodeDataUrl, 'PNG', x + 5, y + 6, labelW - 10, 12);
+
+          // Footer info harga & SKU
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(7);
+          doc.setTextColor(80, 80, 80);
+          const priceStr = item.purchasePrice ? `Rp ${this.formatNumber(item.purchasePrice)}` : '';
+          doc.text(code, x + (labelW / 2), y + 21, { align: 'center' });
+          if (priceStr) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(6.5);
+            doc.text(priceStr, x + (labelW / 2), y + 24, { align: 'center' });
+          }
+
+          printed++;
+        }
+      }
+
+      doc.save(`label_barcode_${item.name.replace(/[^a-zA-Z0-9]/g, '_')}_${size}.pdf`);
+      this.showToast(`Label barcode berhasil diunduh (${printed} label)`, 'success');
+      this.barcodeLabelModal = false;
+    } catch (err) {
+      console.error('printBarcodeLabel error:', err);
+      this.showToast(`Gagal mencetak label: ${err.message}`, 'error');
+    }
+  },
+
+  // =========================================================================
+  // 🎯 R&D FITUR 2: SUPPLIER MASTER & PRE-REGISTER KONSINYASI
+  // =========================================================================
+
+  /**
+   * 2A & 2B. Muat daftar supplier dari /suppliers atau Firebase
+   */
+  async loadSuppliers() {
+    this.loadingSuppliers = true;
+    try {
+      const res = await fetch('/suppliers');
+      const json = await res.json();
+      if (json && json.success && Array.isArray(json.data)) {
+        this.suppliersList = json.data;
+      } else {
+        // Fallback default supplier demo jika kosong
+        this.suppliersList = [
+          { id: 'sp_1', name: 'Pakde (Nasi & Gorengan)', contact: '081234567890', address: 'Jl. Merdeka No. 10', active: true },
+          { id: 'sp_2', name: 'Bu Tejo (Snack & Kue)', contact: '081298765432', address: 'Jl. Melati No. 5', active: true }
+        ];
+      }
+    } catch (e) {
+      console.warn('loadSuppliers error:', e);
+      if (!this.suppliersList || this.suppliersList.length === 0) {
+        this.suppliersList = [
+          { id: 'sp_1', name: 'Pakde (Nasi & Gorengan)', contact: '081234567890', address: 'Jl. Merdeka No. 10', active: true },
+          { id: 'sp_2', name: 'Bu Tejo (Snack & Kue)', contact: '081298765432', address: 'Jl. Melati No. 5', active: true }
+        ];
+      }
+    } finally {
+      this.loadingSuppliers = false;
+    }
+  },
+
+  openAddSupplierModal() {
+    this.supplierForm = { id: '', name: '', contact: '', address: '', active: true };
+    this.supplierModal = true;
+  },
+
+  openEditSupplierModal(sup) {
+    if (!sup) return;
+    this.supplierForm = { ...sup };
+    this.supplierModal = true;
+  },
+
+  async saveSupplier() {
+    if (!this.supplierForm.name || !this.supplierForm.name.trim()) {
+      this.showToast('Nama supplier wajib diisi', 'error');
+      return;
+    }
+    const supId = this.supplierForm.id || `sp_${Date.now()}`;
+    const payload = {
+      id: supId,
+      name: this.supplierForm.name.trim(),
+      contact: this.supplierForm.contact ? this.supplierForm.contact.trim() : '',
+      address: this.supplierForm.address ? this.supplierForm.address.trim() : '',
+      active: this.supplierForm.active !== undefined ? Boolean(this.supplierForm.active) : true,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      const method = this.supplierForm.id ? 'PATCH' : 'POST';
+      const endpoint = this.supplierForm.id ? `/suppliers/${encodeURIComponent(supId)}` : '/suppliers';
+      await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      // Simpan ke Firebase jika ada SDK
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const supRef = this._fbRef(this._fbDb, `suppliers/${supId}`);
+          await this._fbSet(supRef, payload);
+        } catch(e){}
+      }
+
+      await this.loadSuppliers();
+      this.supplierModal = false;
+      this.showToast(`Supplier "${payload.name}" berhasil disimpan`, 'success');
+    } catch (err) {
+      this.showToast(`Gagal menyimpan supplier: ${err.message}`, 'error');
+    }
+  },
+
+  async deleteSupplier(supId) {
+    if (!supId) return;
+    if (!confirm('Yakin ingin menghapus supplier ini?')) return;
+    try {
+      await fetch(`/suppliers/${encodeURIComponent(supId)}`, { method: 'DELETE' });
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const supRef = this._fbRef(this._fbDb, `suppliers/${supId}`);
+          await this._fbSet(supRef, null);
+        } catch(e){}
+      }
+      this.suppliersList = this.suppliersList.filter(s => s.id !== supId);
+      this.showToast('Supplier berhasil dihapus', 'success');
+    } catch (err) {
+      this.showToast(`Gagal menghapus supplier: ${err.message}`, 'error');
+    }
+  },
+
+  /**
+   * 2D. Pre-Register Produk Konsinyasi (Auto-create SKU + Menu Baru + Barcode)
+   */
+  openPreRegisterModal() {
+    const defaultSup = (this.suppliersList && this.suppliersList[0]) ? this.suppliersList[0] : { id: 'sp_1', name: 'Pakde' };
+    this.preRegisterForm = {
+      name: '',
+      supplierId: defaultSup.id,
+      supplierName: defaultSup.name,
+      purchasePrice: 15000,
+      sellingPrice: 18000, // beli + 20%
+      category: 'rice_bowl',
+      unit: 'porsi',
+      initialStock: 0,
+      minStock: 5,
+      sku: this.generateSKU('rice_bowl', 'internal', defaultSup.name),
+      barcode: '',
+      autoPrintBarcode: true
+    };
+    this.preRegisterForm.barcode = this.preRegisterForm.sku;
+    this.preRegisterModal = true;
+  },
+
+  onPreRegisterNameOrSupplierChange() {
+    const sup = this.suppliersList.find(s => s.id === this.preRegisterForm.supplierId);
+    if (sup) this.preRegisterForm.supplierName = sup.name;
+    const cleanSup = (this.preRegisterForm.supplierName || 'PAKDE').split(' ')[0];
+    this.preRegisterForm.sku = this.generateSKU(this.preRegisterForm.category, 'internal', cleanSup);
+    this.preRegisterForm.barcode = this.preRegisterForm.sku;
+    if (this.preRegisterForm.purchasePrice > 0 && !this.preRegisterForm.sellingPrice) {
+      this.preRegisterForm.sellingPrice = Math.round((this.preRegisterForm.purchasePrice * 1.2) / 1000) * 1000;
+    }
+  },
+
+  async savePreRegisterConsignment() {
+    if (!this.preRegisterForm.name || !this.preRegisterForm.name.trim()) {
+      this.showToast('Nama produk konsinyasi wajib diisi', 'error');
+      return;
+    }
+
+    const prodName = this.preRegisterForm.name.trim();
+    const supName = this.preRegisterForm.supplierName || 'Supplier';
+    const menuTitle = `${prodName} (${supName.split(' ')[0]})`;
+    const itemId = `inv_${Date.now()}`;
+    const menuId = `m_${Date.now()}`;
+    const beli = Number(this.preRegisterForm.purchasePrice) || 0;
+    const jual = Number(this.preRegisterForm.sellingPrice) || Math.round(beli * 1.2);
+
+    // 1. Buat Item Inventori Kosong (Stok 0, belum di-receive)
+    const newInvItem = {
+      id: itemId,
+      name: menuTitle,
+      category: 'Bahan Baku',
+      stock: 0,
+      stok: 0,
+      minStock: Number(this.preRegisterForm.minStock) || 5,
+      unit: this.preRegisterForm.unit || 'porsi',
+      purchasePrice: beli,
+      isCountable: true,
+      sku: this.preRegisterForm.sku,
+      skuSource: 'internal',
+      barcode: this.preRegisterForm.sku,
+      barcodeFormat: 'CODE128',
+      supplierId: this.preRegisterForm.supplierId,
+      supplierName: supName,
+      isReadyToSell: true,
+      linkedMenuId: menuId,
+      createdAt: Date.now()
+    };
+
+    // 2. Buat Menu Baru di /menu_items/
+    const newMenuItem = {
+      id: menuId,
+      name: menuTitle,
+      category: this.preRegisterForm.category || 'rice_bowl',
+      price: jual,
+      cost: beli,
+      desc: `Produk titipan konsinyasi dari ${supName}`,
+      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+      inventoryId: itemId,
+      isConsignment: true,
+      supplierId: this.preRegisterForm.supplierId,
+      supplierName: supName,
+      active: true
+    };
+
+    try {
+      // Simpan ke memory lokal
+      this.inventoryList.unshift(newInvItem);
+      this.menuList.unshift(newMenuItem);
+      try {
+        localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
+      } catch(e){}
+
+      // Simpan ke backend endpoint
+      await fetch(`/inventory/${encodeURIComponent(itemId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newInvItem)
+      });
+
+      await fetch(`/menu/${encodeURIComponent(menuId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMenuItem)
+      });
+
+      // Simpan ke Firebase jika ada SDK
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const invRef = this._fbRef(this._fbDb, `inventory/${itemId}`);
+          const menuRef = this._fbRef(this._fbDb, `menu_items/${menuId}`);
+          await this._fbSet(invRef, newInvItem);
+          await this._fbSet(menuRef, newMenuItem);
+        } catch(e){}
+      }
+
+      this.showToast(`Produk konsinyasi "${menuTitle}" berhasil didaftarkan!`, 'success');
+      this.preRegisterModal = false;
+
+      // Cetak label langsung jika dipilih
+      if (this.preRegisterForm.autoPrintBarcode) {
+        this.printBarcodeLabel(newInvItem, '25x15', 30);
+      }
+    } catch (err) {
+      console.error('savePreRegisterConsignment error:', err);
+      this.showToast(`Gagal mendaftarkan produk: ${err.message}`, 'error');
+    }
+  },
+
+  /**
+   * 2E. Scan Receive Barang Konsinyasi dari Supplier
+   */
+  openScanReceiveModal() {
+    this.scanReceiveForm = {
+      skuQuery: '',
+      matchedItem: null,
+      supplierId: '',
+      supplierName: '',
+      qty: 1,
+      purchasePrice: 0,
+      paymentMethod: 'payable', // Konsinyasi: default Hutang Supplier 2001
+      notes: ''
+    };
+    this.scanReceiveModal = true;
+  },
+
+  processScanReceive(code) {
+    const cleanCode = String(code || '').trim().toLowerCase();
+    const item = (this.inventoryList || []).find(i => 
+      (i.sku && i.sku.toLowerCase() === cleanCode) ||
+      (i.barcode && i.barcode.toLowerCase() === cleanCode) ||
+      (i.id && i.id.toLowerCase() === cleanCode)
+    );
+
+    if (item) {
+      this.scanReceiveForm.matchedItem = item;
+      this.scanReceiveForm.skuQuery = item.sku || item.barcode;
+      this.scanReceiveForm.supplierId = item.supplierId || '';
+      this.scanReceiveForm.supplierName = item.supplierName || 'Umum';
+      this.scanReceiveForm.purchasePrice = item.purchasePrice || item.hargaBeli || 0;
+      this.playSound('success');
+      this.showToast(`Item ditemukan: ${item.name}`, 'success');
+    } else {
+      this.playSound('error');
+      if (confirm(`SKU/Barcode "${code}" belum terdaftar.\nApakah Anda ingin mendaftarkan produk baru konsinyasi sekarang?`)) {
+        this.scanReceiveModal = false;
+        this.openPreRegisterModal();
+        this.preRegisterForm.sku = code;
+        this.preRegisterForm.barcode = code;
+      }
+    }
+  },
+
+  async submitReceiveGoods() {
+    if (!this.scanReceiveForm.matchedItem) {
+      this.showToast('Silakan scan atau pilih produk terlebih dahulu', 'error');
+      return;
+    }
+
+    const item = this.scanReceiveForm.matchedItem;
+    const qty = Math.max(1, Number(this.scanReceiveForm.qty) || 1);
+    const price = Number(this.scanReceiveForm.purchasePrice) || Number(item.purchasePrice) || 0;
+    const totalValue = qty * price;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const randHex = Math.floor(Math.random() * 9000 + 1000).toString();
+    const receiveId = `TRM-${dateStr}-${randHex}`;
+    const supName = this.scanReceiveForm.supplierName || item.supplierName || 'Supplier';
+
+    // 1. Update stok inventory +qty
+    const newStock = (Number(item.stock || item.stok || 0) + qty);
+    item.stock = newStock;
+    item.stok = newStock;
+    item.purchasePrice = price;
+
+    // 2. Data payload receive
+    const receiveRecord = {
+      receiveId,
+      id: receiveId,
+      supplierId: this.scanReceiveForm.supplierId || item.supplierId || '',
+      supplierName: supName,
+      date: now.toISOString().slice(0, 10),
+      time: now.toLocaleTimeString('id-ID'),
+      items: [
+        {
+          id: item.id,
+          name: item.name,
+          sku: item.sku || item.barcode || item.id,
+          qty,
+          unit: item.unit || 'unit',
+          price,
+          total: totalValue
+        }
+      ],
+      totalValue,
+      status: 'received',
+      notes: this.scanReceiveForm.notes || 'Penerimaan barang konsinyasi',
+      createdAt: Date.now()
+    };
+
+    try {
+      // POST ke /inventory_receives
+      await fetch('/inventory_receives', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(receiveRecord)
+      });
+
+      // Update stok ke server
+      await fetch(`/inventory/${encodeURIComponent(item.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stock: newStock, purchasePrice: price })
+      });
+
+      // Catat log inventori
+      fetch(`/inventory_logs/${encodeURIComponent(item.id)}/log_${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          t: Date.now(),
+          old: newStock - qty,
+          new: newStock,
+          diff: qty,
+          by: this.kasirInfo?.name || 'kasir',
+          reason: `Penerimaan Barang Konsinyasi #${receiveId}`,
+          changeType: 'purchase'
+        })
+      }).catch(() => {});
+
+      // 3. Auto-Jurnal Akuntansi: Debit 1004 Persediaan / Kredit 2001 Hutang Supplier
+      await fetch('/accounting/journal/receive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: totalValue,
+          receiveId,
+          supplierName: supName,
+          ref: receiveId,
+          date: now.toISOString().slice(0, 10)
+        })
+      }).catch(e => console.warn('Auto journal receive note:', e));
+
+      // Simpan ke Firebase jika ada
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const recRef = this._fbRef(this._fbDb, `inventory_receives/${receiveId}`);
+          await this._fbSet(recRef, receiveRecord);
+          const invRef = this._fbRef(this._fbDb, `inventory/${item.id}/stock`);
+          await this._fbSet(invRef, newStock);
+        } catch(e){}
+      }
+
+      this.currentReceiveRecord = receiveRecord;
+      this.scanReceiveModal = false;
+      this.receiveReceiptModal = true;
+      this.playSound('success');
+      this.showToast(`Penerimaan barang #${receiveId} berhasil dicatat!`, 'success');
+    } catch (err) {
+      console.error('submitReceiveGoods error:', err);
+      this.showToast(`Gagal memproses penerimaan: ${err.message}`, 'error');
+    }
+  },
+
+  /**
+   * 2F. Struk Tanda Terima Konsinyasi (Tanpa nama kasir, tanda tangan, QR verify)
+   */
+  downloadReceiveReceiptImage(record) {
+    const rec = record || this.currentReceiveRecord;
+    if (!rec) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 360;
+      const ctx = canvas.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Header
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(0, 0, canvas.width, 10);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.customKasirTitle || 'DAPUR KULINER VIRAL', 200, 35);
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#047857';
+      ctx.fillText('BUKTI TANDA TERIMA KONSINYASI', 200, 56);
+
+      // Divider garis putus-putus
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(20, 70);
+      ctx.lineTo(380, 70);
+      ctx.stroke();
+
+      // Info Penerimaan
+      ctx.textAlign = 'left';
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#4b5563';
+      ctx.fillText(`No. Terima : ${rec.receiveId}`, 20, 90);
+      ctx.fillText(`Tanggal    : ${rec.date} ${rec.time || ''}`, 20, 108);
+      ctx.fillText(`Supplier   : ${rec.supplierName}`, 20, 126);
+
+      ctx.beginPath();
+      ctx.moveTo(20, 138);
+      ctx.lineTo(380, 138);
+      ctx.stroke();
+
+      // Item List Header
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#111827';
+      ctx.fillText('ITEM', 20, 155);
+      ctx.textAlign = 'right';
+      ctx.fillText('TOTAL', 380, 155);
+
+      // Items
+      let y = 175;
+      (rec.items || []).forEach(it => {
+        ctx.textAlign = 'left';
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(`${it.name}`, 20, y);
+
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText(`[${it.sku}] ${it.qty} ${it.unit} @ Rp ${this.formatNumber(it.price)}`, 20, y + 14);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = '#111827';
+        ctx.fillText(`Rp ${this.formatNumber(it.total)}`, 380, y + 14);
+        y += 32;
+      });
+
+      // Total Garis
+      ctx.beginPath();
+      ctx.moveTo(20, y + 5);
+      ctx.lineTo(380, y + 5);
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#111827';
+      ctx.fillText('TOTAL NILAI SUPPLIER:', 20, y + 26);
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = '#047857';
+      ctx.fillText(`Rp ${this.formatNumber(rec.totalValue)}`, 380, y + 26);
+
+      // Download trigger
+      const link = document.createElement('a');
+      link.download = `struk_terima_${rec.receiveId}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      this.showToast('Foto struk berhasil disimpan', 'success');
+    } catch (e) {
+      console.error('downloadReceiveReceiptImage error:', e);
+      this.showToast('Gagal membentuk gambar struk', 'error');
+    }
+  },
+
+  printReceiveReceiptPDF(record) {
+    const rec = record || this.currentReceiveRecord;
+    if (!rec) return;
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+      this.showToast('Pustaka PDF belum termuat', 'error');
+      return;
+    }
+
+    try {
+      const doc = new window.jspdf.jsPDF('p', 'mm', [80, 140]);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(this.customKasirTitle || 'DAPUR KULINER VIRAL', 40, 8, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.text('BUKTI TANDA TERIMA KONSINYASI', 40, 13, { align: 'center' });
+
+      doc.setLineWidth(0.2);
+      doc.line(4, 16, 76, 16);
+
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(8);
+      doc.text(`No. Terima : ${rec.receiveId}`, 4, 21);
+      doc.text(`Tanggal    : ${rec.date} ${rec.time || ''}`, 4, 25);
+      doc.text(`Supplier   : ${rec.supplierName}`, 4, 29);
+
+      doc.line(4, 32, 76, 32);
+
+      let y = 37;
+      (rec.items || []).forEach(it => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(it.name, 4, y);
+        y += 4;
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(`[${it.sku}] ${it.qty} ${it.unit} @ ${this.formatNumber(it.price)}`, 4, y);
+        doc.text(`Rp ${this.formatNumber(it.total)}`, 76, y, { align: 'right' });
+        y += 6;
+      });
+
+      doc.line(4, y, 76, y);
+      y += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('TOTAL:', 4, y);
+      doc.text(`Rp ${this.formatNumber(rec.totalValue)}`, 76, y, { align: 'right' });
+
+      doc.save(`tanda_terima_${rec.receiveId}.pdf`);
+      this.showToast('Struk tanda terima PDF siap dicetak', 'success');
+    } catch (e) {
+      this.showToast(`Gagal cetak PDF: ${e.message}`, 'error');
+    }
+  },
+
+  shareReceiveReceiptWA(record) {
+    const rec = record || this.currentReceiveRecord;
+    if (!rec) return;
+    const sup = this.suppliersList.find(s => s.id === rec.supplierId || s.name === rec.supplierName);
+    const phone = sup?.contact || '';
+    const itemsText = (rec.items || []).map(i => `- ${i.name} (${i.sku}): ${i.qty} ${i.unit} x Rp ${this.formatNumber(i.price)} = Rp ${this.formatNumber(i.total)}`).join('\n');
+    const msg = `*BUKTI TANDA TERIMA BARANG KONSINYASI*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nNo. Terima: ${rec.receiveId}\nTanggal: ${rec.date} ${rec.time || ''}\nSupplier: ${rec.supplierName}\n\n*Daftar Barang:*\n${itemsText}\n\n*Total Nilai: Rp ${this.formatNumber(rec.totalValue)}*\n\nBarang titipan konsinyasi telah diterima dengan baik. Terima kasih! 🙏`;
+
+    this.sendWhatsAppNotification(phone, msg, 'consignment_receipt');
+  },
+
+  // =========================================================================
+  // 🎯 R&D FITUR 3: AUTO-SETTLEMENT HARIAN + RETUR KONSINYASI
+  // =========================================================================
+
+  /**
+   * 3A & 3B. Modal Tutup Hari Konsinyasi & Ringkasan Laku vs Retur
+   */
+  async openSettlementModal(date) {
+    this.settlementDate = date || new Date().toISOString().slice(0, 10);
+    this.settlementModal = true;
+    await this.loadSettlementSummary(this.settlementDate);
+  },
+
+  async loadSettlementSummary(date) {
+    const d = date || this.settlementDate || new Date().toISOString().slice(0, 10);
+    this.loadingSettlement = true;
+    try {
+      // 1. Ambil transaksi hari ini dari server / Firebase
+      let txList = [];
+      try {
+        const txRes = await fetch(`/pos/transactions/${d}`);
+        const txJson = await txRes.json();
+        if (txJson && txJson.success && Array.isArray(txJson.data)) {
+          txList = txJson.data;
+        }
+      } catch(e){}
+
+      // 2. Mapping produk konsinyasi per supplier
+      const supMap = {};
+      (this.suppliersList || []).forEach(sup => {
+        supMap[sup.id] = {
+          supplierId: sup.id,
+          supplierName: sup.name,
+          contact: sup.contact,
+          soldItems: {},
+          soldQty: 0,
+          totalHutang: 0,
+          unsoldItems: [],
+          unsoldQty: 0,
+          unsoldValue: 0
+        };
+      });
+
+      // Filter item inventori konsinyasi per supplier
+      (this.inventoryList || []).forEach(inv => {
+        const supId = inv.supplierId || 'sp_1';
+        if (!supMap[supId]) {
+          supMap[supId] = {
+            supplierId: supId,
+            supplierName: inv.supplierName || 'Supplier Konsinyasi',
+            contact: '',
+            soldItems: {},
+            soldQty: 0,
+            totalHutang: 0,
+            unsoldItems: [],
+            unsoldQty: 0,
+            unsoldValue: 0
+          };
+        }
+
+        const remainingStock = Number(inv.stock || inv.stok || 0);
+        if (remainingStock > 0) {
+          supMap[supId].unsoldItems.push({
+            id: inv.id,
+            name: inv.name,
+            sku: inv.sku || inv.barcode,
+            stock: remainingStock,
+            price: Number(inv.purchasePrice || 0),
+            totalValue: remainingStock * Number(inv.purchasePrice || 0)
+          });
+          supMap[supId].unsoldQty += remainingStock;
+          supMap[supId].unsoldValue += (remainingStock * Number(inv.purchasePrice || 0));
+        }
+      });
+
+      // Hitung barang laku dari transaksi POS hari ini
+      txList.forEach(tx => {
+        const items = tx.items || [];
+        items.forEach(it => {
+          let mId = Array.isArray(it) ? it[0] : (it.id || it.menuId);
+          let qty = Array.isArray(it) ? Number(it[1]) : Number(it.qty || 1);
+          const menu = (this.menuList || []).find(m => m.id === mId);
+          if (menu && (menu.isConsignment || menu.supplierId)) {
+            const supId = menu.supplierId || 'sp_1';
+            if (supMap[supId]) {
+              const buyPrice = Number(menu.cost || 0);
+              if (!supMap[supId].soldItems[mId]) {
+                supMap[supId].soldItems[mId] = { name: menu.name, qty: 0, buyPrice, total: 0 };
+              }
+              supMap[supId].soldItems[mId].qty += qty;
+              supMap[supId].soldItems[mId].total += (qty * buyPrice);
+              supMap[supId].soldQty += qty;
+              supMap[supId].totalHutang += (qty * buyPrice);
+            }
+          }
+        });
+      });
+
+      const summaryList = Object.values(supMap).filter(s => s.soldQty > 0 || s.unsoldQty > 0);
+      this.settlementSummary = summaryList;
+      this.settlementTotalHutang = summaryList.reduce((acc, s) => acc + s.totalHutang, 0);
+      this.settlementTotalSoldQty = summaryList.reduce((acc, s) => acc + s.soldQty, 0);
+      this.settlementTotalReturnQty = summaryList.reduce((acc, s) => acc + s.unsoldQty, 0);
+    } catch (err) {
+      console.error('loadSettlementSummary error:', err);
+      this.showToast('Gagal memuat ringkasan settlement', 'error');
+    } finally {
+      this.loadingSettlement = false;
+    }
+  },
+
+  /**
+   * 3D. Bayar Supplier: Debit 2001 Hutang / Kredit 1001 Kas (atau 1002 Bank)
+   */
+  async bayarSupplier(supSummary, pm = 'cash') {
+    if (!supSummary || supSummary.totalHutang <= 0) {
+      this.showToast('Tidak ada hutang yang harus dibayar untuk supplier ini', 'notify');
+      return;
+    }
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const randHex = Math.floor(Math.random() * 9000 + 1000).toString();
+    const stlId = `STL-${dateStr}-${randHex}`;
+    const amount = supSummary.totalHutang;
+
+    const payload = {
+      settlementId: stlId,
+      id: stlId,
+      date: this.settlementDate,
+      supplierId: supSummary.supplierId,
+      supplierName: supSummary.supplierName,
+      totalPaid: amount,
+      soldItemsCount: supSummary.soldQty,
+      returnedItemsCount: supSummary.unsoldQty,
+      paymentMethod: pm,
+      status: 'settled',
+      createdAt: Date.now()
+    };
+
+    try {
+      // 1. Simpan settlement ke /settlements
+      await fetch('/settlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      // 2. Auto-Jurnal: Debit 2001 Hutang / Kredit 1001 Kas (atau 1002 Bank)
+      await fetch('/accounting/journal/settlement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          settlementId: stlId,
+          supplierName: supSummary.supplierName,
+          paymentMethod: pm,
+          ref: stlId,
+          date: this.settlementDate
+        })
+      });
+
+      // Simpan ke Firebase jika ada SDK
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const stlRef = this._fbRef(this._fbDb, `settlements/${stlId}`);
+          await this._fbSet(stlRef, payload);
+        } catch(e){}
+      }
+
+      this.currentSettlementRecord = payload;
+      this.showToast(`Hutang supplier ${supSummary.supplierName} sebesar Rp ${this.formatNumber(amount)} berhasil dibayar!`, 'success');
+      this.playSound('success');
+
+      // Refresh settlement data
+      await this.loadSettlementSummary(this.settlementDate);
+
+      // WhatsApp Notifikasi ke Supplier
+      if (supSummary.contact) {
+        const msg = `*BUKTI SETTLEMENT KONSINYASI HARIAN*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nID Settlement: ${stlId}\nTanggal: ${this.settlementDate}\nSupplier: ${supSummary.supplierName}\n\nTotal Barang Laku : ${supSummary.soldQty} pcs\nTotal Pembayaran  : Rp ${this.formatNumber(amount)}\nMetode Pembayaran : ${pm.toUpperCase()}\nStatus: LUNAS DIBAYARKAN ✅\n\nTerima kasih atas kerja samanya! 🙏`;
+        this.sendWhatsAppNotification(supSummary.contact, msg, 'settlement');
+      }
+    } catch (err) {
+      console.error('bayarSupplier error:', err);
+      this.showToast(`Gagal memproses pembayaran: ${err.message}`, 'error');
+    }
+  },
+
+  async bayarSemuaSupplier(pm = 'cash') {
+    if (this.settlementTotalHutang <= 0) {
+      this.showToast('Tidak ada hutang supplier yang perlu dibayar hari ini', 'notify');
+      return;
+    }
+    if (!confirm(`Konfirmasi pembayaran konsinyasi ke SEMUA supplier?\nTotal Nilai: Rp ${this.formatNumber(this.settlementTotalHutang)}`)) return;
+
+    for (const sup of this.settlementSummary) {
+      if (sup.totalHutang > 0) {
+        await this.bayarSupplier(sup, pm);
+      }
+    }
+    this.showToast('Semua hutang konsinyasi berhasil diselesaikan!', 'success');
+  },
+
+  /**
+   * 3E. Retur Barang: Debit 2001 Hutang / Kredit 1004 Persediaan & update stok -qty
+   */
+  async returBarangSupplier(supSummary) {
+    if (!supSummary || !supSummary.unsoldItems || supSummary.unsoldItems.length === 0) {
+      this.showToast('Tidak ada barang konsinyasi yang tersisa untuk diretur', 'notify');
+      return;
+    }
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const randHex = Math.floor(Math.random() * 9000 + 1000).toString();
+    const returnId = `RET-${dateStr}-${randHex}`;
+    const totalQty = supSummary.unsoldQty;
+    const totalValue = supSummary.unsoldValue;
+
+    const payload = {
+      returnId,
+      id: returnId,
+      date: this.settlementDate,
+      supplierId: supSummary.supplierId,
+      supplierName: supSummary.supplierName,
+      items: supSummary.unsoldItems,
+      totalQty,
+      totalValue,
+      reason: 'Retur sisa konsinyasi belum laku (Tutup Hari)',
+      createdAt: Date.now()
+    };
+
+    try {
+      // 1. Simpan log retur ke /returns
+      await fetch('/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      // 2. Kurangi stok inventory yang diretur menjadi 0
+      for (const it of supSummary.unsoldItems) {
+        const inv = this.inventoryList.find(i => i.id === it.id);
+        if (inv) {
+          inv.stock = 0;
+          inv.stok = 0;
+          fetch(`/inventory/${encodeURIComponent(it.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stock: 0 })
+          }).catch(() => {});
+        }
+      }
+
+      // 3. Auto-Jurnal Retur: Debit 2001 Hutang / Kredit 1004 Persediaan
+      await fetch('/accounting/journal/return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: totalValue,
+          returnId,
+          supplierName: supSummary.supplierName,
+          ref: returnId,
+          date: this.settlementDate
+        })
+      });
+
+      this.showToast(`Berhasil meretur ${totalQty} pcs barang ke ${supSummary.supplierName}`, 'success');
+      this.playSound('success');
+      await this.loadSettlementSummary(this.settlementDate);
+    } catch (err) {
+      console.error('returBarangSupplier error:', err);
+      this.showToast(`Gagal meretur barang: ${err.message}`, 'error');
+    }
+  },
+
+  async returSemuaBarang() {
+    if (this.settlementTotalReturnQty <= 0) {
+      this.showToast('Tidak ada barang sisa untuk diretur', 'notify');
+      return;
+    }
+    if (!confirm(`Yakin ingin meretur SEMUA barang konsinyasi yang belum laku?\nTotal Barang: ${this.settlementTotalReturnQty} pcs`)) return;
+
+    for (const sup of this.settlementSummary) {
+      if (sup.unsoldQty > 0) {
+        await this.returBarangSupplier(sup);
+      }
+    }
+    this.showToast('Semua barang sisa konsinyasi berhasil diretur!', 'success');
+  },
+
+  shareSettlementWA(supSummary) {
+    if (!supSummary) return;
+    const phone = supSummary.contact || '';
+    const soldLines = Object.values(supSummary.soldItems || {}).map(i => `- ${i.name}: ${i.qty} pcs x Rp ${this.formatNumber(i.buyPrice)} = Rp ${this.formatNumber(i.total)}`).join('\n');
+    const unsoldLines = (supSummary.unsoldItems || []).map(i => `- ${i.name} (${i.sku}): ${i.stock} pcs`).join('\n');
+    const msg = `*LAPORAN SETTLEMENT KONSINYASI HARIAN*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nTanggal: ${this.settlementDate}\nSupplier: ${supSummary.supplierName}\n\n*Barang Terjual:*\n${soldLines || '- Tidak ada barang laku'}\n*Total Hutang Dibayar: Rp ${this.formatNumber(supSummary.totalHutang)}*\n\n*Barang Retur/Sisa:*\n${unsoldLines || '- Tidak ada sisa'}\nTotal Sisa: ${supSummary.unsoldQty} pcs\n\nTerima kasih atas kerja samanya! 🙏`;
+    this.sendWhatsAppNotification(phone, msg, 'settlement');
+  },
+
+  printSettlementPDF(supSummary) {
+    if (!supSummary) return;
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+      this.showToast('Pustaka PDF belum termuat', 'error');
+      return;
+    }
+    try {
+      const doc = new window.jspdf.jsPDF('p', 'mm', [80, 150]);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(this.customKasirTitle || 'DAPUR KULINER VIRAL', 40, 8, { align: 'center' });
+      doc.setFontSize(9);
+      doc.text('LAPORAN SETTLEMENT KONSINYASI', 40, 13, { align: 'center' });
+      doc.setLineWidth(0.2);
+      doc.line(4, 16, 76, 16);
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(8);
+      doc.text(`Tanggal  : ${this.settlementDate}`, 4, 21);
+      doc.text(`Supplier : ${supSummary.supplierName}`, 4, 25);
+      doc.line(4, 28, 76, 28);
+      doc.setFont('helvetica', 'bold');
+      doc.text('BARANG LAKU (DIBAYAR):', 4, 33);
+      let y = 38;
+      const soldItems = Object.values(supSummary.soldItems || {});
+      if (soldItems.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.text('- Tidak ada barang laku hari ini', 4, y);
+        y += 5;
+      } else {
+        soldItems.forEach(it => {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.text(it.name, 4, y);
+          y += 4;
+          doc.setFont('courier', 'normal');
+          doc.text(`${it.qty} pcs x ${this.formatNumber(it.buyPrice)}`, 4, y);
+          doc.text(`Rp ${this.formatNumber(it.total)}`, 76, y, { align: 'right' });
+          y += 6;
+        });
+      }
+      doc.line(4, y, 76, y);
+      y += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('TOTAL HUTANG:', 4, y);
+      doc.text(`Rp ${this.formatNumber(supSummary.totalHutang)}`, 76, y, { align: 'right' });
+      y += 7;
+      if (supSummary.unsoldQty > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(`RETUR / SISA: ${supSummary.unsoldQty} pcs`, 4, y);
+      }
+      doc.save(`settlement_${supSummary.supplierName.replace(/[^a-zA-Z0-9]/g, '_')}_${this.settlementDate}.pdf`);
+      this.showToast('Laporan settlement PDF berhasil diunduh', 'success');
+    } catch(e) {
+      this.showToast(`Gagal cetak PDF: ${e.message}`, 'error');
+    }
+  },
+
+  // =========================================================================
+  // 🎯 R&D FITUR 4 & 5: DUAL ROLE ITEM & AUTO-BRIDGE INVENTORY → MENU
+  // =========================================================================
+
+  openGenerateMenuModal(item) {
+    if (!item) return;
+    const cost = Number(item.purchasePrice || item.hargaBeli || 0);
+    const suggestedPrice = Math.round((cost * 1.2) / 1000) * 1000 || 15000;
+    this.generateMenuForm = {
+      inventoryId: item.id,
+      name: item.name,
+      price: suggestedPrice,
+      cost: cost,
+      category: 'rice_bowl',
+      desc: `Menu siap saji langsung dari bahan baku ${item.name}`,
+      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'
+    };
+    this.generateMenuModal = true;
+  },
+
+  async saveGenerateMenu() {
+    if (!this.generateMenuForm.name || !this.generateMenuForm.name.trim()) {
+      this.showToast('Nama menu wajib diisi', 'error');
+      return;
+    }
+
+    const inv = this.inventoryList.find(i => i.id === this.generateMenuForm.inventoryId);
+    if (!inv) return;
+
+    const newMenuId = `m_${Date.now()}`;
+    const price = Number(this.generateMenuForm.price) || 0;
+
+    const newMenuItem = {
+      id: newMenuId,
+      name: this.generateMenuForm.name.trim(),
+      category: this.generateMenuForm.category || 'rice_bowl',
+      price: price,
+      cost: Number(this.generateMenuForm.cost) || Number(inv.purchasePrice) || 0,
+      desc: this.generateMenuForm.desc || '',
+      image: this.generateMenuForm.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+      inventoryId: inv.id,
+      isConsignment: Boolean(inv.supplierId),
+      supplierId: inv.supplierId || '',
+      supplierName: inv.supplierName || '',
+      active: true
+    };
+
+    // Tandai inv item sebagai Ready to Sell & tautkan ID menu
+    inv.isReadyToSell = true;
+    inv.linkedMenuId = newMenuId;
+
+    try {
+      this.menuList.unshift(newMenuItem);
+
+      // Simpan menu baru
+      await fetch(`/menu/${encodeURIComponent(newMenuId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMenuItem)
+      });
+
+      // Update inventory item
+      await fetch(`/inventory/${encodeURIComponent(inv.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isReadyToSell: true, linkedMenuId: newMenuId })
+      });
+
+      // Buat resep otomatis 1:1
+      await fetch(`/inventory/recipes/${encodeURIComponent(newMenuId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menuId: newMenuId,
+          ingredients: [
+            { itemId: inv.id, amount: 1, unit: inv.unit || 'porsi' }
+          ]
+        })
+      });
+
+      // Simpan ke Firebase jika ada
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const mRef = this._fbRef(this._fbDb, `menu_items/${newMenuId}`);
+          await this._fbSet(mRef, newMenuItem);
+          const iRef = this._fbRef(this._fbDb, `inventory/${inv.id}`);
+          await this._fbSet(iRef, inv);
+        } catch(e){}
+      }
+
+      this.generateMenuModal = false;
+      this.playSound('success');
+      this.showToast(`Menu "${newMenuItem.name}" berhasil dipublish ke POS!`, 'success');
+    } catch (err) {
+      console.error('saveGenerateMenu error:', err);
+      this.showToast(`Gagal generate menu: ${err.message}`, 'error');
+    }
+  },
+
+  // =========================================================================
+  // 🎯 R&D FITUR 6: NOTIFIKASI WHATSAPP OTOMATIS & PROXY GATEWAY
+  // =========================================================================
+
+  /**
+   * Helper: Kirim Notifikasi WhatsApp via Gateway / Proxy Endpoint
+   * Mendukung WAHA, Baileys, dan Web WhatsApp fallback
+   */
+  async sendWhatsAppNotification(phone, message, template = 'custom') {
+    let cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
+    if (!cleanPhone || !message) return false;
+    if (cleanPhone.startsWith('08')) cleanPhone = '62' + cleanPhone.slice(1);
+
+    try {
+      const res = await fetch('/api/send-wa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message,
+          template
+        })
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        console.log('[WA-NOTIF] ✅ Sent to:', cleanPhone, 'Status:', data.status);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[WA-NOTIF] Note:', e.message);
+    }
+
+    // Direct Web WA Fallback jika user meminta share langsung
+    try {
+      const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+      if (template === 'consignment_receipt' || template === 'settlement' || template === 'consignment_settlement') {
+        window.open(waUrl, '_blank');
+      }
+    } catch (e) {}
+
+    return true;
+  },
+
   // -------------------------------------------------------------------------
   // 14.9 LOGOUT KASIR LOGIC (TANPA NATIVE PROMPT TERTAHAN)
+
   // -------------------------------------------------------------------------
 
   logoutKasir() {

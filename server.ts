@@ -421,12 +421,20 @@ app.post(['/inventory/:itemId', '/api/inventory/:itemId', '/inventory', '/api/in
       minStock: Number(minStock !== undefined ? minStock : (min !== undefined ? min : 5)),
       unit: String(unit),
       purchasePrice: Number(purchasePrice !== undefined ? purchasePrice : (hargaBeli !== undefined ? hargaBeli : 0)),
-      isCountable: isCountable !== undefined ? Boolean(isCountable) : true
+      isCountable: isCountable !== undefined ? Boolean(isCountable) : true,
+      sku: req.body?.sku || '',
+      skuSource: req.body?.skuSource || 'internal',
+      barcodeFormat: req.body?.barcodeFormat || 'CODE128',
+      barcode: req.body?.barcode || req.body?.sku || '',
+      supplierId: req.body?.supplierId || '',
+      supplierName: req.body?.supplierName || '',
+      isReadyToSell: Boolean(req.body?.isReadyToSell),
+      linkedMenuId: req.body?.linkedMenuId || null
     };
 
     const existingIndex = posInventory.findIndex(i => i.id === itemId);
     if (existingIndex >= 0) {
-      posInventory[existingIndex] = newItem;
+      posInventory[existingIndex] = { ...posInventory[existingIndex], ...newItem };
     } else {
       posInventory.unshift(newItem);
     }
@@ -446,7 +454,7 @@ app.patch(['/inventory/:itemId', '/api/inventory/:itemId'], (req, res) => {
       return res.status(404).json({ success: false, error: "Item inventory tidak ditemukan" });
     }
 
-    const { stock, stok, minStock, min, name, category, unit, purchasePrice, hargaBeli, isCountable } = req.body || {};
+    const { stock, stok, minStock, min, name, category, unit, purchasePrice, hargaBeli, isCountable, sku, skuSource, barcodeFormat, barcode, supplierId, supplierName, isReadyToSell, linkedMenuId } = req.body || {};
     if (stock !== undefined) item.stock = Number(stock);
     else if (stok !== undefined) item.stock = Number(stok);
     if (minStock !== undefined) item.minStock = Number(minStock);
@@ -457,6 +465,14 @@ app.patch(['/inventory/:itemId', '/api/inventory/:itemId'], (req, res) => {
     if (category) item.category = String(category);
     if (unit) item.unit = String(unit);
     if (isCountable !== undefined) item.isCountable = Boolean(isCountable);
+    if (sku !== undefined) item.sku = String(sku);
+    if (skuSource !== undefined) item.skuSource = String(skuSource);
+    if (barcodeFormat !== undefined) item.barcodeFormat = String(barcodeFormat);
+    if (barcode !== undefined) item.barcode = String(barcode);
+    if (supplierId !== undefined) item.supplierId = String(supplierId);
+    if (supplierName !== undefined) item.supplierName = String(supplierName);
+    if (isReadyToSell !== undefined) item.isReadyToSell = Boolean(isReadyToSell);
+    if (linkedMenuId !== undefined) item.linkedMenuId = linkedMenuId;
 
     res.json({ success: true, message: "Stok inventory diperbarui", item });
   } catch (err: any) {
@@ -530,6 +546,191 @@ app.post(['/inventory/deduct', '/api/inventory/deduct'], (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// =========================================================================
+// R&D: SUPPLIER, KONSINYASI (RECEIVE, SETTLEMENT, RETUR), WA PROXY & NOTIF
+// =========================================================================
+let serverSuppliers: any[] = [
+  { id: 'sp_1', name: 'Pakde (Nasi & Gorengan)', contact: '081234567890', address: 'Jl. Merdeka No. 10', active: true, createdAt: new Date().toISOString() },
+  { id: 'sp_2', name: 'Bu Tejo (Snack & Kue)', contact: '081298765432', address: 'Jl. Melati No. 5', active: true, createdAt: new Date().toISOString() }
+];
+let serverReceives: any[] = [];
+let serverSettlements: any[] = [];
+let serverReturns: any[] = [];
+let serverNotificationsLog: any[] = [];
+
+// GET /suppliers
+app.get(['/suppliers', '/api/suppliers'], (req, res) => {
+  res.json({ success: true, data: serverSuppliers });
+});
+
+// GET /suppliers/:id
+app.get(['/suppliers/:id', '/api/suppliers/:id'], (req, res) => {
+  const sup = serverSuppliers.find(s => s.id === req.params.id);
+  if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+  res.json({ success: true, data: sup });
+});
+
+// POST /suppliers
+app.post(['/suppliers', '/api/suppliers'], (req, res) => {
+  const { name, contact, address, active } = req.body || {};
+  const newSup = {
+    id: req.body?.id || `sp_${Date.now()}`,
+    name: name || 'Supplier Tanpa Nama',
+    contact: contact || '',
+    address: address || '',
+    active: active !== undefined ? Boolean(active) : true,
+    createdAt: new Date().toISOString()
+  };
+  serverSuppliers.unshift(newSup);
+  res.json({ success: true, data: newSup });
+});
+
+// PATCH / PUT /suppliers/:id
+app.all(['/suppliers/:id', '/api/suppliers/:id'], (req, res, next) => {
+  if (req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') return next();
+  const idx = serverSuppliers.findIndex(s => s.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ success: false, error: 'Supplier not found' });
+  
+  if (req.method === 'DELETE') {
+    serverSuppliers.splice(idx, 1);
+    return res.json({ success: true, message: 'Supplier deleted' });
+  }
+
+  serverSuppliers[idx] = { ...serverSuppliers[idx], ...req.body };
+  res.json({ success: true, message: 'Supplier updated', data: serverSuppliers[idx] });
+});
+
+// GET /inventory_receives
+app.get(['/inventory_receives', '/api/inventory_receives'], (req, res) => {
+  res.json({ success: true, data: serverReceives });
+});
+
+// POST /inventory_receives
+app.post(['/inventory_receives', '/api/inventory_receives'], (req, res) => {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const recId = req.body?.receiveId || `TRM-${dateStr}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  const record = {
+    receiveId: recId,
+    id: recId,
+    supplierId: req.body?.supplierId || '',
+    supplierName: req.body?.supplierName || 'Umum',
+    date: req.body?.date || now.toISOString().slice(0, 10),
+    time: req.body?.time || now.toLocaleTimeString('id-ID'),
+    items: req.body?.items || [],
+    totalValue: Number(req.body?.totalValue) || 0,
+    status: req.body?.status || 'received',
+    notes: req.body?.notes || '',
+    createdAt: Date.now()
+  };
+  serverReceives.unshift(record);
+  res.json({ success: true, data: record });
+});
+
+// GET /settlements
+app.get(['/settlements', '/api/settlements'], (req, res) => {
+  res.json({ success: true, data: serverSettlements });
+});
+
+// POST /settlements
+app.post(['/settlements', '/api/settlements'], (req, res) => {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const stlId = req.body?.settlementId || `STL-${dateStr}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  const record = {
+    settlementId: stlId,
+    id: stlId,
+    date: req.body?.date || now.toISOString().slice(0, 10),
+    supplierId: req.body?.supplierId || '',
+    supplierName: req.body?.supplierName || 'Semua Supplier',
+    totalPaid: Number(req.body?.totalPaid) || 0,
+    soldItemsCount: Number(req.body?.soldItemsCount) || 0,
+    returnedItemsCount: Number(req.body?.returnedItemsCount) || 0,
+    details: req.body?.details || [],
+    paymentMethod: req.body?.paymentMethod || 'cash',
+    status: 'settled',
+    createdAt: Date.now()
+  };
+  serverSettlements.unshift(record);
+  res.json({ success: true, data: record });
+});
+
+// GET /returns
+app.get(['/returns', '/api/returns'], (req, res) => {
+  res.json({ success: true, data: serverReturns });
+});
+
+// POST /returns
+app.post(['/returns', '/api/returns'], (req, res) => {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const retId = req.body?.returnId || `RET-${dateStr}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  const record = {
+    returnId: retId,
+    id: retId,
+    date: req.body?.date || now.toISOString().slice(0, 10),
+    supplierId: req.body?.supplierId || '',
+    supplierName: req.body?.supplierName || 'Umum',
+    items: req.body?.items || [],
+    totalValue: Number(req.body?.totalValue) || 0,
+    totalQty: Number(req.body?.totalQty) || 0,
+    reason: req.body?.reason || 'Barang konsinyasi belum laku (Tutup Hari)',
+    createdAt: Date.now()
+  };
+  serverReturns.unshift(record);
+  res.json({ success: true, data: record });
+});
+
+// POST /api/send-wa
+app.post(['/api/send-wa', '/functions/api/send-wa'], (req, res) => {
+  let phone = String(req.body?.phone || '').trim().replace(/[^0-9]/g, '');
+  const message = String(req.body?.message || '').trim();
+  const template = req.body?.template || 'custom';
+  if (!phone || !message) {
+    return res.status(400).json({ success: false, error: 'phone dan message wajib diisi' });
+  }
+  if (phone.startsWith('08')) phone = '62' + phone.slice(1);
+  const messageId = `wa_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const logEntry = {
+    id: `notif_${Date.now()}`,
+    at: new Date().toISOString(),
+    phone,
+    template,
+    messagePreview: message.slice(0, 100),
+    status: 'sent',
+    messageId
+  };
+  serverNotificationsLog.unshift(logEntry);
+  res.json({
+    success: true,
+    messageId,
+    status: 'sent',
+    phone,
+    waLink: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+  });
+});
+
+// GET /notifications_log
+app.get(['/notifications_log', '/api/notifications_log'], (req, res) => {
+  res.json({ success: true, data: serverNotificationsLog });
+});
+
+// POST /notifications_log
+app.post(['/notifications_log', '/api/notifications_log'], (req, res) => {
+  const logId = req.body?.id || `notif_${Date.now()}`;
+  const logEntry = {
+    id: logId,
+    at: req.body?.at || new Date().toISOString(),
+    phone: req.body?.phone || '',
+    template: req.body?.template || 'custom',
+    status: req.body?.status || 'logged',
+    messageId: req.body?.messageId || '',
+    messagePreview: req.body?.messagePreview || ''
+  };
+  serverNotificationsLog.unshift(logEntry);
+  res.json({ success: true, data: logEntry });
 });
 
 // In-Memory Menu & Categories Store for Server
@@ -691,6 +892,131 @@ app.get(['/accounting/approvals', '/api/accounting/approvals'], (req, res) => {
   });
   approvals.sort((a, b) => (b.createdAt || b.t || 0) - (a.createdAt || a.t || 0));
   res.json({ success: true, count: approvals.length, data: approvals });
+});
+
+// POST /accounting/journal/pos
+app.post(['/accounting/journal/pos', '/api/accounting/journal/pos'], (req, res) => {
+  const body = req.body || {};
+  const orderId = String(body.orderId || '').trim();
+  const dateStr = body.date || new Date().toISOString().split('T')[0];
+  const bulan = dateStr.substring(0, 7);
+  const total = Number(body.total || body.tot) || 0;
+  const pm = String(body.pm || 'cash').toLowerCase();
+  const isBank = pm.includes('qris') || pm.includes('transfer') || pm.includes('bank') || pm.includes('ewallet');
+  const debitAcc = isBank ? '1002' : '1001';
+
+  if (!serverJournals[bulan]) serverJournals[bulan] = {};
+  const jrnId = `JRN-${dateStr.replace(/-/g, '')}-POS-${Date.now().toString().slice(-4)}`;
+  serverJournals[bulan][jrnId] = {
+    noEntry: `POS-REV-${orderId.slice(-6)}`,
+    date: dateStr,
+    timestamp: Date.now(),
+    category: 'pendapatan',
+    desc: `Penjualan POS #${orderId} (${pm.toUpperCase()})`,
+    ref: orderId,
+    status: 'approved',
+    lines: [
+      { acc: debitAcc, debit: total, credit: 0 },
+      { acc: '4001', debit: 0, credit: total }
+    ],
+    total,
+    createdAt: Date.now()
+  };
+
+  res.status(201).json({ success: true, message: "Jurnal POS berhasil disimpan", totalRev: total, totalHpp: 0 });
+});
+
+// POST /accounting/journal/receive (Konsinyasi: Debit Persediaan 1004 / Kredit Hutang Supplier 2001)
+app.post(['/accounting/journal/receive', '/api/accounting/journal/receive'], (req, res) => {
+  const body = req.body || {};
+  const dateStr = body.date || new Date().toISOString().split('T')[0];
+  const bulan = dateStr.substring(0, 7);
+  const amount = Number(body.amount || body.totalValue) || 0;
+  const ref = body.ref || body.receiveId || `TRM-${Date.now()}`;
+  const desc = body.desc || `Penerimaan Barang Konsinyasi: ${body.supplierName || 'Supplier'} (${ref})`;
+
+  if (!serverJournals[bulan]) serverJournals[bulan] = {};
+  const jrnId = `JRN-${dateStr.replace(/-/g, '')}-REC-${Date.now().toString().slice(-4)}`;
+  serverJournals[bulan][jrnId] = {
+    noEntry: `REC-${ref.slice(-6)}`,
+    date: dateStr,
+    timestamp: Date.now(),
+    category: 'pembelian',
+    desc,
+    ref,
+    status: 'approved',
+    lines: [
+      { acc: '1004', debit: amount, credit: 0 },
+      { acc: '2001', debit: 0, credit: amount }
+    ],
+    total: amount,
+    createdAt: Date.now()
+  };
+
+  res.status(201).json({ success: true, message: "Jurnal Penerimaan Konsinyasi berhasil dicatat", jrnId, amount });
+});
+
+// POST /accounting/journal/settlement (Konsinyasi: Debit Hutang Supplier 2001 / Kredit Kas 1001/1002)
+app.post(['/accounting/journal/settlement', '/api/accounting/journal/settlement'], (req, res) => {
+  const body = req.body || {};
+  const dateStr = body.date || new Date().toISOString().split('T')[0];
+  const bulan = dateStr.substring(0, 7);
+  const amount = Number(body.amount || body.totalPaid) || 0;
+  const pm = String(body.paymentMethod || 'cash').toLowerCase();
+  const isBank = pm.includes('transfer') || pm.includes('bank') || pm.includes('qris');
+  const creditAcc = isBank ? '1002' : '1001';
+  const ref = body.ref || body.settlementId || `STL-${Date.now()}`;
+  const desc = body.desc || `Settlement & Bayar Konsinyasi: ${body.supplierName || 'Semua'} (${pm.toUpperCase()})`;
+
+  if (!serverJournals[bulan]) serverJournals[bulan] = {};
+  const jrnId = `JRN-${dateStr.replace(/-/g, '')}-STL-${Date.now().toString().slice(-4)}`;
+  serverJournals[bulan][jrnId] = {
+    noEntry: `STL-${ref.slice(-6)}`,
+    date: dateStr,
+    timestamp: Date.now(),
+    category: 'operasional',
+    desc,
+    ref,
+    status: 'approved',
+    lines: [
+      { acc: '2001', debit: amount, credit: 0 },
+      { acc: creditAcc, debit: 0, credit: amount }
+    ],
+    total: amount,
+    createdAt: Date.now()
+  };
+
+  res.status(201).json({ success: true, message: "Jurnal Settlement Konsinyasi berhasil dicatat", jrnId, amount });
+});
+
+// POST /accounting/journal/return (Konsinyasi: Debit Hutang Supplier 2001 / Kredit Persediaan 1004)
+app.post(['/accounting/journal/return', '/api/accounting/journal/return'], (req, res) => {
+  const body = req.body || {};
+  const dateStr = body.date || new Date().toISOString().split('T')[0];
+  const bulan = dateStr.substring(0, 7);
+  const amount = Number(body.amount || body.totalValue) || 0;
+  const ref = body.ref || body.returnId || `RET-${Date.now()}`;
+  const desc = body.desc || `Retur Barang Konsinyasi: ${body.supplierName || 'Supplier'} (${ref})`;
+
+  if (!serverJournals[bulan]) serverJournals[bulan] = {};
+  const jrnId = `JRN-${dateStr.replace(/-/g, '')}-RET-${Date.now().toString().slice(-4)}`;
+  serverJournals[bulan][jrnId] = {
+    noEntry: `RET-${ref.slice(-6)}`,
+    date: dateStr,
+    timestamp: Date.now(),
+    category: 'penyesuaian',
+    desc,
+    ref,
+    status: 'approved',
+    lines: [
+      { acc: '2001', debit: amount, credit: 0 },
+      { acc: '1004', debit: 0, credit: amount }
+    ],
+    total: amount,
+    createdAt: Date.now()
+  };
+
+  res.status(201).json({ success: true, message: "Jurnal Retur Konsinyasi berhasil dicatat", jrnId, amount });
 });
 
 // GET & POST /accounting/journal/:bulan

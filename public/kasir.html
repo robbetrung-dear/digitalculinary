@@ -123,6 +123,12 @@
   <!-- jsPDF CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+  <!-- JsBarcode CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+  <!-- Html5-QRCode Scanner CDN -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
   <!-- Alpine.js Cloak Style & Shimmer Animation -->
   <style>
     [x-cloak] { display: none !important; }
@@ -1492,6 +1498,16 @@
                 <span>🧮 Kalkulator Shift</span>
               </button>
 
+              <!-- 🧾 Tombol Tutup Hari Konsinyasi (Fitur 3A) -->
+              <button 
+                type="button" 
+                @click="openSettlementModal()"
+                class="min-h-[48px] px-4 rounded-2xl border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                title="Tutup hari konsinyasi, bayar supplier & retur barang">
+                <i class="fa-solid fa-receipt text-violet-700"></i>
+                <span>🧾 Tutup Hari Konsinyasi</span>
+              </button>
+
               <!-- Tombol TUTUP SHIFT SEKARANG (Merah Besar) -->
               <button 
                 type="button" 
@@ -1605,13 +1621,13 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2.5 justify-end">
-            <!-- Sub-tab Selector: Bahan Baku vs Produk Resep vs Pembelian Bahan -->
-            <div class="inline-flex p-1 bg-stone-100 rounded-xl border border-stone-200">
+            <!-- Sub-tab Selector: Bahan Baku vs Produk Resep vs Pembelian Bahan vs Master Supplier vs Settlement -->
+            <div class="inline-flex p-1 bg-stone-100 rounded-xl border border-stone-200 overflow-x-auto max-w-full">
               <button 
                 type="button" 
                 @click="inventoryTab = 'ingredients'"
                 :class="(inventoryTab || 'ingredients') === 'ingredients' ? 'bg-white text-stone-900 font-black shadow-xs' : 'text-stone-500 font-semibold'"
-                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-layer-group text-[10px]"></i>
                 <span>Bahan Baku / Item</span>
               </button>
@@ -1619,7 +1635,7 @@
                 type="button" 
                 @click="inventoryTab = 'products'"
                 :class="inventoryTab === 'products' ? 'bg-white text-stone-900 font-black shadow-xs' : 'text-stone-500 font-semibold'"
-                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-utensils text-[10px]"></i>
                 <span>Produk Menu &amp; Resep</span>
               </button>
@@ -1627,58 +1643,102 @@
                 type="button" 
                 @click="inventoryTab = 'pembelian'; loadRiwayatPembelian()"
                 :class="inventoryTab === 'pembelian' ? 'bg-white text-stone-900 font-black shadow-xs' : 'text-stone-500 font-semibold'"
-                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-truck-ramp-box text-[10px] text-emerald-600"></i>
                 <span>Pembelian Bahan</span>
+              </button>
+              <button 
+                type="button" 
+                @click="inventoryTab = 'suppliers'; loadSuppliers()"
+                :class="inventoryTab === 'suppliers' ? 'bg-white text-stone-900 font-black shadow-xs' : 'text-stone-500 font-semibold'"
+                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-truck-field text-[10px] text-sky-600"></i>
+                <span>Master Supplier</span>
+              </button>
+              <button 
+                type="button" 
+                @click="inventoryTab = 'settlement'; loadSettlementSummary()"
+                :class="inventoryTab === 'settlement' ? 'bg-white text-stone-900 font-black shadow-xs' : 'text-stone-500 font-semibold'"
+                class="px-3 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-file-invoice-dollar text-[10px] text-violet-600"></i>
+                <span>Settlement Konsinyasi</span>
               </button>
             </div>
 
             <!-- Tombol Log Riwayat Stok Opname -->
             <button 
-              type="button" 
-              @click="showInventoryLogsModal = true"
-              class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-stone-300"
-              title="Lihat riwayat perubahan stok & log opname">
-              <i class="fa-solid fa-clock-rotate-left text-xs text-amber-600"></i>
-              <span>Log Riwayat</span>
+                type="button" 
+                @click="showInventoryLogsModal = true"
+                class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-stone-300"
+                title="Lihat riwayat perubahan stok & log opname">
+                <i class="fa-solid fa-clock-rotate-left text-xs text-amber-600"></i>
+                <span>Log Riwayat</span>
             </button>
 
             <!-- Tombol Export CSV Stok Opname -->
             <button 
-              type="button" 
-              @click="exportInventoryCSV()"
-              class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-stone-300"
-              title="Download CSV tabel stok untuk edit luar (stok opname)">
-              <i class="fa-solid fa-file-export text-xs text-emerald-600"></i>
-              <span>Export CSV</span>
+                type="button" 
+                @click="exportInventoryCSV()"
+                class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-stone-300"
+                title="Download CSV tabel stok untuk edit luar (stok opname)">
+                <i class="fa-solid fa-file-export text-xs text-emerald-600"></i>
+                <span>Export CSV</span>
             </button>
 
             <!-- Tombol Import CSV Stok Opname -->
             <button 
-              type="button" 
-              @click="$refs.csvFileInput.click()"
-              class="min-h-[44px] px-3.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-blue-200"
-              title="Upload file CSV hasil stok opname untuk update otomatis">
-              <i class="fa-solid fa-file-import text-xs text-blue-600"></i>
-              <span>Import CSV</span>
+                type="button" 
+                @click="$refs.csvFileInput.click()"
+                class="min-h-[44px] px-3.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-blue-200"
+                title="Upload file CSV hasil stok opname untuk update otomatis">
+                <i class="fa-solid fa-file-import text-xs text-blue-600"></i>
+                <span>Import CSV</span>
             </button>
             <input type="file" x-ref="csvFileInput" accept=".csv" @change="importInventoryCSV($event)" class="hidden" />
 
             <!-- Tombol Aksi Tambah Menu & Tambah Bahan -->
             <button 
-              type="button" 
-              @click="openNewMenuModal()"
-              class="min-h-[44px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs">
-              <i class="fa-solid fa-utensils text-xs"></i>
-              <span>+ Tambah Menu Baru</span>
+                type="button" 
+                @click="openNewMenuModal()"
+                class="min-h-[48px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs">
+                <i class="fa-solid fa-utensils text-xs"></i>
+                <span>+ Tambah Menu</span>
             </button>
 
             <button 
-              type="button" 
-              @click="openAddInventoryModal()"
-              class="min-h-[44px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs">
-              <i class="fa-solid fa-boxes-stacked text-xs"></i>
-              <span>+ Tambah Bahan Baku</span>
+                type="button" 
+                @click="openAddInventoryModal()"
+                class="min-h-[48px] px-4 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs">
+                <i class="fa-solid fa-boxes-stacked text-xs"></i>
+                <span>+ Bahan Baku</span>
+            </button>
+
+            <!-- Tombol Aksi R&D Konsinyasi (Fitur 2D, 2E, 3A) -->
+            <button 
+                type="button" 
+                @click="openPreRegisterModal()"
+                class="min-h-[48px] px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shadow-indigo-600/20"
+                title="Daftarkan produk baru titipan supplier konsinyasi">
+                <i class="fa-solid fa-tag text-xs"></i>
+                <span>🏷️ Pre-Register Konsinyasi</span>
+            </button>
+
+            <button 
+                type="button" 
+                @click="openScanReceiveModal()"
+                class="min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shadow-emerald-600/20"
+                title="Scan barcode bahan masuk titipan supplier">
+                <i class="fa-solid fa-camera text-xs"></i>
+                <span>📷 Scan Bahan Masuk</span>
+            </button>
+
+            <button 
+                type="button" 
+                @click="openSettlementModal()"
+                class="min-h-[48px] px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shadow-violet-600/20"
+                title="Tutup hari konsinyasi, bayar supplier & retur barang sisa">
+                <i class="fa-solid fa-receipt text-xs"></i>
+                <span>🧾 Tutup Hari Konsinyasi</span>
             </button>
           </div>
         </div>
@@ -1796,7 +1856,41 @@
                     <div>
                       <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider" x-text="item.category || 'Bahan Baku'"></span>
                       <h4 class="font-extrabold text-sm text-stone-900 mt-0.5" x-text="item.name"></h4>
+
+                      <!-- 1E. SKU Badge & 5B. Dual Role Badge -->
+                      <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                        <!-- SKU Badge -->
+                        <template x-if="item.sku">
+                          <span 
+                            :class="item.skuSource === 'external' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'"
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-mono font-bold">
+                            <i class="fa-solid fa-barcode text-[9px]"></i>
+                            <span x-text="item.sku"></span>
+                            <span x-show="item.skuSource === 'external'" class="px-1 py-0.2 bg-sky-200 text-sky-900 rounded text-[8px] font-extrabold">EXT</span>
+                          </span>
+                        </template>
+                        <template x-if="!item.sku">
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-stone-200 bg-stone-50 text-stone-400 text-[10px] font-mono">
+                            <i class="fa-solid fa-barcode text-[9px]"></i>
+                            <span>Belum ada SKU</span>
+                          </span>
+                        </template>
+
+                        <!-- 5B. Dual Role Badge: Ready to Sell vs Bahan Baku Saja -->
+                        <span 
+                          :class="item.isReadyToSell ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-stone-100 text-stone-600 border-stone-200'" 
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-extrabold uppercase">
+                          <i :class="item.isReadyToSell ? 'fa-solid fa-circle-check text-emerald-600' : 'fa-solid fa-box text-stone-400'"></i>
+                          <span x-text="item.isReadyToSell ? 'Ready to Sell' : 'Bahan Baku Saja'"></span>
+                        </span>
+
+                        <!-- Supplier Badge jika ada -->
+                        <template x-if="item.supplierName">
+                          <span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold" x-text="item.supplierName"></span>
+                        </template>
+                      </div>
                     </div>
+
                     <!-- Status Countable / Uncountable & Badge Stok -->
                     <div class="flex flex-col items-end gap-1 flex-shrink-0">
                       <button 
@@ -1815,7 +1909,7 @@
                     </div>
                   </div>
 
-                  <div class="pt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div class="pt-3 grid grid-cols-2 gap-2 text-xs">
                     <div class="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
                       <span class="text-stone-400 block text-[10px]">Stok Tersedia</span>
                       <span class="font-black text-sm font-mono text-stone-900" x-text="item.stock + ' ' + item.unit"></span>
@@ -1832,13 +1926,44 @@
                   </div>
                 </div>
 
-                <div class="pt-2 border-t border-stone-100 flex items-center gap-2">
+                <div class="pt-2 border-t border-stone-100 flex flex-wrap items-center gap-1.5">
                   <button 
                     type="button" 
                     @click="openEditStockModal(item)"
-                    class="w-full min-h-[38px] rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
+                    class="flex-1 min-h-[44px] rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
                     <i class="fa-solid fa-pen-to-square text-[11px]"></i>
-                    <span>Edit Stok / Harga</span>
+                    <span>Edit Stok / SKU</span>
+                  </button>
+
+                  <!-- Fitur 5B: Generate as Menu or Edit Menu -->
+                  <template x-if="!item.isReadyToSell || !item.linkedMenuId">
+                    <button 
+                      type="button" 
+                      @click="openGenerateMenuModal(item)"
+                      class="min-h-[44px] px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
+                      title="Jadikan produk siap jual di POS">
+                      <i class="fa-solid fa-utensils text-[11px] text-amber-600"></i>
+                      <span>🍽️ Jadi Menu</span>
+                    </button>
+                  </template>
+                  <template x-if="item.isReadyToSell && item.linkedMenuId">
+                    <button 
+                      type="button" 
+                      @click="openProductRecipeModal(item)"
+                      class="min-h-[44px] px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
+                      title="Edit resep & pengaturan menu terhubung">
+                      <i class="fa-solid fa-pen text-[11px] text-emerald-600"></i>
+                      <span>✏️ Edit Menu</span>
+                    </button>
+                  </template>
+
+                  <!-- Tombol Print Label Barcode -->
+                  <button 
+                    type="button" 
+                    @click="openBarcodeLabelModal(item)"
+                    class="w-11 min-h-[44px] rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center justify-center transition cursor-pointer border border-stone-200"
+                    title="Cetak Label Barcode">
+                    <i class="fa-solid fa-print text-xs"></i>
                   </button>
                 </div>
               </div>
@@ -1903,15 +2028,34 @@
                   />
                 </div>
 
-                <!-- Supplier -->
+                <!-- Supplier (Fitur 2C: Dropdown Supplier + Tambah Supplier Baru) -->
                 <div>
-                  <label class="block font-bold text-stone-700 mb-1">Nama Supplier / Toko</label>
-                  <input 
-                    type="text" 
-                    x-model="pembelianForm.supplier" 
-                    placeholder="Contoh: Pasar Induk / PT Berkah Boga" 
-                    class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-                  />
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="block font-bold text-stone-700">Nama Supplier / Toko</label>
+                    <button 
+                      type="button" 
+                      @click="openAddSupplierModal()"
+                      class="text-[11px] font-extrabold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer">
+                      <i class="fa-solid fa-plus text-[10px]"></i>
+                      <span>+ Supplier Baru</span>
+                    </button>
+                  </div>
+                  <div class="space-y-1.5">
+                    <select 
+                      @change="if ($event.target.value) pembelianForm.supplier = $event.target.value"
+                      class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                      <option value="">-- Pilih dari Daftar Supplier --</option>
+                      <template x-for="sup in suppliersList" :key="sup.id">
+                        <option :value="sup.name" x-text="sup.name + (sup.contact ? ' (' + sup.contact + ')' : '')"></option>
+                      </template>
+                    </select>
+                    <input 
+                      type="text" 
+                      x-model="pembelianForm.supplier" 
+                      placeholder="Atau ketik nama supplier langsung..." 
+                      class="w-full min-h-[40px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    />
+                  </div>
                 </div>
 
                 <!-- Bahan Baku Target -->
@@ -2137,6 +2281,291 @@
 
           </div>
 
+        </div>
+
+        <!-- TAMPILAN 4: MASTER SUPPLIER KONSINYASI & BAHAN (Fitur 2B) -->
+        <div x-show="inventoryTab === 'suppliers'" class="space-y-6">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-stone-200 shadow-xs">
+            <div>
+              <h3 class="text-lg font-black text-stone-900 flex items-center gap-2">
+                <i class="fa-solid fa-truck-field text-sky-600"></i>
+                <span>Master Rekanan Supplier</span>
+              </h3>
+              <p class="text-xs text-stone-500 mt-0.5">Kelola data mitra titip konsinyasi dan supplier pembelian bahan baku.</p>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+              <button 
+                type="button" 
+                @click="loadSuppliers()" 
+                class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+                <i class="fa-solid fa-rotate text-xs"></i>
+                <span>Refresh</span>
+              </button>
+              <button 
+                type="button" 
+                @click="openAddSupplierModal()" 
+                class="min-h-[44px] px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-sky-600/20">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>+ Tambah Supplier</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Search & Filter Bar -->
+          <div class="flex items-center gap-3">
+            <div class="relative flex-1">
+              <input 
+                type="text" 
+                x-model="supplierSearch" 
+                placeholder="Cari nama supplier, kontak WA, alamat..." 
+                class="w-full min-h-[42px] pl-10 pr-4 rounded-2xl border border-stone-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-xs" 
+              />
+              <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400">
+                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grid Daftar Supplier -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="sup in (suppliersList || []).filter(s => !supplierSearch || (s.name && s.name.toLowerCase().includes(supplierSearch.toLowerCase())) || (s.contact && s.contact.includes(supplierSearch)) || (s.address && s.address.toLowerCase().includes(supplierSearch.toLowerCase())))" :key="sup.id">
+              <div class="bg-white rounded-3xl p-5 border border-stone-200 shadow-xs space-y-4 flex flex-col justify-between hover:border-sky-300 transition">
+                <div class="space-y-3">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <span class="text-[10px] font-mono font-bold text-stone-400" x-text="sup.id"></span>
+                      <h4 class="font-black text-base text-stone-900 leading-tight" x-text="sup.name"></h4>
+                    </div>
+                    <span 
+                      :class="sup.active !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-500'" 
+                      class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase"
+                      x-text="sup.active !== false ? 'Aktif' : 'Nonaktif'">
+                    </span>
+                  </div>
+
+                  <div class="space-y-1.5 text-xs text-stone-600 bg-stone-50 p-3 rounded-2xl border border-stone-100">
+                    <div class="flex items-center gap-2">
+                      <i class="fa-brands fa-whatsapp text-emerald-600 w-4 text-center"></i>
+                      <span class="font-mono font-semibold" x-text="sup.contact || 'Belum ada kontak'"></span>
+                      <template x-if="sup.contact">
+                        <a :href="'https://wa.me/' + String(sup.contact).replace(/[^0-9]/g, '')" target="_blank" class="ml-auto text-[10px] font-bold text-emerald-600 hover:underline">
+                          Chat WA <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                        </a>
+                      </template>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <i class="fa-solid fa-location-dot text-stone-400 w-4 text-center mt-0.5"></i>
+                      <span class="text-[11px] leading-relaxed" x-text="sup.address || 'Alamat belum diisi'"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2 border-t border-stone-100">
+                  <button 
+                    type="button" 
+                    @click="openEditSupplierModal(sup)" 
+                    class="flex-1 min-h-[38px] rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-pen text-[11px]"></i>
+                    <span>Edit Data</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    @click="deleteSupplier(sup.id)" 
+                    class="w-10 min-h-[38px] rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center justify-center transition cursor-pointer"
+                    title="Hapus Supplier">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Empty State -->
+          <div x-show="!loadingSuppliers && (suppliersList || []).length === 0" class="p-12 text-center space-y-2 border border-dashed border-stone-200 rounded-3xl bg-white">
+            <i class="fa-solid fa-truck-field text-stone-300 text-4xl"></i>
+            <h4 class="font-black text-stone-800 text-sm">Belum Ada Rekanan Supplier</h4>
+            <p class="text-xs text-stone-400">Klik tombol "+ Tambah Supplier" untuk menambahkan mitra titip konsinyasi Anda.</p>
+          </div>
+        </div>
+
+        <!-- TAMPILAN 5: SETTLEMENT KONSINYASI HARIAN (Fitur 3B, 3C, 3D, 3E) -->
+        <div x-show="inventoryTab === 'settlement'" class="space-y-6">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-stone-200 shadow-xs">
+            <div>
+              <h3 class="text-lg font-black text-stone-900 flex items-center gap-2">
+                <i class="fa-solid fa-file-invoice-dollar text-violet-600"></i>
+                <span>Tutup Hari &amp; Settlement Konsinyasi</span>
+              </h3>
+              <p class="text-xs text-stone-500 mt-0.5">Rekapitulasi penjualan produk titipan per supplier, pembayaran hutang hari ini, dan retur barang sisa.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input 
+                type="date" 
+                x-model="settlementDate" 
+                @change="loadSettlementSummary(settlementDate)" 
+                class="min-h-[44px] px-3 rounded-xl border border-stone-300 bg-stone-50 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500" 
+              />
+              <button 
+                type="button" 
+                @click="loadSettlementSummary(settlementDate)" 
+                class="min-h-[44px] px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+                <i class="fa-solid fa-rotate text-xs"></i>
+                <span>Hitung Ulang</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Ringkasan Finansial Settlement Hari Ini -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="p-5 rounded-3xl bg-violet-50 border border-violet-200 space-y-1">
+              <span class="text-[11px] font-bold text-violet-700 block uppercase">Total Hutang Supplier Hari Ini</span>
+              <span class="font-black text-2xl font-mono text-violet-950" x-text="formatRupiah(settlementTotalHutang)"></span>
+              <p class="text-[10px] text-violet-600">Total nilai modal barang konsinyasi yang laku terjual</p>
+            </div>
+            <div class="p-5 rounded-3xl bg-emerald-50 border border-emerald-200 space-y-1">
+              <span class="text-[11px] font-bold text-emerald-700 block uppercase">Total Barang Terjual</span>
+              <span class="font-black text-2xl font-mono text-emerald-950" x-text="settlementTotalSoldQty + ' pcs'"></span>
+              <p class="text-[10px] text-emerald-600">Porsi produk konsinyasi dibeli pelanggan</p>
+            </div>
+            <div class="p-5 rounded-3xl bg-amber-50 border border-amber-200 space-y-1">
+              <span class="text-[11px] font-bold text-amber-700 block uppercase">Total Barang Sisa / Retur</span>
+              <span class="font-black text-2xl font-mono text-amber-950" x-text="settlementTotalReturnQty + ' pcs'"></span>
+              <p class="text-[10px] text-amber-600">Stok belum laku yang siap dikembalikan ke supplier</p>
+            </div>
+          </div>
+
+          <!-- Tombol Aksi Massal (Bulk Settlement & Retur) -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-stone-100 rounded-2xl border border-stone-200">
+            <div class="text-xs text-stone-700">
+              <span class="font-bold">Aksi Tutup Hari Massal:</span> Lakukan pembayaran serentak atau retur sisa stok untuk semua supplier.
+            </div>
+            <div class="flex items-center gap-2">
+              <button 
+                type="button" 
+                @click="bayarSemuaSupplier('cash')" 
+                class="min-h-[44px] px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-violet-600/20">
+                <i class="fa-solid fa-credit-card text-xs"></i>
+                <span>💳 Bayar Semua Supplier</span>
+              </button>
+              <button 
+                type="button" 
+                @click="returSemuaBarang()" 
+                class="min-h-[44px] px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-amber-600/20">
+                <i class="fa-solid fa-arrow-rotate-left text-xs"></i>
+                <span>↩️ Retur Semua Barang Belum Laku</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Rincian per Supplier -->
+          <div class="space-y-4">
+            <template x-for="sup in settlementSummary" :key="sup.supplierId">
+              <div class="bg-white rounded-3xl p-6 border border-stone-200 shadow-xs space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+                  <div>
+                    <h4 class="font-black text-base text-stone-900" x-text="sup.supplierName"></h4>
+                    <span class="text-xs text-stone-400 font-mono" x-text="'ID: ' + sup.supplierId + (sup.contact ? ' &bull; WA: ' + sup.contact : '')"></span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-stone-500">Hutang Harus Dibayar:</span>
+                    <span class="font-black text-lg font-mono text-violet-700" x-text="formatRupiah(sup.totalHutang)"></span>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                  <!-- Kolom Barang Laku -->
+                  <div class="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-2">
+                    <div class="flex items-center justify-between font-extrabold text-emerald-950">
+                      <span>Barang Laku Hari Ini</span>
+                      <span x-text="sup.soldQty + ' pcs'"></span>
+                    </div>
+                    <template x-if="sup.soldQty === 0">
+                      <p class="text-stone-400 italic text-[11px]">Belum ada penjualan untuk supplier ini hari ini.</p>
+                    </template>
+                    <div class="space-y-1.5" x-show="sup.soldQty > 0">
+                      <template x-for="(it, k) in sup.soldItems" :key="k">
+                        <div class="flex items-center justify-between py-1 border-b border-emerald-100/60 text-[11px]">
+                          <span class="font-semibold text-stone-800" x-text="it.name"></span>
+                          <span class="font-mono text-stone-700" x-text="it.qty + ' pcs &times; ' + formatRupiah(it.buyPrice) + ' = ' + formatRupiah(it.total)"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- Kolom Barang Retur / Belum Laku -->
+                  <div class="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 space-y-2">
+                    <div class="flex items-center justify-between font-extrabold text-amber-950">
+                      <span>Barang Sisa (Belum Laku)</span>
+                      <span x-text="sup.unsoldQty + ' pcs'"></span>
+                    </div>
+                    <template x-if="sup.unsoldQty === 0">
+                      <p class="text-stone-400 italic text-[11px]">Tidak ada stok tersisa / semua laku.</p>
+                    </template>
+                    <div class="space-y-1.5" x-show="sup.unsoldQty > 0">
+                      <template x-for="it in sup.unsoldItems" :key="it.id">
+                        <div class="flex items-center justify-between py-1 border-b border-amber-100/60 text-[11px]">
+                          <span class="font-semibold text-stone-800" x-text="it.name + ' (' + (it.sku || '-') + ')'"></span>
+                          <span class="font-mono text-stone-700" x-text="it.stock + ' pcs (Rp ' + formatNumber(it.totalValue) + ')'"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Aksi per Supplier: Bayar, Retur, Cetak Struk, Kirim WA -->
+                <div class="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-stone-100">
+                  <button 
+                    type="button" 
+                    @click="printSettlementPDF(sup)" 
+                    class="min-h-[40px] px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-print text-stone-600"></i>
+                    <span>Cetak Struk</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    @click="shareSettlementWA(sup)" 
+                    class="min-h-[40px] px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer border border-emerald-200">
+                    <i class="fa-brands fa-whatsapp text-emerald-600"></i>
+                    <span>Kirim WA</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    @click="returBarangSupplier(sup)" 
+                    :disabled="sup.unsoldQty <= 0" 
+                    :class="sup.unsoldQty <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer'" 
+                    class="min-h-[40px] px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-arrow-rotate-left text-xs"></i>
+                    <span>Retur Barang Sisa</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    @click="bayarSupplier(sup, 'cash')" 
+                    :disabled="sup.totalHutang <= 0" 
+                    :class="sup.totalHutang <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-xs shadow-violet-600/20'" 
+                    class="min-h-[40px] px-4 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-money-bill-wave text-xs"></i>
+                    <span>Bayar (Tunai)</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    @click="bayarSupplier(sup, 'transfer')" 
+                    :disabled="sup.totalHutang <= 0" 
+                    :class="sup.totalHutang <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs shadow-blue-600/20'" 
+                    class="min-h-[40px] px-4 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-building-columns text-xs"></i>
+                    <span>Bayar (Bank)</span>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Empty State -->
+          <div x-show="!loadingSettlement && settlementSummary.length === 0" class="p-12 text-center space-y-2 border border-dashed border-stone-200 rounded-3xl bg-white">
+            <i class="fa-solid fa-file-circle-check text-stone-300 text-4xl"></i>
+            <h4 class="font-black text-stone-800 text-sm">Tidak Ada Transaksi Konsinyasi Hari Ini</h4>
+            <p class="text-xs text-stone-400">Belum ada barang konsinyasi yang terjual atau tersisa pada tanggal ini.</p>
+          </div>
         </div>
 
       </section>
@@ -3931,6 +4360,63 @@
         </div>
       </div>
 
+      <!-- 1F. Section SKU Item & Barcode (Di Atas Info Stok) -->
+      <div class="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-xs space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-stone-700 uppercase text-[10px]">SKU &amp; Barcode Item</span>
+          <span 
+            :class="selectedStockItem?.skuSource === 'external' ? 'bg-sky-100 text-sky-800 border-sky-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'"
+            class="px-2 py-0.5 rounded-md border text-[9px] font-extrabold uppercase"
+            x-text="(selectedStockItem?.skuSource === 'external' ? 'External Barcode' : 'Internal SKU')">
+          </span>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-stone-200">
+          <div>
+            <span class="text-[10px] text-stone-400 block">Kode Terdaftar:</span>
+            <span class="font-mono font-black text-sm text-stone-900" x-text="selectedStockItem?.sku || selectedStockItem?.barcode || 'Belum ada SKU'"></span>
+          </div>
+          <!-- Barcode Preview Image jika ada -->
+          <template x-if="selectedStockItem?.sku || selectedStockItem?.barcode">
+            <div class="bg-white p-1 rounded border border-stone-100">
+              <img :src="generateBarcodeDataURL(selectedStockItem.sku || selectedStockItem.barcode)" alt="Barcode" class="h-8 max-w-[120px] object-contain" />
+            </div>
+          </template>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1.5 pt-1">
+          <!-- Tombol Generate Ulang -->
+          <button 
+            type="button" 
+            @click="regenerateSKUForItem(selectedStockItem)"
+            class="min-h-[44px] px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer border border-stone-200"
+            title="Generate ulang kode SKU internal">
+            <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+            <span>Generate</span>
+          </button>
+
+          <!-- Tombol Scan External -->
+          <button 
+            type="button" 
+            @click="openScanModal('edit_stock', 'camera', (code) => { if (selectedStockItem) { selectedStockItem.sku = code; selectedStockItem.barcode = code; selectedStockItem.skuSource = 'external'; } })"
+            class="min-h-[44px] px-2 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer border border-sky-200"
+            title="Scan barcode dari kemasan produk">
+            <i class="fa-solid fa-barcode text-[10px]"></i>
+            <span>Scan Ext</span>
+          </button>
+
+          <!-- Tombol Print Label -->
+          <button 
+            type="button" 
+            @click="openBarcodeLabelModal(selectedStockItem)"
+            class="min-h-[44px] px-2 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer border border-emerald-200"
+            title="Cetak label barcode">
+            <i class="fa-solid fa-print text-[10px]"></i>
+            <span>Print Label</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Info Stok Saat Ini -->
       <div class="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-xs space-y-1">
         <div class="flex justify-between">
@@ -5254,6 +5740,26 @@
         </div>
       </div>
 
+      <!-- 1H. Kotak Hijau: Scan Bahan untuk Pembelian Cepat -->
+      <div class="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm">
+            <i class="fa-solid fa-barcode"></i>
+          </div>
+          <div>
+            <h5 class="text-xs font-black text-emerald-950">Scan Bahan untuk Pembelian Cepat</h5>
+            <p class="text-[11px] text-emerald-700">Scan barcode/SKU bahan untuk auto-isi jurnal: Persediaan 1004 &amp; Kas 1001</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="openScanModal('journal', 'camera', (code) => handleJournalScanBahan(code))" 
+          class="min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-sm transition">
+          <i class="fa-solid fa-camera"></i>
+          <span>Scan Sekarang</span>
+        </button>
+      </div>
+
       <!-- Form Detail Transaksi -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <!-- Tanggal -->
@@ -5636,6 +6142,903 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 1: SCAN GLOBAL (Html5-QRCode + Fallback Manual)       -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="scanModal.open" 
+    x-cloak 
+    @click.self="closeScanModal()"
+    class="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-camera text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">Scan Barcode / SKU</h3>
+            <p class="text-[11px] text-stone-400">Arahkan kamera ke barcode produk atau ketik manual</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="closeScanModal()" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Kamera Viewport -->
+      <div x-show="scanModal.mode === 'camera'" class="space-y-3">
+        <div class="relative rounded-2xl overflow-hidden bg-stone-950 border-2 border-emerald-500/50 shadow-inner">
+          <div id="html5qr-code-full-region" class="w-full min-h-[220px]"></div>
+        </div>
+        <div class="text-center">
+          <span class="text-[11px] text-stone-500 font-medium">Posisikan barcode berada di dalam kotak pemindai</span>
+        </div>
+      </div>
+
+      <!-- Error Notif jika kamera gagal -->
+      <div x-show="scanModal.error" class="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+        <i class="fa-solid fa-circle-exclamation text-amber-600 mt-0.5"></i>
+        <span x-text="scanModal.error"></span>
+      </div>
+
+      <!-- Input Manual Fallback (Fitur 1G) -->
+      <div class="pt-2 border-t border-stone-100 space-y-2">
+        <label class="block font-bold text-stone-700 text-xs">Atau Input Kode Manual:</label>
+        <div class="flex items-center gap-2">
+          <input 
+            type="text" 
+            x-model="scanModal.manualInput" 
+            @keydown.enter.prevent="submitManualScan()" 
+            placeholder="Contoh: SKU-BHN-0001-2026-PAKDE" 
+            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+          />
+          <button 
+            type="button" 
+            @click="submitManualScan()" 
+            class="min-h-[44px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs">
+            <span>KONFIRMASI KODE</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Footer Modal -->
+      <div class="flex items-center justify-between pt-2 border-t border-stone-100">
+        <button 
+          type="button" 
+          @click="scanModal.mode = (scanModal.mode === 'camera' ? 'manual' : 'camera'); if (scanModal.mode === 'camera') _startScanner();" 
+          class="text-xs font-bold text-stone-600 hover:text-stone-900 cursor-pointer flex items-center gap-1.5">
+          <i class="fa-solid fa-sliders text-xs"></i>
+          <span x-text="scanModal.mode === 'camera' ? 'Beralih ke Input Manual' : 'Beralih ke Kamera'"></span>
+        </button>
+        <button 
+          type="button" 
+          @click="closeScanModal()" 
+          class="h-9 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Batal
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 1I: PRINT LABEL BARCODE (PDF 3 UKURAN GRID A4)         -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="barcodeLabelModal" 
+    x-cloak 
+    @click.self="barcodeLabelModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-stone-800 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-print text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">Cetak Label Barcode</h3>
+            <p class="text-[11px] text-stone-400">Layout grid A4 otomatis 30 label per halaman</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="barcodeLabelModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Preview Item & Barcode -->
+      <div class="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-3 text-center">
+        <h4 class="font-black text-sm text-stone-900" x-text="barcodeLabelItem?.name"></h4>
+        <div class="bg-white p-3 rounded-xl border border-stone-200 inline-block shadow-xs">
+          <img 
+            :src="generateBarcodeDataURL(barcodeLabelItem?.sku || barcodeLabelItem?.barcode || barcodeLabelItem?.id || 'SKU-DEMO', barcodeLabelItem?.barcodeFormat || 'CODE128')" 
+            alt="Barcode Preview" 
+            class="h-12 max-w-[220px] object-contain mx-auto" 
+          />
+        </div>
+        <div class="text-[11px] font-mono text-stone-600 font-bold" x-text="barcodeLabelItem?.sku || barcodeLabelItem?.barcode || barcodeLabelItem?.id"></div>
+      </div>
+
+      <!-- Pilihan Ukuran Label (Fitur 1I) -->
+      <div class="space-y-2 text-xs">
+        <label class="block font-bold text-stone-700">Pilih Ukuran Label Kemasan:</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button 
+            type="button" 
+            @click="barcodeLabelSize = '25x15'" 
+            :class="barcodeLabelSize === '25x15' ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs' : 'border-stone-200 bg-white text-stone-700 font-semibold'" 
+            class="p-2.5 rounded-xl border text-center transition cursor-pointer">
+            <span class="block text-xs">25 × 15 mm</span>
+            <span class="text-[10px] opacity-75">Kotak Makan</span>
+          </button>
+          <button 
+            type="button" 
+            @click="barcodeLabelSize = '20x10'" 
+            :class="barcodeLabelSize === '20x10' ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs' : 'border-stone-200 bg-white text-stone-700 font-semibold'" 
+            class="p-2.5 rounded-xl border text-center transition cursor-pointer">
+            <span class="block text-xs">20 × 10 mm</span>
+            <span class="text-[10px] opacity-75">Alat Tulis/Mini</span>
+          </button>
+          <button 
+            type="button" 
+            @click="barcodeLabelSize = '30x20'" 
+            :class="barcodeLabelSize === '30x20' ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs' : 'border-stone-200 bg-white text-stone-700 font-semibold'" 
+            class="p-2.5 rounded-xl border text-center transition cursor-pointer">
+            <span class="block text-xs">30 × 20 mm</span>
+            <span class="text-[10px] opacity-75">Kemasan Besar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Jumlah Label per Cetak -->
+      <div class="text-xs">
+        <label class="block font-bold text-stone-700 mb-1">Jumlah Label (Grid 3×10 = 30 per sheet A4):</label>
+        <input 
+          type="number" 
+          min="1" 
+          max="300" 
+          x-model.number="barcodeLabelCount" 
+          class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+        />
+      </div>
+
+      <!-- Footer Tombol Cetak -->
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+        <button 
+          type="button" 
+          @click="barcodeLabelModal = false" 
+          class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Batal
+        </button>
+        <button 
+          type="button" 
+          @click="printBarcodeLabel(barcodeLabelItem, barcodeLabelSize, barcodeLabelCount)" 
+          class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 transition cursor-pointer shadow-xs shadow-emerald-600/20">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>Unduh PDF Label</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 2B: CRUD SUPPLIER MASTER                              -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="supplierModal" 
+    x-cloak 
+    @click.self="supplierModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-truck-field text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base" x-text="supplierForm.id ? 'Edit Supplier' : 'Tambah Supplier Baru'"></h3>
+            <p class="text-[11px] text-stone-400">Data rekanan mitra titip konsinyasi / pembelian</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="supplierModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form @submit.prevent="saveSupplier()" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Nama Supplier / Mitra <span class="text-red-500">*</span></label>
+          <input 
+            type="text" 
+            x-model="supplierForm.name" 
+            required 
+            placeholder="Contoh: Pakde (Nasi & Gorengan) / Bu Tejo" 
+            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-500" 
+          />
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Kontak WhatsApp / No. HP</label>
+          <input 
+            type="text" 
+            x-model="supplierForm.contact" 
+            placeholder="Contoh: 081234567890" 
+            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500" 
+          />
+          <p class="text-[10px] text-stone-400 mt-1">Digunakan untuk kirim bukti tanda terima &amp; laporan settlement otomatis via WhatsApp.</p>
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Alamat / Lokasi</label>
+          <textarea 
+            x-model="supplierForm.address" 
+            rows="2" 
+            placeholder="Contoh: Jl. Merdeka No. 10 / Dapur Belakang" 
+            class="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200">
+          <span class="font-bold text-stone-800">Status Kemitraan Aktif</span>
+          <input 
+            type="checkbox" 
+            x-model="supplierForm.active" 
+            class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer" 
+          />
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+          <button 
+            type="button" 
+            @click="supplierModal = false" 
+            class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            class="h-10 px-5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs shadow-sky-600/20">
+            <i class="fa-solid fa-check"></i>
+            <span>Simpan Supplier</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 2D: PRE-REGISTER PRODUK KONSINYASI                    -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="preRegisterModal" 
+    x-cloak 
+    @click.self="preRegisterModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-tag text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">🏷️ Pre-Register Produk Konsinyasi</h3>
+            <p class="text-[11px] text-stone-400">Auto-create SKU + Menu Baru + Barcode Label</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="preRegisterModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form @submit.prevent="savePreRegisterConsignment()" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Nama Produk Konsinyasi <span class="text-red-500">*</span></label>
+          <input 
+            type="text" 
+            x-model="preRegisterForm.name" 
+            @input="onPreRegisterNameOrSupplierChange()" 
+            required 
+            placeholder="Contoh: Nasi Goreng Spesial / Lumpia Basah" 
+            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Pilih Supplier <span class="text-red-500">*</span></label>
+            <select 
+              x-model="preRegisterForm.supplierId" 
+              @change="onPreRegisterNameOrSupplierChange()" 
+              required 
+              class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <template x-for="sup in suppliersList" :key="sup.id">
+                <option :value="sup.id" x-text="sup.name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Kategori Menu POS</label>
+            <select 
+              x-model="preRegisterForm.category" 
+              @change="onPreRegisterNameOrSupplierChange()" 
+              class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="rice_bowl">Rice Bowl / Makanan</option>
+              <option value="drink">Minuman</option>
+              <option value="snack">Cemilan / Snack</option>
+              <option value="dessert">Dessert</option>
+              <option value="mie">Mie &amp; Pasta</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Harga Beli Supplier (Rp) <span class="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              min="0" 
+              step="500" 
+              x-model.number="preRegisterForm.purchasePrice" 
+              @input="onPreRegisterNameOrSupplierChange()" 
+              required 
+              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+            />
+          </div>
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Harga Jual Pelanggan (Rp) <span class="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              min="0" 
+              step="500" 
+              x-model.number="preRegisterForm.sellingPrice" 
+              required 
+              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-black font-mono text-emerald-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+            />
+            <span class="text-[10px] text-stone-400">Default auto: Beli + 20% margin</span>
+          </div>
+        </div>
+
+        <!-- Preview Auto-Generated SKU & Barcode -->
+        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-extrabold uppercase text-indigo-900 tracking-wider">Auto-Generated SKU &amp; Barcode</span>
+            <span class="px-2 py-0.5 rounded-md bg-indigo-200 text-indigo-900 text-[9px] font-black uppercase">CODE128</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-indigo-100">
+            <div>
+              <span class="text-[10px] text-stone-400 block">Kode SKU:</span>
+              <span class="font-mono font-black text-xs text-indigo-950" x-text="preRegisterForm.sku"></span>
+            </div>
+            <img 
+              :src="generateBarcodeDataURL(preRegisterForm.sku || 'SKU-DEMO', 'CODE128')" 
+              alt="Barcode" 
+              class="h-8 max-w-[140px] object-contain" 
+            />
+          </div>
+          <div class="text-[10px] text-indigo-800">
+            Item akan otomatis dibuatkan menu di POS dengan nama: <strong x-text="preRegisterForm.name + ' (' + (preRegisterForm.supplierName || 'Pakde').split(' ')[0] + ')'"></strong> dengan stok awal 0 (siap di-receive).
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+          <button 
+            type="button" 
+            @click="preRegisterModal = false" 
+            class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            class="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs shadow-indigo-600/20">
+            <i class="fa-solid fa-check"></i>
+            <span>Simpan &amp; Buat Menu POS</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 2E: SCAN RECEIVE DARI SUPPLIER KONSINYASI             -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="scanReceiveModal" 
+    x-cloak 
+    @click.self="scanReceiveModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-truck-ramp-box text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">📷 Scan Penerimaan Barang Masuk</h3>
+            <p class="text-[11px] text-stone-400">Penerimaan barang konsinyasi: auto-stok, auto-bridge &amp; auto-jurnal</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="scanReceiveModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Scan Barcode / Input SKU Cepat -->
+      <div class="space-y-1.5">
+        <label class="block font-bold text-stone-700 text-xs">Scan Barcode atau Ketik SKU Produk:</label>
+        <div class="flex items-center gap-2">
+          <input 
+            type="text" 
+            x-model="scanReceiveForm.skuQuery" 
+            @keydown.enter.prevent="onReceiveSkuQueryChange()" 
+            placeholder="Scan atau ketik SKU / Barcode..." 
+            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+          />
+          <button 
+            type="button" 
+            @click="openScanModal('receive_goods', 'camera', (code) => { scanReceiveForm.skuQuery = code; onReceiveSkuQueryChange(); })" 
+            class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-camera"></i>
+            <span>Scan</span>
+          </button>
+          <button 
+            type="button" 
+            @click="onReceiveSkuQueryChange()" 
+            class="min-h-[44px] px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>Cari</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Kartu Produk Terdeteksi -->
+      <template x-if="scanReceiveForm.matchedItem">
+        <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-[10px] text-emerald-700 font-bold block">Produk Terdaftar:</span>
+              <h4 class="font-black text-sm text-emerald-950" x-text="scanReceiveForm.matchedItem.name"></h4>
+            </div>
+            <span class="px-2 py-0.5 rounded-md bg-emerald-200 text-emerald-900 text-[10px] font-mono font-bold" x-text="scanReceiveForm.matchedItem.sku || scanReceiveForm.matchedItem.barcode"></span>
+          </div>
+          <div class="flex items-center gap-4 text-[11px] text-emerald-900 pt-1 border-t border-emerald-100">
+            <span>Stok Saat Ini: <strong class="font-mono" x-text="(scanReceiveForm.matchedItem.stock || 0) + ' ' + (scanReceiveForm.matchedItem.unit || 'porsi')"></strong></span>
+            <span>Supplier: <strong x-text="scanReceiveForm.matchedItem.supplierName || 'Umum'"></strong></span>
+          </div>
+        </div>
+      </template>
+
+      <!-- Alert jika SKU Belum Terdaftar -->
+      <template x-if="!scanReceiveForm.matchedItem && scanReceiveForm.skuQuery">
+        <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2 text-amber-900">
+            <i class="fa-solid fa-circle-question text-amber-600 text-base"></i>
+            <span>Kode belum terdaftar di inventori.</span>
+          </div>
+          <button 
+            type="button" 
+            @click="openPreRegisterModal()" 
+            class="h-8 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition">
+            <i class="fa-solid fa-plus text-[10px]"></i>
+            <span>+ Daftarkan Produk Baru</span>
+          </button>
+        </div>
+      </template>
+
+      <!-- Form Detail Penerimaan Barang -->
+      <form @submit.prevent="submitReceiveGoods()" class="space-y-3.5 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Qty Diterima <span class="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              min="1" 
+              step="any" 
+              x-model.number="scanReceiveForm.qty" 
+              required 
+              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+            />
+          </div>
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Harga Beli Supplier (Rp) <span class="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              min="0" 
+              step="500" 
+              x-model.number="scanReceiveForm.purchasePrice" 
+              required 
+              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Supplier Titipan <span class="text-red-500">*</span></label>
+          <select 
+            x-model="scanReceiveForm.supplierId" 
+            required 
+            class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <template x-for="sup in suppliersList" :key="sup.id">
+              <option :value="sup.id" x-text="sup.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- Total Nilai Penerimaan -->
+        <div class="p-3 rounded-2xl bg-stone-50 border border-stone-200 flex items-center justify-between">
+          <span class="font-extrabold text-stone-700">Total Nilai Terima:</span>
+          <span class="font-black text-base font-mono text-emerald-700" x-text="formatRupiah((scanReceiveForm.qty || 0) * (scanReceiveForm.purchasePrice || 0))"></span>
+        </div>
+
+        <!-- Auto-Jurnal Penjelasan Konsinyasi (Opsi B: Debit 1004 / Kredit 2001) -->
+        <div class="p-2.5 rounded-xl bg-stone-100 border border-stone-200 text-[11px] text-stone-600">
+          <span class="font-bold text-stone-800">Auto-Jurnal Akuntansi:</span> Debit 1004 (Persediaan) / Kredit 2001 (Hutang Supplier). Hutang dibayar hari itu juga saat tutup hari.
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+          <button 
+            type="button" 
+            @click="scanReceiveModal = false" 
+            class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs shadow-emerald-600/20">
+            <i class="fa-solid fa-check"></i>
+            <span>Simpan &amp; Terima Barang</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 2F: STRUK TANDA TERIMA KONSINYASI                     -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="receiveReceiptModal" 
+    x-cloak 
+    @click.self="receiveReceiptModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-receipt text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">Tanda Terima Konsinyasi</h3>
+            <p class="text-[11px] text-stone-400">Bukti serah terima barang titipan</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="receiveReceiptModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Preview Struk Simple -->
+      <div class="p-4 rounded-2xl bg-stone-50 border border-stone-200 font-mono text-xs space-y-3">
+        <div class="text-center border-b border-stone-200 pb-2">
+          <h4 class="font-black text-sm text-stone-900 font-sans" x-text="customKasirTitle || 'DAPUR KULINER VIRAL'"></h4>
+          <span class="text-[10px] text-emerald-700 font-bold uppercase block font-sans">BUKTI TANDA TERIMA KONSINYASI</span>
+        </div>
+
+        <div class="space-y-1 text-[11px] text-stone-600">
+          <div class="flex justify-between">
+            <span>No. Terima:</span>
+            <span class="font-bold text-stone-900" x-text="currentReceiveRecord?.receiveId"></span>
+          </div>
+          <div class="flex justify-between">
+            <span>Tanggal:</span>
+            <span x-text="currentReceiveRecord?.date + ' ' + (currentReceiveRecord?.time || '')"></span>
+          </div>
+          <div class="flex justify-between">
+            <span>Supplier:</span>
+            <span class="font-bold text-stone-900" x-text="currentReceiveRecord?.supplierName"></span>
+          </div>
+        </div>
+
+        <div class="border-t border-dashed border-stone-200 pt-2 space-y-1">
+          <template x-for="it in (currentReceiveRecord?.items || [])" :key="it.sku">
+            <div>
+              <div class="flex justify-between text-stone-900 font-bold">
+                <span x-text="it.name"></span>
+                <span x-text="formatRupiah(it.total)"></span>
+              </div>
+              <div class="text-[10px] text-stone-400">
+                <span x-text="'[' + it.sku + '] ' + it.qty + ' ' + it.unit + ' @ ' + formatRupiah(it.price)"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="border-t border-stone-300 pt-2 flex justify-between items-center text-sm font-black text-stone-900">
+          <span>TOTAL NILAI:</span>
+          <span class="text-emerald-700" x-text="formatRupiah(currentReceiveRecord?.totalValue || 0)"></span>
+        </div>
+      </div>
+
+      <!-- Tombol Aksi: Foto Struk (PNG), Cetak (PDF), Kirim WA -->
+      <div class="grid grid-cols-3 gap-2">
+        <button 
+          type="button" 
+          @click="downloadReceiveReceiptImage(currentReceiveRecord)" 
+          class="p-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+          <i class="fa-solid fa-camera text-sm text-stone-600"></i>
+          <span>📱 Foto Struk</span>
+        </button>
+        <button 
+          type="button" 
+          @click="printReceiveReceiptPDF(currentReceiveRecord)" 
+          class="p-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex flex-col items-center justify-center gap-1 transition cursor-pointer">
+          <i class="fa-solid fa-print text-sm text-stone-600"></i>
+          <span>🖨️ Cetak</span>
+        </button>
+        <button 
+          type="button" 
+          @click="shareReceiveReceiptWA(currentReceiveRecord)" 
+          class="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex flex-col items-center justify-center gap-1 transition cursor-pointer border border-emerald-200">
+          <i class="fa-brands fa-whatsapp text-sm text-emerald-600"></i>
+          <span>💬 Kirim WA</span>
+        </button>
+      </div>
+
+      <div class="pt-2 border-t border-stone-100 flex justify-end">
+        <button 
+          type="button" 
+          @click="receiveReceiptModal = false" 
+          class="h-9 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 3B: TUTUP HARI KONSINYASI & SETTLEMENT MODAL          -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="settlementModal" 
+    x-cloak 
+    @click.self="settlementModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-file-invoice-dollar text-base"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">🧾 Tutup Hari Konsinyasi</h3>
+            <p class="text-[11px] text-stone-400">Pembayaran barang laku &amp; retur barang titipan belum laku</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="settlementModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Pilih Tanggal & Stats -->
+      <div class="flex items-center justify-between gap-3 bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
+        <div>
+          <span class="text-[10px] text-stone-400 font-bold block">Tanggal Tutup Hari:</span>
+          <input 
+            type="date" 
+            x-model="settlementDate" 
+            @change="loadSettlementSummary(settlementDate)" 
+            class="px-2.5 py-1 rounded-lg border border-stone-300 text-xs font-bold bg-white" 
+          />
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-violet-700 font-bold block uppercase">Total Hutang Dibayar</span>
+          <span class="font-black text-xl font-mono text-violet-950" x-text="formatRupiah(settlementTotalHutang)"></span>
+        </div>
+      </div>
+
+      <!-- Daftar Supplier Settlement -->
+      <div class="space-y-3">
+        <template x-for="sup in settlementSummary" :key="sup.supplierId">
+          <div class="p-4 rounded-2xl border border-stone-200 bg-white space-y-3">
+            <div class="flex items-center justify-between border-b border-stone-100 pb-2">
+              <div>
+                <h4 class="font-black text-sm text-stone-900" x-text="sup.supplierName"></h4>
+                <span class="text-[10px] text-stone-400 font-mono" x-text="'WA: ' + (sup.contact || '-')"></span>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] text-stone-400 block">Total Hutang:</span>
+                <span class="font-black text-sm font-mono text-violet-700" x-text="formatRupiah(sup.totalHutang)"></span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-100">
+                <span class="text-[10px] font-bold text-emerald-800 block">Barang Laku:</span>
+                <span class="font-bold text-emerald-950" x-text="sup.soldQty + ' pcs'"></span>
+              </div>
+              <div class="p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                <span class="text-[10px] font-bold text-amber-800 block">Barang Sisa / Retur:</span>
+                <span class="font-bold text-amber-950" x-text="sup.unsoldQty + ' pcs'"></span>
+              </div>
+            </div>
+
+            <!-- Tombol Aksi per Supplier -->
+            <div class="flex items-center justify-end gap-1.5 pt-1">
+              <button 
+                type="button" 
+                @click="printSettlementPDF(sup)" 
+                class="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center gap-1 transition cursor-pointer">
+                <i class="fa-solid fa-print text-[10px]"></i>
+                <span>Struk</span>
+              </button>
+              <button 
+                type="button" 
+                @click="shareSettlementWA(sup)" 
+                class="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1 transition cursor-pointer border border-emerald-200">
+                <i class="fa-brands fa-whatsapp text-[10px]"></i>
+                <span>WA</span>
+              </button>
+              <button 
+                type="button" 
+                @click="returBarangSupplier(sup)" 
+                :disabled="sup.unsoldQty <= 0" 
+                :class="sup.unsoldQty <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer'" 
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition">
+                <span>Retur</span>
+              </button>
+              <button 
+                type="button" 
+                @click="bayarSupplier(sup, 'cash')" 
+                :disabled="sup.totalHutang <= 0" 
+                :class="sup.totalHutang <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer'" 
+                class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition">
+                <span>Bayar Tunai</span>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="!loadingSettlement && settlementSummary.length === 0" class="p-8 text-center text-stone-400 text-xs border border-dashed border-stone-200 rounded-2xl">
+          Tidak ada barang konsinyasi yang laku atau tersisa hari ini.
+        </div>
+      </div>
+
+      <!-- Footer Bulk Action -->
+      <div class="flex items-center justify-between pt-3 border-t border-stone-100">
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            @click="bayarSemuaSupplier('cash')" 
+            class="h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs">
+            <i class="fa-solid fa-credit-card"></i>
+            <span>Bayar Semua Supplier</span>
+          </button>
+          <button 
+            type="button" 
+            @click="returSemuaBarang()" 
+            class="h-10 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+            <span>Retur Semua Sisa</span>
+          </button>
+        </div>
+        <button 
+          type="button" 
+          @click="settlementModal = false" 
+          class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL R&D FITUR 4 & 5: DUAL ROLE ITEM → GENERATE MENU POS             -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="generateMenuModal" 
+    x-cloak 
+    @click.self="generateMenuModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-utensils text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">🍽️ Jadikan Produk Siap Jual di POS</h3>
+            <p class="text-[11px] text-stone-400">Hubungkan stok bahan baku konsinyasi 1:1 ke menu kasir</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="generateMenuModal = false" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form @submit.prevent="saveGenerateMenu()" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Nama Menu di POS <span class="text-red-500">*</span></label>
+          <input 
+            type="text" 
+            x-model="generateMenuForm.name" 
+            required 
+            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500" 
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Harga Jual POS (Rp) <span class="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              min="0" 
+              step="500" 
+              x-model.number="generateMenuForm.price" 
+              required 
+              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-amber-500" 
+            />
+          </div>
+          <div>
+            <label class="block font-bold text-stone-700 mb-1">Kategori Menu</label>
+            <select 
+              x-model="generateMenuForm.category" 
+              class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <option value="rice_bowl">Rice Bowl / Makanan</option>
+              <option value="drink">Minuman</option>
+              <option value="snack">Cemilan / Snack</option>
+              <option value="dessert">Dessert</option>
+              <option value="mie">Mie &amp; Pasta</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Deskripsi Singkat</label>
+          <textarea 
+            x-model="generateMenuForm.desc" 
+            rows="2" 
+            placeholder="Deskripsi menu untuk kasir &amp; struk..." 
+            class="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+          <button 
+            type="button" 
+            @click="generateMenuModal = false" 
+            class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            class="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs shadow-amber-500/20">
+            <i class="fa-solid fa-check"></i>
+            <span>Publish ke Menu POS</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -662,6 +662,132 @@ export async function onRequest(context) {
           revId, hppId, totalRev: total, totalHpp, hppDetails
         }, 201);
       }
+
+      // ================================================================
+      // POST /accounting/journal/receive — Jurnal Terima Barang Konsinyasi
+      // Debit Persediaan 1004 / Kredit Hutang Supplier 2001
+      // ================================================================
+      if (method === 'POST' && parts[1] === 'receive') {
+        const body = await request.json().catch(() => ({}));
+        const dateStr = body.date || new Date().toISOString().split('T')[0];
+        const bulan = dateStr.substring(0, 7);
+        const amount = toNum(body.amount || body.totalValue);
+        const ref = String(body.ref || body.receiveId || `TRM-${Date.now()}`);
+        const desc = body.desc || `Penerimaan Barang Konsinyasi: ${body.supplierName || 'Supplier'} (${ref})`;
+
+        if (amount <= 0) return jsonResponse({ success: false, error: 'amount harus lebih dari 0' }, 400);
+
+        const recId = `JRN-${dateStr.replace(/-/g, '')}-REC-${Date.now().toString().slice(-4)}`;
+        const recEntry = {
+          noEntry: `REC-${ref.slice(-6)}`,
+          date: dateStr,
+          timestamp: Date.now(),
+          category: 'pembelian',
+          desc,
+          ref,
+          status: 'approved',
+          lines: [
+            { acc: '1004', debit: amount, credit: 0 },
+            { acc: '2001', debit: 0, credit: amount }
+          ],
+          total: amount,
+          createdAt: Date.now()
+        };
+
+        await fetch(`${dbUrl}/accounting/journal/${bulan}/${recId}.json${authParam}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recEntry)
+        });
+        await updateLedgerAfterApprove(dbUrl, bulan, recEntry.lines, apiKey, recId);
+        await updateSummaryAfterApprove(dbUrl, bulan, apiKey);
+
+        return jsonResponse({ success: true, message: 'Jurnal penerimaan konsinyasi tercatat', recId, amount }, 201);
+      }
+
+      // ================================================================
+      // POST /accounting/journal/settlement — Jurnal Settlement & Bayar Supplier
+      // Debit Hutang Supplier 2001 / Kredit Kas 1001 atau Bank 1002
+      // ================================================================
+      if (method === 'POST' && parts[1] === 'settlement') {
+        const body = await request.json().catch(() => ({}));
+        const dateStr = body.date || new Date().toISOString().split('T')[0];
+        const bulan = dateStr.substring(0, 7);
+        const amount = toNum(body.amount || body.totalPaid);
+        const pm = String(body.paymentMethod || 'cash').toLowerCase();
+        const isBank = pm.includes('transfer') || pm.includes('bank') || pm.includes('qris');
+        const creditAcc = isBank ? '1002' : '1001';
+        const ref = String(body.ref || body.settlementId || `STL-${Date.now()}`);
+        const desc = body.desc || `Bayar Konsinyasi: ${body.supplierName || 'Semua'} (${pm.toUpperCase()})`;
+
+        if (amount <= 0) return jsonResponse({ success: false, error: 'amount harus lebih dari 0' }, 400);
+
+        const stlId = `JRN-${dateStr.replace(/-/g, '')}-STL-${Date.now().toString().slice(-4)}`;
+        const stlEntry = {
+          noEntry: `STL-${ref.slice(-6)}`,
+          date: dateStr,
+          timestamp: Date.now(),
+          category: 'operasional',
+          desc,
+          ref,
+          status: 'approved',
+          lines: [
+            { acc: '2001', debit: amount, credit: 0 },
+            { acc: creditAcc, debit: 0, credit: amount }
+          ],
+          total: amount,
+          createdAt: Date.now()
+        };
+
+        await fetch(`${dbUrl}/accounting/journal/${bulan}/${stlId}.json${authParam}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(stlEntry)
+        });
+        await updateLedgerAfterApprove(dbUrl, bulan, stlEntry.lines, apiKey, stlId);
+        await updateSummaryAfterApprove(dbUrl, bulan, apiKey);
+
+        return jsonResponse({ success: true, message: 'Jurnal settlement konsinyasi tercatat', stlId, amount }, 201);
+      }
+
+      // ================================================================
+      // POST /accounting/journal/return — Jurnal Retur Barang Konsinyasi
+      // Debit Hutang Supplier 2001 / Kredit Persediaan 1004
+      // ================================================================
+      if (method === 'POST' && parts[1] === 'return') {
+        const body = await request.json().catch(() => ({}));
+        const dateStr = body.date || new Date().toISOString().split('T')[0];
+        const bulan = dateStr.substring(0, 7);
+        const amount = toNum(body.amount || body.totalValue);
+        const ref = String(body.ref || body.returnId || `RET-${Date.now()}`);
+        const desc = body.desc || `Retur Barang Konsinyasi: ${body.supplierName || 'Supplier'} (${ref})`;
+
+        if (amount <= 0) return jsonResponse({ success: false, error: 'amount harus lebih dari 0' }, 400);
+
+        const retId = `JRN-${dateStr.replace(/-/g, '')}-RET-${Date.now().toString().slice(-4)}`;
+        const retEntry = {
+          noEntry: `RET-${ref.slice(-6)}`,
+          date: dateStr,
+          timestamp: Date.now(),
+          category: 'penyesuaian',
+          desc,
+          ref,
+          status: 'approved',
+          lines: [
+            { acc: '2001', debit: amount, credit: 0 },
+            { acc: '1004', debit: 0, credit: amount }
+          ],
+          total: amount,
+          createdAt: Date.now()
+        };
+
+        await fetch(`${dbUrl}/accounting/journal/${bulan}/${retId}.json${authParam}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(retEntry)
+        });
+        await updateLedgerAfterApprove(dbUrl, bulan, retEntry.lines, apiKey, retId);
+        await updateSummaryAfterApprove(dbUrl, bulan, apiKey);
+
+        return jsonResponse({ success: true, message: 'Jurnal retur konsinyasi tercatat', retId, amount }, 201);
+      }
       if (method === 'POST') {
         const body = await request.json().catch(() => ({}));
         
