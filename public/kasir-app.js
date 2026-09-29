@@ -3918,7 +3918,7 @@ try {
         console.warn('Inventory loading timeout 5s, unlocking loading state');
         this.loadingStates.inventory = false;
       }
-    }, 5000);
+    }, 15000);
 
     try {
       if (this._fbDb && this._fbOnValue && this._fbRef) {
