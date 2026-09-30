@@ -7930,7 +7930,22 @@ try {
     this.scanReceiveModal = true;
   },
 
-  processScanReceive(code) {
+   /**
+   * Handler tombol "Cari" / Enter di input SKU Receive
+   * Wrapper ke processScanReceive — resolve bug "Kode belum terdaftar" 
+   * karena HTML memanggil onReceiveSkuQueryChange() yang tadinya tidak ada
+   */
+  onReceiveSkuQueryChange() {
+    const code = String(this.scanReceiveForm?.skuQuery || '').trim();
+    if (!code) {
+      this.showToast('Masukkan SKU atau scan barcode terlebih dahulu', 'error');
+      this.playSound('error');
+      return;
+    }
+    this.processScanReceive(code);
+  },
+ 
+ processScanReceive(code) {
     const cleanCode = String(code || '').trim().toLowerCase();
     const item = (this.inventoryList || []).find(i => 
       (i.sku && i.sku.toLowerCase() === cleanCode) ||
