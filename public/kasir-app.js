@@ -7833,7 +7833,7 @@ try {
   onPreRegisterNameOrSupplierChange() {
     const sup = this.suppliersList.find(s => s.id === this.preRegisterForm.supplierId);
     if (sup) this.preRegisterForm.supplierName = sup.name;
-    const cleanSup = (this.preRegisterForm.supplierName || 'PAKDE').split(' ')[0];
+    const cleanSup = (this.preRegisterForm.supplierName || 'UMUM').split(' ')[0];
     this.preRegisterForm.sku = this.generateSKU(this.preRegisterForm.category, 'internal', cleanSup);
     this.preRegisterForm.barcode = this.preRegisterForm.sku;
     if (this.preRegisterForm.purchasePrice > 0 && !this.preRegisterForm.sellingPrice) {
