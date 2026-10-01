@@ -3948,7 +3948,23 @@
           <p>Dapur Kami, Viral di Meja Anda.</p>
         </div>
       </div>
-
+      <!-- ✅ FEATURE-3: Input nomor WA pelanggan -->
+      <div class="mb-1">
+        <label class="block text-xs font-bold text-stone-600 mb-1.5">
+          <i class="fa-brands fa-whatsapp text-emerald-600 mr-1"></i>
+          Nomor WA Pelanggan (Opsional)
+        </label>
+        <input
+          type="tel"
+          inputmode="numeric"
+          x-model="receiptWAPhone"
+          placeholder="08xxxxxxxxxx — kosongkan untuk share manual"
+          class="w-full h-11 px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <p class="text-[10px] text-stone-400 mt-1 italic">
+          Isi nomor → langsung buka chat pelanggan. Kosong → pilih kontak manual.
+        </p>
+      </div>
       <!-- Tombol Aksi Struk: [Cetak] [Download PDF] [Kirim WA] -->
       <div class="grid grid-cols-3 gap-2 pt-2">
         <button 
