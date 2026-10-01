@@ -8267,7 +8267,7 @@ try {
     await this.loadSettlementSummary(this.settlementDate);
   },
 
-  async loadSettlementSummary(date) {
+    async loadSettlementSummary(date) {
     const d = date || this.settlementDate || new Date().toISOString().slice(0, 10);
     this.loadingSettlement = true;
     try {
@@ -8281,9 +8281,13 @@ try {
         }
       } catch(e){}
 
-      // 2. Mapping produk konsinyasi per supplier
+      // 2. ✅ FIX BUG-7: Bangun supMap HANYA dari suppliersList (valid supplier)
       const supMap = {};
+      const validSupplierIds = new Set();
+
       (this.suppliersList || []).forEach(sup => {
+        if (!sup || !sup.id) return;
+        validSupplierIds.add(sup.id);
         supMap[sup.id] = {
           supplierId: sup.id,
           supplierName: sup.name,
@@ -8297,22 +8301,12 @@ try {
         };
       });
 
-      // Filter item inventori konsinyasi per supplier
+      // ✅ FIX BUG-7: Hanya proses inventory yang punya supplierId VALID
+      // Item tanpa supplierId atau supplierId tidak di supplierList → SKIP
       (this.inventoryList || []).forEach(inv => {
-        const supId = inv.supplierId || 'sp_1';
-        if (!supMap[supId]) {
-          supMap[supId] = {
-            supplierId: supId,
-            supplierName: inv.supplierName || 'Supplier Konsinyasi',
-            contact: '',
-            soldItems: {},
-            soldQty: 0,
-            totalHutang: 0,
-            unsoldItems: [],
-            unsoldQty: 0,
-            unsoldValue: 0
-          };
-        }
+        const supId = inv.supplierId;
+        if (!supId) return;                          // skip — bukan konsinyasi
+        if (!validSupplierIds.has(supId)) return;    // skip — ghost supplier
 
         const remainingStock = Number(inv.stock || inv.stok || 0);
         if (remainingStock > 0) {
@@ -8337,8 +8331,9 @@ try {
           let qty = Array.isArray(it) ? Number(it[1]) : Number(it.qty || 1);
           const menu = (this.menuList || []).find(m => m.id === mId);
           if (menu && (menu.isConsignment || menu.supplierId)) {
-            const supId = menu.supplierId || 'sp_1';
-            if (supMap[supId]) {
+            const supId = menu.supplierId;
+            // ✅ FIX BUG-7: Cek supplier valid
+            if (supId && validSupplierIds.has(supId) && supMap[supId]) {
               const buyPrice = Number(menu.cost || 0);
               if (!supMap[supId].soldItems[mId]) {
                 supMap[supId].soldItems[mId] = { name: menu.name, qty: 0, buyPrice, total: 0 };
@@ -8357,6 +8352,13 @@ try {
       this.settlementTotalHutang = summaryList.reduce((acc, s) => acc + s.totalHutang, 0);
       this.settlementTotalSoldQty = summaryList.reduce((acc, s) => acc + s.soldQty, 0);
       this.settlementTotalReturnQty = summaryList.reduce((acc, s) => acc + s.unsoldQty, 0);
+
+      console.log('[SETTLEMENT] Summary:', summaryList.map(s => ({
+        name: s.supplierName,
+        sold: s.soldQty,
+        unsold: s.unsoldQty,
+        hutang: s.totalHutang
+      })));
     } catch (err) {
       console.error('loadSettlementSummary error:', err);
       this.showToast('Gagal memuat ringkasan settlement', 'error');
@@ -8460,7 +8462,7 @@ try {
   /**
    * 3E. Retur Barang: Debit 2001 Hutang / Kredit 1004 Persediaan & update stok -qty
    */
-  async returBarangSupplier(supSummary) {
+    async returBarangSupplier(supSummary) {
     if (!supSummary || !supSummary.unsoldItems || supSummary.unsoldItems.length === 0) {
       this.showToast('Tidak ada barang konsinyasi yang tersisa untuk diretur', 'notify');
       return;
@@ -8487,28 +8489,55 @@ try {
     };
 
     try {
-      // 1. Simpan log retur ke /returns
-      await fetch('/returns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      // 2. Kurangi stok inventory yang diretur menjadi 0
+      // 1. ✅ FIX BUG-9: Update stok SETIAP item ke 0 di Firebase LANGSUNG
+      //    Jangan hanya fetch PATCH — update _fbSet juga biar persist
       for (const it of supSummary.unsoldItems) {
         const inv = this.inventoryList.find(i => i.id === it.id);
         if (inv) {
           inv.stock = 0;
           inv.stok = 0;
+
+          // ✅ FIX BUG-9: Update Firebase via _fbSet (authoritative)
+          if (this._fbDb && this._fbSet && this._fbRef) {
+            try {
+              const itemRef = this._fbRef(this._fbDb, `inventory/${it.id}/stock`);
+              const stokRef = this._fbRef(this._fbDb, `inventory/${it.id}/stok`);
+              await this._fbSet(itemRef, 0);
+              await this._fbSet(stokRef, 0);
+              console.log(`[RETUR] ✅ Firebase stock updated: ${it.id} → 0`);
+            } catch (fbErr) {
+              console.warn(`[RETUR] ❌ Firebase update failed for ${it.id}:`, fbErr);
+            }
+          }
+
+          // Juga PATCH ke backend (untuk consistency kalau ada proses lain)
           fetch(`/inventory/${encodeURIComponent(it.id)}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stock: 0 })
-          }).catch(() => {});
+            body: JSON.stringify({ stock: 0, stok: 0 })
+          }).catch((e) => console.warn('[RETUR] PATCH backend note:', e));
         }
       }
 
-      // 3. Auto-Jurnal Retur: Debit 2001 Hutang / Kredit 1004 Persediaan
+      // 2. ✅ FIX BUG-9: Simpan retur log ke Firebase langsung
+      if (this._fbDb && this._fbSet && this._fbRef) {
+        try {
+          const retRef = this._fbRef(this._fbDb, `returns_log/${returnId}`);
+          await this._fbSet(retRef, payload);
+          console.log('[RETUR] ✅ Firebase returns_log saved:', returnId);
+        } catch (e) {
+          console.warn('[RETUR] Firebase returns_log save error:', e);
+        }
+      }
+
+      // 3. Simpan retur log ke backend endpoint juga
+      await fetch('/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch((e) => console.warn('[RETUR] Backend returns POST note:', e));
+
+      // 4. Auto-Jurnal Retur: Debit 2001 Hutang / Kredit 1004 Persediaan
       await fetch('/accounting/journal/return', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8519,7 +8548,7 @@ try {
           ref: returnId,
           date: this.settlementDate
         })
-      });
+      }).catch((e) => console.warn('[RETUR] Auto journal note:', e));
 
       this.showToast(`Berhasil meretur ${totalQty} pcs barang ke ${supSummary.supplierName}`, 'success');
       this.playSound('success');
@@ -8530,19 +8559,34 @@ try {
     }
   },
 
-  async returSemuaBarang() {
+    async returSemuaBarang() {
     if (this.settlementTotalReturnQty <= 0) {
       this.showToast('Tidak ada barang sisa untuk diretur', 'notify');
       return;
     }
-    if (!confirm(`Yakin ingin meretur SEMUA barang konsinyasi yang belum laku?\nTotal Barang: ${this.settlementTotalReturnQty} pcs`)) return;
 
-    for (const sup of this.settlementSummary) {
-      if (sup.unsoldQty > 0) {
-        await this.returBarangSupplier(sup);
-      }
+    // ✅ FIX BUG-8: Filter hanya supplier yang benar-benar ada di suppliersList
+    const validSupplierIds = new Set((this.suppliersList || []).map(s => s.id).filter(Boolean));
+    const candidates = (this.settlementSummary || []).filter(s =>
+      s.unsoldQty > 0 &&
+      s.supplierId &&
+      validSupplierIds.has(s.supplierId)
+    );
+
+    if (candidates.length === 0) {
+      this.showToast('Tidak ada supplier konsinyasi valid untuk diretur', 'notify');
+      return;
     }
-    this.showToast('Semua barang sisa konsinyasi berhasil diretur!', 'success');
+
+    const totalQty = candidates.reduce((acc, s) => acc + s.unsoldQty, 0);
+    if (!confirm(`Yakin ingin meretur barang konsinyasi yang belum laku?\n\nTotal Barang: ${totalQty} pcs\nSupplier: ${candidates.length}\n\n⚠️ Ghost supplier akan DILEWATI otomatis.`)) return;
+
+    let countSuccess = 0;
+    for (const sup of candidates) {
+      await this.returBarangSupplier(sup);
+      countSuccess++;
+    }
+    this.showToast(`${countSuccess} supplier berhasil diretur (total ${totalQty} pcs)`, 'success');
   },
 
   shareSettlementWA(supSummary) {
