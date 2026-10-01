@@ -8333,15 +8333,45 @@ try {
     }
   },
 
-  shareReceiveReceiptWA(record) {
+    shareReceiveReceiptWA(record) {
     const rec = record || this.currentReceiveRecord;
     if (!rec) return;
-    const sup = this.suppliersList.find(s => s.id === rec.supplierId || s.name === rec.supplierName);
-    const phone = sup?.contact || '';
-    const itemsText = (rec.items || []).map(i => `- ${i.name} (${i.sku}): ${i.qty} ${i.unit} x Rp ${this.formatNumber(i.price)} = Rp ${this.formatNumber(i.total)}`).join('\n');
+
+    // ✅ FIX: Prioritas nomor dari form (yang user isi/edit), fallback ke master supplier
+    let phone = String(this.scanReceiveForm?.waPhone || '').trim();
+    if (!phone) {
+      const sup = (this.suppliersList || []).find(s => s && (s.id === rec.supplierId || s.name === rec.supplierName));
+      phone = sup?.contact || '';
+    }
+
+    if (!phone) {
+      this.showToast('Nomor WA supplier belum diisi — isi dulu di form Scan Bahan Masuk', 'error');
+      return;
+    }
+
+    // Normalize: 08xxx / 8xxx → 62xxx
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+    else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+    // Build message
+    const itemsText = (rec.items || []).map(i =>
+      `- ${i.name} (${i.sku}): ${i.qty} ${i.unit} x Rp ${this.formatNumber(i.price)} = Rp ${this.formatNumber(i.total)}`
+    ).join('\n');
     const msg = `*BUKTI TANDA TERIMA BARANG KONSINYASI*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nNo. Terima: ${rec.receiveId}\nTanggal: ${rec.date} ${rec.time || ''}\nSupplier: ${rec.supplierName}\n\n*Daftar Barang:*\n${itemsText}\n\n*Total Nilai: Rp ${this.formatNumber(rec.totalValue)}*\n\nBarang titipan konsinyasi telah diterima dengan baik. Terima kasih! 🙏`;
 
-    this.sendWhatsAppNotification(phone, msg, 'consignment_receipt');
+    // ✅ FIX: window.open SINKRON (dalam user gesture) — popup blocker tidak block
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    const win = window.open(waUrl, '_blank');
+
+    if (!win) {
+      // Popup benar-benar diblok → kasih user fallback link manual
+      this.showToast('Popup diblok browser — izinkan popup untuk kirim WA', 'error');
+      console.warn('[WA-RECEIPT] Popup blocked for', cleanPhone);
+    } else {
+      this.showToast(`WhatsApp dibuka — kirim ke ${cleanPhone}`, 'success');
+      console.log('[WA-RECEIPT] ✅ WA opened for', cleanPhone);
+    }
   },
 
   // =========================================================================
