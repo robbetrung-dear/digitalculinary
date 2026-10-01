@@ -8343,7 +8343,11 @@ try {
         if (!supId) return;
         if (!validSupplierIds.has(supId)) return;
 
-        const remainingStock = Number(inv.stock || inv.stok || 0);
+        // ✅ FIX BUG-12: Safe check — jangan pakai `|| 0` karena 0 falsy
+        const remainingStock = Number(
+          (inv.stock !== undefined && inv.stock !== null) ? inv.stock :
+          ((inv.stok !== undefined && inv.stok !== null) ? inv.stok : 0)
+        );
         if (remainingStock > 0) {
           supMap[supId].unsoldItems.push({
             id: inv.id,
@@ -8527,28 +8531,31 @@ try {
     };
 
     try {
-      // 1. ✅ FIX BUG-9: Update stok SETIAP item ke 0 di Firebase LANGSUNG
-      //    Jangan hanya fetch PATCH — update _fbSet juga biar persist
+            // 1. ✅ FIX BUG-9 + BUG-13: Update stok SETIAP item ke 0 di Firebase LANGSUNG
+      //    WAJIB update stock, stok, DAN seluruh object biar tidak stale
       for (const it of supSummary.unsoldItems) {
         const inv = this.inventoryList.find(i => i.id === it.id);
         if (inv) {
           inv.stock = 0;
           inv.stok = 0;
 
-          // ✅ FIX BUG-9: Update Firebase via _fbSet (authoritative)
+          // ✅ FIX BUG-13: Update seluruh object inventory (bukan hanya field)
           if (this._fbDb && this._fbSet && this._fbRef) {
             try {
-              const itemRef = this._fbRef(this._fbDb, `inventory/${it.id}/stock`);
-              const stokRef = this._fbRef(this._fbDb, `inventory/${it.id}/stok`);
-              await this._fbSet(itemRef, 0);
-              await this._fbSet(stokRef, 0);
-              console.log(`[RETUR] ✅ Firebase stock updated: ${it.id} → 0`);
+              const itemRef = this._fbRef(this._fbDb, `inventory/${it.id}`);
+              await this._fbSet(itemRef, {
+                ...inv,
+                stock: 0,
+                stok: 0,
+                lastUpdate: Date.now()
+              });
+              console.log(`[RETUR] ✅ Firebase item updated: ${it.id} → stock:0, stok:0`);
             } catch (fbErr) {
               console.warn(`[RETUR] ❌ Firebase update failed for ${it.id}:`, fbErr);
             }
           }
 
-          // Juga PATCH ke backend (untuk consistency kalau ada proses lain)
+          // Juga PATCH ke backend
           fetch(`/inventory/${encodeURIComponent(it.id)}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
