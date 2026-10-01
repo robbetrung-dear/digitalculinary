@@ -2033,11 +2033,12 @@ try {
       localStorage.removeItem('dapur_pos_draft_cart');
     }
 
-    // 12. Sound & Toast
+        // 12. Sound & Toast
     this.playSound('success');
     if (!isReconciliation) {
       this.showToast('Transaksi berhasil!', 'success');
       this.receiptModal = true;
+      this.receiptWAPhone = ''; // ✅ FEATURE-3: reset field WA tiap struk baru
     }
   },
 
@@ -2326,7 +2327,7 @@ try {
   /**
    * Kirim struk transaksi via WhatsApp
    */
-  kirimStrukWA(txData) {
+    kirimStrukWA(txData, phoneInput) {
     const order = txData || this.currentOrder || { id: 'T' + Date.now(), total: this.getCartGrandTotal() };
     const sCharge = order.serviceCharge !== undefined ? order.serviceCharge : this.getCartServiceCharge();
     const subtotal = order.subtotal || order.sub || this.getCartSubtotal();
@@ -2358,7 +2359,18 @@ try {
       details +
       `*TOTAL: ${this.formatRupiah(order.total || order.tot || this.getCartGrandTotal())}*\n\n` +
       `Terima kasih telah berbelanja di Dapur Kuliner Viral!`;
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    // ✅ FEATURE-3: prioritas nomor dari param → state receiptWAPhone → generic share
+    const rawPhone = phoneInput !== undefined ? phoneInput : (this.receiptWAPhone || '');
+    let cleanPhone = String(rawPhone || '').replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1);
+    } else if (cleanPhone.startsWith('8')) {
+      cleanPhone = '62' + cleanPhone;
+    }
+
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   },
   sendReceiptWA() {
