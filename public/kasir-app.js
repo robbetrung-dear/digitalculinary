@@ -1867,7 +1867,17 @@ try {
       id: txId,
       date: this.formatDate(Date.now()),
       time: this.formatTime(Date.now()),
-      items: normalizedItems.length > 0 ? JSON.parse(JSON.stringify(normalizedItems)) : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal }],
+            items: normalizedItems.length > 0 
+        ? normalizedItems.map(it => {
+            const menu = (this.menuList || []).find(m => m.id === it.id);
+            return { 
+              id: it.id, 
+              qty: it.qty, 
+              price: it.price, 
+              name: (menu && menu.name) ? menu.name : it.id 
+            };
+          })
+        : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal }],
       subtotal: subtotal,
       tax: tax,
       serviceCharge: serviceCharge,
@@ -2325,7 +2335,8 @@ try {
 
     let itemsText = '';
     (order.items || []).forEach(it => {
-      const name = it.name || 'Menu';
+      const menu = (this.menuList || []).find(m => m.id === (it.id || it.menuId));
+      const name = it.name || (menu && menu.name) || it.id || 'Menu';
       const qty = it.qty || 1;
       const price = it.price || 0;
       itemsText += `• ${name} x${qty} = ${this.formatRupiah(qty * price)}\n`;
