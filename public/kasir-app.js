@@ -7972,6 +7972,30 @@ try {
     this.processScanReceive(code);
   },
  
+   /**
+   * ✅ FITUR: Saat user pilih supplier dari dropdown → auto-fill nomor WA
+   * Rule: hanya isi kalau field masih kosong (jangan overwrite manual edit user)
+   */
+  onReceiveSupplierChange() {
+    const sid = this.scanReceiveForm?.supplierId;
+    if (!sid) return;
+    const sup = (this.suppliersList || []).find(s => s && s.id === sid);
+    if (sup) {
+      this.scanReceiveForm.supplierName = sup.name || 'Umum';
+      // Auto-fill WA hanya kalau field kosong — biar user bisa edit manual dulu
+      if (!String(this.scanReceiveForm.waPhone || '').trim()) {
+        this.scanReceiveForm.waPhone = sup.contact || '';
+      }
+      console.log('[RECEIVE] Supplier dipilih:', sup.name, '| WA auto-fill:', this.scanReceiveForm.waPhone);
+      this.showToast(
+        sup.contact
+          ? `Supplier "${sup.name}" dipilih • WA auto-terisi`
+          : `Supplier "${sup.name}" belum punya kontak WA — isi manual`,
+        sup.contact ? 'success' : 'notify'
+      );
+    }
+  },
+
  processScanReceive(code) {
     const cleanCode = String(code || '').trim().toLowerCase();
     const item = (this.inventoryList || []).find(i => 
