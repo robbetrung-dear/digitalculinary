@@ -7389,11 +7389,26 @@ try {
     }
   },
 
-  /**
-   * Helper: Format SKU Final: SKU-{KATEGORI}-{URUT}-{TAHUN}-{SUPPLIER}
-   * Contoh: SKU-BHN-0001-2026-PAKDE
+   /**
+   * Helper: Hash string jadi 4-char uppercase hex (FNV-1a 32-bit)
+   * Deterministik — string sama selalu hasil sama
    */
-  generateSKU(category, skuSource, supplierName, sequentialNum) {
+  _hash4(str) {
+    const s = String(str || 'UMUM');
+    let h = 2166136261; // FNV offset basis
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619); // FNV prime
+    }
+    return (h >>> 0).toString(16).toUpperCase().padStart(8, '0').slice(0, 4);
+  },
+
+  /**
+   * Helper: Format SKU Final: SKU-{KATEGORI}-{URUT}-{TAHUN}-{HASH4}
+   * Contoh: SKU-BHN-0001-2026-4A9F
+   */
+  
+ generateSKU(category, skuSource, supplierName, sequentialNum) {
     if (skuSource === 'external') return null;
     const cat = String(category || '').toLowerCase();
     let catCode = 'BHN';
@@ -7405,14 +7420,24 @@ try {
     else if (cat.includes('snack') || cat.includes('dimsum')) catCode = 'SNK';
 
     const year = new Date().getFullYear();
-    const sup = String(supplierName || 'PAKDE').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'PAKDE';
+
+    // ✅ BUG-1 Opsi C: hash 4-char dari supplierId (fallback ke name kalau ID tidak ketemu)
+    const supNameRaw = String(supplierName || '').trim();
+    let hashSource = supNameRaw || 'UMUM';
+    if (supNameRaw && Array.isArray(this.suppliersList)) {
+      const found = this.suppliersList.find(s =>
+        s && s.name && s.name.toLowerCase() === supNameRaw.toLowerCase()
+      );
+      if (found && found.id) hashSource = String(found.id);
+    }
+    const hash4 = this._hash4(hashSource);
 
     let num = sequentialNum;
     if (!num) {
       num = (this.inventoryList ? this.inventoryList.length : 0) + 1;
     }
     const numPadded = String(num).padStart(4, '0');
-    return `SKU-${catCode}-${numPadded}-${year}-${sup}`;
+    return `SKU-${catCode}-${numPadded}-${year}-${hash4}`;
   },
 
   /**
@@ -7653,18 +7678,7 @@ try {
           // Gambar barcode
           doc.addImage(barcodeDataUrl, 'PNG', x + 5, y + 6, labelW - 10, 12);
 
-          // Footer info harga & SKU
-          doc.setFont('courier', 'bold');
-          doc.setFontSize(7);
-          doc.setTextColor(80, 80, 80);
-          const priceStr = item.purchasePrice ? `Rp ${this.formatNumber(item.purchasePrice)}` : '';
-          doc.text(code, x + (labelW / 2), y + 21, { align: 'center' });
-          if (priceStr) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(6.5);
-            doc.text(priceStr, x + (labelW / 2), y + 24, { align: 'center' });
-          }
-
+          // ✅ BUG-1: Footer harga & SKU dihapus (JsBarcode sudah render displayValue)
           printed++;
         }
       }
@@ -7823,7 +7837,8 @@ try {
 
     const prodName = this.preRegisterForm.name.trim();
     const supName = this.preRegisterForm.supplierName || 'Supplier';
-    const menuTitle = `${prodName} (${supName.split(' ')[0]})`;
+    // ✅ BUG-1: Nama menu bersih (supplier tetap tersimpan di field supplierName)
+    const menuTitle = prodName;
     const itemId = `inv_${Date.now()}`;
     const menuId = `m_${Date.now()}`;
     const beli = Number(this.preRegisterForm.purchasePrice) || 0;
