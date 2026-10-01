@@ -6494,30 +6494,28 @@ try {
     }
   },
 
-  getAccountingSummary() {
+    getAccountingSummary() {
     const d = this.accountingSummaryData;
     
-    // Debug log
-    if (d) {
-      console.log('[ACCT-GETTER] Cache OK, keys:', Object.keys(d));
-    } else {
-      console.log('[ACCT-GETTER] No cache, using fallback');
-    }
-    
-    // Check lebih fleksibel
+    // ✅ FIX BUG-19: PRIORITAS pakai backend data kalau valid
+    // Cek lebih fleksibel — minimal ada salah satu field inti
     const hasValidData = d && typeof d === 'object' && 
-      (d.pendapatan !== undefined || d.labaKotor !== undefined || d.hpp !== undefined);
+      (d.pendapatan !== undefined || d.labaKotor !== undefined || d.hpp !== undefined || d.labaBersih !== undefined);
     
     if (hasValidData) {
       const pendapatan = d.pendapatan || {};
       const hpp = d.hpp || {};
       const beban = d.beban || {};
       
+      const totalRev = Number(pendapatan.totalPendapatan) || 0;
+      const totalCOGS = Number(hpp.totalHpp) || 0;
+      const grossProfit = Number(d.labaKotor) || (totalRev - totalCOGS);
+      
       return {
-        totalRev: Number(pendapatan.totalPendapatan) || 0,
-        totalCOGS: Number(hpp.totalHpp) || 0,
-        grossProfit: Number(d.labaKotor) || 0,
-        grossMargin: Number(d.marginKotor) || 0,
+        totalRev,
+        totalCOGS,
+        grossProfit,
+        grossMargin: totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0,
         opExList: [
           { name: 'Beban Gaji Karyawan', amount: Number(beban.gaji) || 0 },
           { name: 'Beban Sewa Tempat', amount: Number(beban.sewa) || 0 },
@@ -6528,67 +6526,32 @@ try {
         ].filter(item => item.amount > 0),
         totalOpEx: Number(beban.totalBeban) || 0,
         netProfit: Number(d.labaBersih) || 0,
-        netMargin: Number(d.marginBersih) || 0,
-        status: d.status || (Number(d.labaBersih) >= 0 ? 'PROFIT' : 'LOSS'),
-        // INFORMASI TAMBAHAN
+        netMargin: totalRev > 0 ? Math.round((Number(d.labaBersih) || 0) / totalRev * 100) : 0,
+        status: (Number(d.labaBersih) || 0) >= 0 ? 'PROFIT' : 'LOSS',
         pembelianBahanBaku: Number(d.pembelianBahanBaku) || 0,
         persediaanAkhir: Number(d.persediaanAkhir) || 0,
         source: 'firebase'
       };
     }
 
-    console.log('[ACCT-GETTER] Using fallback local calc');
-    // FALLBACK: kalkulasi lama (existing, hardcoded)
+    // Fallback: kalau Firebase benar-benar kosong
     const totalRev = Number(this.todayTotalRevenue) || 0;
+    const fallbackCOGS = Math.round(totalRev * 0.38);
+    const grossProfit = totalRev - fallbackCOGS;
     
-    // Hitung total HPP
-    let totalCOGS = 0;
-    if (Array.isArray(this.salesHistory)) {
-      this.salesHistory.forEach(tx => {
-        if (Array.isArray(tx.items)) {
-          tx.items.forEach(item => {
-            const recipe = this.menuRecipes[item.id];
-            if (recipe && Array.isArray(recipe.ingredients)) {
-              recipe.ingredients.forEach(ing => {
-                const invItem = (this.inventoryList || []).find(i => i.id === ing.itemId);
-                if (invItem) {
-                  const costPerUnit = Number(invItem.purchasePrice || invItem.hargaBeli || 0);
-                  totalCOGS += (Number(ing.amount) || 0) * (Number(item.qty) || 1) * costPerUnit;
-                }
-              });
-            }
-          });
-        }
-      });
-    }
-    if (totalCOGS === 0 && totalRev > 0) {
-      totalCOGS = Math.round(totalRev * 0.38);
-    }
-
-    const grossProfit = totalRev - totalCOGS;
-    const grossMargin = totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0;
-
-    const opExList = [
-      { name: 'Beban Sewa Tempat & Operasional Dapur', amount: 95000 },
-      { name: 'Beban Listrik, Air & Gas Elpiji', amount: 65000 },
-      { name: 'Beban Packaging & Perlengkapan Kebersihan', amount: 35000 }
-    ];
-    const totalOpEx = opExList.reduce((acc, curr) => acc + curr.amount, 0);
-    const netProfit = grossProfit - totalOpEx;
-
     return {
       totalRev,
-      totalCOGS,
+      totalCOGS: fallbackCOGS,
       grossProfit,
-      grossMargin,
-      opExList,
-      totalOpEx,
-      netProfit,
-      netMargin: totalRev > 0 ? Math.round((netProfit / totalRev) * 100) : 0,
-      status: netProfit >= 0 ? 'PROFIT' : 'LOSS',
-      source: 'local',
+      grossMargin: totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0,
+      opExList: [],
+      totalOpEx: 0,
+      netProfit: grossProfit,
+      netMargin: totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0,
+      status: grossProfit >= 0 ? 'PROFIT' : 'LOSS',
       pembelianBahanBaku: 0,
-      persediaanAkhir: 0
+      persediaanAkhir: 0,
+      source: 'local-fallback'
     };
   },
 
