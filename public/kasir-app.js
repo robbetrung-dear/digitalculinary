@@ -6494,13 +6494,12 @@ try {
     }
   },
 
-    getAccountingSummary() {
+      getAccountingSummary() {
     const d = this.accountingSummaryData;
     
-    // ✅ FIX BUG-19: PRIORITAS pakai backend data kalau valid
-    // Cek lebih fleksibel — minimal ada salah satu field inti
+    // ✅ FIX BUG-19: Prioritas backend data kalau valid
     const hasValidData = d && typeof d === 'object' && 
-      (d.pendapatan !== undefined || d.labaKotor !== undefined || d.hpp !== undefined || d.labaBersih !== undefined);
+      (d.pendapatan !== undefined || d.hpp !== undefined || d.labaBersih !== undefined);
     
     if (hasValidData) {
       const pendapatan = d.pendapatan || {};
@@ -6534,21 +6533,18 @@ try {
       };
     }
 
-    // Fallback: kalau Firebase benar-benar kosong
+    // Fallback minimalis — jangan pakai *0.38
     const totalRev = Number(this.todayTotalRevenue) || 0;
-    const fallbackCOGS = Math.round(totalRev * 0.38);
-    const grossProfit = totalRev - fallbackCOGS;
-    
     return {
       totalRev,
-      totalCOGS: fallbackCOGS,
-      grossProfit,
-      grossMargin: totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0,
+      totalCOGS: 0,
+      grossProfit: totalRev,
+      grossMargin: 100,
       opExList: [],
       totalOpEx: 0,
-      netProfit: grossProfit,
-      netMargin: totalRev > 0 ? Math.round((grossProfit / totalRev) * 100) : 0,
-      status: grossProfit >= 0 ? 'PROFIT' : 'LOSS',
+      netProfit: totalRev,
+      netMargin: 100,
+      status: 'PROFIT',
       pembelianBahanBaku: 0,
       persediaanAkhir: 0,
       source: 'local-fallback'
