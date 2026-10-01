@@ -1017,17 +1017,19 @@ try {
   /**
    * Tambah item menu ke keranjang dengan validasi stok bahan baku
    */
-  addToCart(menuItem) {
+    addToCart(menuItem) {
     if (!menuItem) return;
-    
-    // Cek kalkulasi stok porsi menu berdasarkan komposisi bahan baku
+
+    // ✅ FIX BUG-14: Block kalau stok 0 atau negatif (konsisten dengan UI badge)
     const currentStock = this.getMenuCalculatedStock(menuItem.id);
     const existing = this.cart.find(i => i.id === menuItem.id);
     const currentCartQty = existing ? existing.qty : 0;
 
+    console.log('[ADD-CART] Menu:', menuItem.name, '| Stock:', currentStock, '| In Cart:', currentCartQty);
+
     if (currentStock <= 0) {
       const missing = this.getMenuMissingIngredient(menuItem.id);
-      const missingText = missing ? ` (Bahan habis: ${missing.name})` : ' (Bahan baku belum diatur atau habis)';
+      const missingText = missing ? ` (Bahan habis: ${missing.name})` : ' (Stok fisik kosong di toko)';
       this.showToast(`Stok "${menuItem.name}" tidak mencukupi${missingText}!`, 'error');
       this.playSound('error');
       return;
@@ -5044,20 +5046,43 @@ try {
    * Hitung stok porsi yang tersedia untuk menu tertentu
    * Aturan: Jika belum ada resep atau salah satu item stok = 0 / kurang -> porsi = 0
    */
-  getMenuCalculatedStock(menuId) {
+    getMenuCalculatedStock(menuId) {
     const recipe = this.menuRecipes[menuId];
     if (!recipe || !Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
-      return 0; // Default stok = 0 jika belum diset bahan bakunya
+      // ✅ FIX BUG-6: Fallback ke dual-role inventory link
+      const menu = (this.menuList || []).find(m => m.id === menuId);
+      if (menu && menu.inventoryId) {
+        const inv = (this.inventoryList || []).find(i => i.id === menu.inventoryId);
+        if (inv) {
+          // ✅ FIX BUG-12: Safe check — jangan pakai `|| 0` karena 0 falsy
+          return Number(
+            (inv.stock !== undefined && inv.stock !== null) ? inv.stock :
+            ((inv.stok !== undefined && inv.stok !== null) ? inv.stok : 0)
+          );
+        }
+      }
+      const linkedInv = (this.inventoryList || []).find(i => i.linkedMenuId === menuId);
+      if (linkedInv) {
+        return Number(
+          (linkedInv.stock !== undefined && linkedInv.stock !== null) ? linkedInv.stock :
+          ((linkedInv.stok !== undefined && linkedInv.stok !== null) ? linkedInv.stok : 0)
+        );
+      }
+      return 0;
     }
 
     let minPossiblePortions = Infinity;
 
     for (const ing of recipe.ingredients) {
       const invItem = this.inventoryList.find(i => i.id === ing.itemId);
-      if (!invItem) return 0; // Bahan tidak ditemukan -> 0
-      if (invItem.isCountable === false) continue; // Uncountable tidak membatasi stok
+      if (!invItem) return 0;
+      if (invItem.isCountable === false) continue;
 
-      const currentStock = Number(invItem.stock || invItem.stok || 0);
+      // ✅ FIX BUG-12: Safe check
+      const currentStock = Number(
+        (invItem.stock !== undefined && invItem.stock !== null) ? invItem.stock :
+        ((invItem.stok !== undefined && invItem.stok !== null) ? invItem.stok : 0)
+      );
       const requiredAmount = Number(ing.amount) || 0;
       if (requiredAmount <= 0) continue;
 
@@ -5065,7 +5090,6 @@ try {
       const itemUnit = (invItem.unit || '').toLowerCase();
       const ingUnit = (ing.unit || '').toLowerCase();
 
-      // Normalisasi satuan berat / volume
       if (itemUnit === 'kg' && ingUnit === 'gram') availableAmount = availableAmount * 1000;
       else if (itemUnit === 'gram' && ingUnit === 'kg') availableAmount = availableAmount / 1000;
       else if (itemUnit === 'liter' && ingUnit === 'ml') availableAmount = availableAmount * 1000;
@@ -5083,7 +5107,7 @@ try {
   /**
    * Dapatkan bahan baku yang menjadi penyebab habisnya stok menu
    */
-  getMenuMissingIngredient(menuId) {
+    getMenuMissingIngredient(menuId) {
     const recipe = this.menuRecipes[menuId];
     if (!recipe || !Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
       return null;
@@ -5094,7 +5118,11 @@ try {
       if (!invItem) return { name: 'Item Belum Terdaftar' };
       if (invItem.isCountable === false) continue;
 
-      const currentStock = Number(invItem.stock || invItem.stok || 0);
+      // ✅ FIX BUG-12: Safe check
+      const currentStock = Number(
+        (invItem.stock !== undefined && invItem.stock !== null) ? invItem.stock :
+        ((invItem.stok !== undefined && invItem.stok !== null) ? invItem.stok : 0)
+      );
       const requiredAmount = Number(ing.amount) || 0;
       if (requiredAmount <= 0) continue;
 
@@ -5108,7 +5136,7 @@ try {
       else if (itemUnit === 'ml' && ingUnit === 'liter') availableAmount = availableAmount / 1000;
 
       if (Math.floor(availableAmount / requiredAmount) <= 0) {
-        return { name: invItem.name, available: invItem.stock, unit: invItem.unit };
+        return { name: invItem.name, available: currentStock, unit: invItem.unit };
       }
     }
     return null;
