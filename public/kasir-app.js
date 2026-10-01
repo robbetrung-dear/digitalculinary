@@ -8261,9 +8261,25 @@ try {
   /**
    * 3A & 3B. Modal Tutup Hari Konsinyasi & Ringkasan Laku vs Retur
    */
-  async openSettlementModal(date) {
+    async openSettlementModal(date) {
     this.settlementDate = date || new Date().toISOString().slice(0, 10);
     this.settlementModal = true;
+
+    // ✅ FIX BUG-11: Refresh inventory dari Firebase DULU sebelum hitung settlement
+    // Biar state inventoryList tidak stale saat loadSettlementSummary dipanggil
+    try {
+      if (this._fbDb && this._fbRef && FB_DB) {
+        const snap = await FB_DB.ref('inventory').once('value');
+        const val = snap.val();
+        if (val) {
+          this.inventoryList = Object.entries(val).map(([k, v]) => ({ id: k, ...v }));
+          console.log('[SETTLEMENT] Inventory refreshed from Firebase:', this.inventoryList.length, 'items');
+        }
+      }
+    } catch (e) {
+      console.warn('[SETTLEMENT] Inventory refresh note:', e.message);
+    }
+
     await this.loadSettlementSummary(this.settlementDate);
   },
 
