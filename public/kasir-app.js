@@ -326,9 +326,10 @@ window.kasirApp = () => ({
     scanReceiveForm: {
     skuQuery: '',
     matchedItem: null,
+    items: [],                    // ✅ NEW: array item (maks 5)
     supplierId: '',
     supplierName: '',
-    waPhone: '',   // ✅ FITUR: nomor WA supplier (auto-fill dari master, editable)
+    waPhone: '',
     qty: 1,
     purchasePrice: 0,
     paymentMethod: 'payable',
@@ -7942,10 +7943,11 @@ try {
   /**
    * 2E. Scan Receive Barang Konsinyasi dari Supplier
    */
-    openScanReceiveModal() {
+      openScanReceiveModal() {
     this.scanReceiveForm = {
       skuQuery: '',
       matchedItem: null,
+      items: [],
       supplierId: '',
       supplierName: '',
       waPhone: '',
@@ -7976,27 +7978,107 @@ try {
    * ✅ FITUR: Saat user pilih supplier dari dropdown → auto-fill nomor WA
    * Rule: hanya isi kalau field masih kosong (jangan overwrite manual edit user)
    */
-  onReceiveSupplierChange() {
+    onReceiveSupplierChange() {
     const sid = this.scanReceiveForm?.supplierId;
     if (!sid) return;
     const sup = (this.suppliersList || []).find(s => s && s.id === sid);
-    if (sup) {
-      this.scanReceiveForm.supplierName = sup.name || 'Umum';
-      // Auto-fill WA hanya kalau field kosong — biar user bisa edit manual dulu
-      if (!String(this.scanReceiveForm.waPhone || '').trim()) {
-        this.scanReceiveForm.waPhone = sup.contact || '';
+    if (!sup) return;
+
+    // ✅ Validasi: kalau list sudah ada item dari supplier lain → konfirmasi reset
+    const items = this.scanReceiveForm.items || [];
+    if (items.length > 0 && items[0].supplierId && items[0].supplierId !== sid) {
+      if (!confirm(`Sudah ada ${items.length} item dari supplier lain.\nGanti supplier akan MENGOSONGKAN list. Lanjutkan?`)) {
+        this.scanReceiveForm.supplierId = items[0].supplierId;
+        return;
       }
-      console.log('[RECEIVE] Supplier dipilih:', sup.name, '| WA auto-fill:', this.scanReceiveForm.waPhone);
-      this.showToast(
-        sup.contact
-          ? `Supplier "${sup.name}" dipilih • WA auto-terisi`
-          : `Supplier "${sup.name}" belum punya kontak WA — isi manual`,
-        sup.contact ? 'success' : 'notify'
-      );
+      this.scanReceiveForm.items = [];
+    }
+
+    this.scanReceiveForm.supplierName = sup.name || 'Umum';
+    if (!String(this.scanReceiveForm.waPhone || '').trim()) {
+      this.scanReceiveForm.waPhone = sup.contact || '';
+    }
+    this.showToast(
+      sup.contact
+        ? `Supplier "${sup.name}" dipilih • WA auto-terisi`
+        : `Supplier "${sup.name}" belum punya kontak WA — isi manual`,
+      sup.contact ? 'success' : 'notify'
+    );
+  },
+
+   /**
+   * ✅ Multi-item: Tambah item ke list (auto-dedupe, maks 5)
+   */
+  _addItemToReceiveList(item, qty, price) {
+    if (!item) return false;
+    if (!Array.isArray(this.scanReceiveForm.items)) this.scanReceiveForm.items = [];
+
+    if (this.scanReceiveForm.items.length >= 5) {
+      this.showToast('Maksimal 5 produk per penerimaan. Simpan dulu, baru buat penerimaan baru.', 'error');
+      this.playSound('error');
+      return false;
+    }
+
+    const numQty = Math.max(1, Number(qty) || 1);
+    const numPrice = Number(price) || Number(item.purchasePrice || item.hargaBeli) || 0;
+
+    const existing = this.scanReceiveForm.items.find(it => it.id === item.id);
+    if (existing) {
+      existing.qty += numQty;
+      existing.price = numPrice || existing.price;
+      existing.total = existing.qty * existing.price;
+      this.showToast(`"${item.name}" sudah ada — qty jadi ${existing.qty}`, 'notify');
+      this.playSound('click');
+      return true;
+    }
+
+    this.scanReceiveForm.items.push({
+      id: item.id,
+      name: item.name,
+      sku: item.sku || item.barcode || item.id,
+      unit: item.unit || 'unit',
+      qty: numQty,
+      price: numPrice,
+      total: numQty * numPrice,
+      supplierId: item.supplierId || '',
+      supplierName: item.supplierName || ''
+    });
+    this.playSound('success');
+    return true;
+  },
+
+  /**
+   * ✅ Multi-item: Hapus item dari list
+   */
+  removeItemFromReceiveList(idx) {
+    if (!Array.isArray(this.scanReceiveForm.items)) return;
+    if (idx < 0 || idx >= this.scanReceiveForm.items.length) return;
+    const removed = this.scanReceiveForm.items.splice(idx, 1)[0];
+    if (removed) {
+      this.showToast(`"${removed.name}" dihapus dari list`, 'notify');
+      this.playSound('click');
     }
   },
 
- processScanReceive(code) {
+  /**
+   * ✅ Multi-item: Recalc total saat qty/price di-edit inline
+   */
+  updateReceiveItemTotal(item) {
+    if (!item) return;
+    item.qty = Math.max(1, Number(item.qty) || 1);
+    item.price = Math.max(0, Number(item.price) || 0);
+    item.total = item.qty * item.price;
+  },
+
+  /**
+   * ✅ Multi-item: Total nilai seluruh list
+   */
+  getReceiveTotal() {
+    if (!Array.isArray(this.scanReceiveForm?.items)) return 0;
+    return this.scanReceiveForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+  },
+
+   processScanReceive(code) {
     const cleanCode = String(code || '').trim().toLowerCase();
     const item = (this.inventoryList || []).find(i => 
       (i.sku && i.sku.toLowerCase() === cleanCode) ||
@@ -8004,28 +8086,49 @@ try {
       (i.id && i.id.toLowerCase() === cleanCode)
     );
 
-      if (item) {
-      this.scanReceiveForm.matchedItem = item;
-      this.scanReceiveForm.skuQuery = item.sku || item.barcode;
-      this.scanReceiveForm.supplierId = item.supplierId || '';
-      this.scanReceiveForm.supplierName = item.supplierName || 'Umum';
-      this.scanReceiveForm.purchasePrice = item.purchasePrice || item.hargaBeli || 0;
+    if (item) {
+      // Validasi supplier konsisten
+      if (this.scanReceiveForm.supplierId) {
+        if (item.supplierId && item.supplierId !== this.scanReceiveForm.supplierId) {
+          this.showToast(
+            `Item "${item.name}" dari supplier berbeda. Simpan dulu penerimaan ini, baru buat baru.`,
+            'error'
+          );
+          this.playSound('error');
+          return;
+        }
+      } else {
+        // Pertama kali scan — set context supplier
+        this.scanReceiveForm.supplierId = item.supplierId || '';
+        this.scanReceiveForm.supplierName = item.supplierName || 'Umum';
+        const matchedSupplier = (this.suppliersList || []).find(s =>
+          s && (s.id === item.supplierId || s.name === item.supplierName)
+        );
+        if (matchedSupplier?.contact && !this.scanReceiveForm.waPhone) {
+          this.scanReceiveForm.waPhone = matchedSupplier.contact;
+        }
+      }
 
-      // ✅ FITUR: Auto-fill nomor WA supplier dari master (masih editable)
-      const matchedSupplier = (this.suppliersList || []).find(s =>
-        s && (s.id === item.supplierId || s.name === item.supplierName)
+      // Tambah ke list
+      const added = this._addItemToReceiveList(
+        item,
+        this.scanReceiveForm.qty || 1,
+        this.scanReceiveForm.purchasePrice || 0
       );
-      this.scanReceiveForm.waPhone = matchedSupplier?.contact || '';
-      console.log('[RECEIVE] Auto-fill WA:', this.scanReceiveForm.waPhone, '| Supplier:', matchedSupplier?.name);
 
-      this.playSound('success');
-      this.showToast(
-        `Item ditemukan: ${item.name}${matchedSupplier?.contact ? ' • WA supplier terisi' : ' • WA supplier kosong, isi manual'}`,
-        'success'
-      );
+      if (added) {
+        this.showToast(
+          `✅ "${item.name}" ditambah (${this.scanReceiveForm.items.length}/5)`,
+          'success'
+        );
+        // Clear input untuk scan berikutnya
+        this.scanReceiveForm.skuQuery = '';
+        this.scanReceiveForm.matchedItem = null;
+        this.scanReceiveForm.qty = 1;
+      }
     } else {
       this.playSound('error');
-      if (confirm(`SKU/Barcode "${code}" belum terdaftar.\nApakah Anda ingin mendaftarkan produk baru konsinyasi sekarang?`)) {
+      if (confirm(`SKU/Barcode "${code}" belum terdaftar.\nDaftarkan produk baru konsinyasi sekarang?`)) {
         this.scanReceiveModal = false;
         this.openPreRegisterModal();
         this.preRegisterForm.sku = code;
@@ -8034,47 +8137,32 @@ try {
     }
   },
 
-  async submitReceiveGoods() {
-    if (!this.scanReceiveForm.matchedItem) {
-      this.showToast('Silakan scan atau pilih produk terlebih dahulu', 'error');
+    async submitReceiveGoods() {
+    const items = Array.isArray(this.scanReceiveForm?.items) ? this.scanReceiveForm.items : [];
+    if (items.length === 0) {
+      this.showToast('Belum ada item di list. Scan minimal 1 produk dulu.', 'error');
       return;
     }
 
-    const item = this.scanReceiveForm.matchedItem;
-    const qty = Math.max(1, Number(this.scanReceiveForm.qty) || 1);
-    const price = Number(this.scanReceiveForm.purchasePrice) || Number(item.purchasePrice) || 0;
-    const totalValue = qty * price;
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const randHex = Math.floor(Math.random() * 9000 + 1000).toString();
     const receiveId = `TRM-${dateStr}-${randHex}`;
-    const supName = this.scanReceiveForm.supplierName || item.supplierName || 'Supplier';
+    const supName = this.scanReceiveForm.supplierName || 'Supplier';
+    const supId = this.scanReceiveForm.supplierId || '';
+    const totalValue = this.getReceiveTotal();
 
-    // 1. Update stok inventory +qty
-    const newStock = (Number(item.stock || item.stok || 0) + qty);
-    item.stock = newStock;
-    item.stok = newStock;
-    item.purchasePrice = price;
+    const recordItems = items.map(it => ({
+      id: it.id, name: it.name, sku: it.sku,
+      qty: it.qty, unit: it.unit, price: it.price, total: it.total
+    }));
 
-    // 2. Data payload receive
     const receiveRecord = {
-      receiveId,
-      id: receiveId,
-      supplierId: this.scanReceiveForm.supplierId || item.supplierId || '',
-      supplierName: supName,
+      receiveId, id: receiveId,
+      supplierId: supId, supplierName: supName,
       date: now.toISOString().slice(0, 10),
       time: now.toLocaleTimeString('id-ID'),
-      items: [
-        {
-          id: item.id,
-          name: item.name,
-          sku: item.sku || item.barcode || item.id,
-          qty,
-          unit: item.unit || 'unit',
-          price,
-          total: totalValue
-        }
-      ],
+      items: recordItems,
       totalValue,
       status: 'received',
       notes: this.scanReceiveForm.notes || 'Penerimaan barang konsinyasi',
@@ -8082,89 +8170,83 @@ try {
     };
 
     try {
-      // POST ke /inventory_receives
+      // 1. POST receive record
       await fetch('/inventory_receives', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(receiveRecord)
       });
 
-      // Update stok ke server
-      await fetch(`/inventory/${encodeURIComponent(item.id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stock: newStock, purchasePrice: price })
-      });
+      // 2. Update stok + log setiap item
+      for (const it of items) {
+        const inv = (this.inventoryList || []).find(i => i.id === it.id);
+        if (!inv) continue;
+        const oldStock = Number(inv.stock || inv.stok || 0);
+        const newStock = oldStock + Number(it.qty);
+        inv.stock = newStock;
+        inv.stok = newStock;
+        inv.purchasePrice = Number(it.price) || inv.purchasePrice;
 
-      // Catat log inventori
-      fetch(`/inventory_logs/${encodeURIComponent(item.id)}/log_${Date.now()}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          t: Date.now(),
-          old: newStock - qty,
-          new: newStock,
-          diff: qty,
-          by: this.kasirInfo?.name || 'kasir',
-          reason: `Penerimaan Barang Konsinyasi #${receiveId}`,
-          changeType: 'purchase'
-        })
-      }).catch(() => {});
+        fetch(`/inventory/${encodeURIComponent(it.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stock: newStock, stok: newStock, purchasePrice: it.price })
+        }).catch(() => {});
 
-      // 3. Auto-Jurnal Akuntansi: Debit 1004 Persediaan / Kredit 2001 Hutang Supplier
+        fetch(`/inventory_logs/${encodeURIComponent(it.id)}/log_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            t: Date.now(), old: oldStock, new: newStock, diff: it.qty,
+            by: this.kasirInfo?.name || 'kasir',
+            reason: `Penerimaan Konsinyasi #${receiveId}`,
+            changeType: 'purchase'
+          })
+        }).catch(() => {});
+
+        if (this._fbDb && this._fbSet && this._fbRef) {
+          try {
+            const itemRef = this._fbRef(this._fbDb, `inventory/${it.id}`);
+            await this._fbSet(itemRef, inv);
+          } catch (e) { console.warn('[RECEIVE] FB update err:', e); }
+        }
+      }
+
+      // 3. Auto-jurnal (1 jurnal total untuk seluruh penerimaan)
       await fetch('/accounting/journal/receive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: totalValue,
-          receiveId,
-          supplierName: supName,
-          ref: receiveId,
+          amount: totalValue, receiveId,
+          supplierName: supName, ref: receiveId,
           date: now.toISOString().slice(0, 10)
         })
       }).catch(e => console.warn('Auto journal receive note:', e));
 
-      // Simpan ke Firebase jika ada
+      // 4. Firebase receive record
       if (this._fbDb && this._fbSet && this._fbRef) {
         try {
           const recRef = this._fbRef(this._fbDb, `inventory_receives/${receiveId}`);
           await this._fbSet(recRef, receiveRecord);
-          const invRef = this._fbRef(this._fbDb, `inventory/${item.id}/stock`);
-          await this._fbSet(invRef, newStock);
-        } catch(e){}
+        } catch (e) { console.warn('[RECEIVE] FB record err:', e); }
       }
 
+      // 5. Reset & show receipt
       this.currentReceiveRecord = receiveRecord;
       this.scanReceiveModal = false;
       this.receiveReceiptModal = true;
       this.playSound('success');
 
-      // ✅ FITUR: Auto-download struk + auto-kirim WA ke supplier
-      const waPhoneSnapshot = String(this.scanReceiveForm.waPhone || '').trim();
-
-      // 1. Auto-download struk PNG tanda terima (delay 300ms biar modal render dulu)
+      // 6. Auto-download struk
       setTimeout(() => {
         try { this.downloadReceiveReceiptImage(receiveRecord); }
         catch (e) { console.warn('[AUTO-RECEIPT] Download error:', e); }
       }, 300);
 
-      // 2. Auto-kirim WA ke supplier (kalau nomor terisi)
-      if (waPhoneSnapshot) {
-        const itemsText = (receiveRecord.items || [])
-          .map(i => `- ${i.name} (${i.sku}): ${i.qty} ${i.unit} x Rp ${this.formatNumber(i.price)} = Rp ${this.formatNumber(i.total)}`)
-          .join('\n');
-        const msg = `*BUKTI TANDA TERIMA BARANG KONSINYASI*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nNo. Terima: ${receiveRecord.receiveId}\nTanggal: ${receiveRecord.date} ${receiveRecord.time || ''}\nSupplier: ${receiveRecord.supplierName}\n\n*Daftar Barang:*\n${itemsText}\n\n*Total Nilai: Rp ${this.formatNumber(receiveRecord.totalValue)}*\n\nBarang titipan konsinyasi telah diterima dengan baik. Terima kasih! 🙏`;
-
-        setTimeout(() => {
-          try {
-            console.log('[AUTO-RECEIPT] Sending WA to:', waPhoneSnapshot);
-            this.sendWhatsAppNotification(waPhoneSnapshot, msg, 'consignment_receipt');
-          } catch (e) { console.warn('[AUTO-RECEIPT] Send WA error:', e); }
-        }, 1200);
-      }
-
+      // 7. Info
+      const waPhoneSnapshot = String(this.scanReceiveForm.waPhone || '').trim();
       this.showToast(
-        `Penerimaan #${receiveId} dicatat${waPhoneSnapshot ? ' • Auto-kirim WA ke supplier…' : ' • WA supplier belum diisi'}`,
+        `✅ ${items.length} produk diterima #${receiveId}${waPhoneSnapshot ? ' • klik Kirim WA di modal' : ' • WA supplier belum diisi'}`,
         'success'
       );
     } catch (err) {
