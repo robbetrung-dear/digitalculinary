@@ -8267,11 +8267,11 @@ try {
     await this.loadSettlementSummary(this.settlementDate);
   },
 
-    async loadSettlementSummary(date) {
+      async loadSettlementSummary(date) {
     const d = date || this.settlementDate || new Date().toISOString().slice(0, 10);
     this.loadingSettlement = true;
     try {
-      // 1. Ambil transaksi hari ini dari server / Firebase
+      // 1. Ambil transaksi hari ini
       let txList = [];
       try {
         const txRes = await fetch(`/pos/transactions/${d}`);
@@ -8281,7 +8281,26 @@ try {
         }
       } catch(e){}
 
-      // 2. ✅ FIX BUG-7: Bangun supMap HANYA dari suppliersList (valid supplier)
+      // 2. ✅ FIX BUG-10: Ambil daftar supplier yang SUDAH DIBAYAR hari ini
+      const paidSupplierIds = new Set();
+      try {
+        const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+          || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        const stlRes = await fetch(`${fbUrl.replace(/\/$/, '')}/settlements.json`);
+        if (stlRes.ok) {
+          const stls = await stlRes.json() || {};
+          Object.values(stls).forEach(stl => {
+            if (stl && stl.date === d && stl.status === 'settled' && stl.supplierId) {
+              paidSupplierIds.add(String(stl.supplierId));
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[SETTLEMENT] Gagal load settlements:', e.message);
+      }
+      console.log('[SETTLEMENT] Sudah dibayar hari ini:', [...paidSupplierIds]);
+
+      // 3. Bangun supMap dari suppliersList (valid supplier only)
       const supMap = {};
       const validSupplierIds = new Set();
 
@@ -8297,16 +8316,16 @@ try {
           totalHutang: 0,
           unsoldItems: [],
           unsoldQty: 0,
-          unsoldValue: 0
+          unsoldValue: 0,
+          isPaid: paidSupplierIds.has(String(sup.id))   // ✅ flag pembayaran
         };
       });
 
-      // ✅ FIX BUG-7: Hanya proses inventory yang punya supplierId VALID
-      // Item tanpa supplierId atau supplierId tidak di supplierList → SKIP
+      // ✅ Inventory konsinyasi (hanya supplier valid)
       (this.inventoryList || []).forEach(inv => {
         const supId = inv.supplierId;
-        if (!supId) return;                          // skip — bukan konsinyasi
-        if (!validSupplierIds.has(supId)) return;    // skip — ghost supplier
+        if (!supId) return;
+        if (!validSupplierIds.has(supId)) return;
 
         const remainingStock = Number(inv.stock || inv.stok || 0);
         if (remainingStock > 0) {
@@ -8323,7 +8342,7 @@ try {
         }
       });
 
-      // Hitung barang laku dari transaksi POS hari ini
+      // Hitung barang laku dari POS
       txList.forEach(tx => {
         const items = tx.items || [];
         items.forEach(it => {
@@ -8332,7 +8351,6 @@ try {
           const menu = (this.menuList || []).find(m => m.id === mId);
           if (menu && (menu.isConsignment || menu.supplierId)) {
             const supId = menu.supplierId;
-            // ✅ FIX BUG-7: Cek supplier valid
             if (supId && validSupplierIds.has(supId) && supMap[supId]) {
               const buyPrice = Number(menu.cost || 0);
               if (!supMap[supId].soldItems[mId]) {
@@ -8341,7 +8359,10 @@ try {
               supMap[supId].soldItems[mId].qty += qty;
               supMap[supId].soldItems[mId].total += (qty * buyPrice);
               supMap[supId].soldQty += qty;
-              supMap[supId].totalHutang += (qty * buyPrice);
+              // ✅ FIX BUG-10: Set totalHutang = 0 kalau sudah dibayar
+              if (!supMap[supId].isPaid) {
+                supMap[supId].totalHutang += (qty * buyPrice);
+              }
             }
           }
         });
@@ -8349,7 +8370,7 @@ try {
 
       const summaryList = Object.values(supMap).filter(s => s.soldQty > 0 || s.unsoldQty > 0);
       this.settlementSummary = summaryList;
-      this.settlementTotalHutang = summaryList.reduce((acc, s) => acc + s.totalHutang, 0);
+      this.settlementTotalHutang = summaryList.reduce((acc, s) => acc + (s.isPaid ? 0 : s.totalHutang), 0);
       this.settlementTotalSoldQty = summaryList.reduce((acc, s) => acc + s.soldQty, 0);
       this.settlementTotalReturnQty = summaryList.reduce((acc, s) => acc + s.unsoldQty, 0);
 
@@ -8357,7 +8378,8 @@ try {
         name: s.supplierName,
         sold: s.soldQty,
         unsold: s.unsoldQty,
-        hutang: s.totalHutang
+        hutang: s.totalHutang,
+        isPaid: s.isPaid
       })));
     } catch (err) {
       console.error('loadSettlementSummary error:', err);
