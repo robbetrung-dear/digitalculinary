@@ -6568,14 +6568,16 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAL R&D FITUR 2E: SCAN RECEIVE DARI SUPPLIER KONSINYASI             -->
+  <!-- MODAL R&D FITUR 2E: SCAN RECEIVE DARI SUPPLIER KONSINYASI (MULTI ITEM) -->
   <!-- ===================================================================== -->
   <div 
     x-show="scanReceiveModal" 
     x-cloak 
     @click.self="scanReceiveModal = false"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-stone-200 space-y-4">
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-stone-200 space-y-4 my-8">
+
+      <!-- Header -->
       <div class="flex items-center justify-between pb-3 border-b border-stone-100">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
@@ -6583,160 +6585,163 @@
           </div>
           <div>
             <h3 class="font-black text-stone-900 text-base">📷 Scan Penerimaan Barang Masuk</h3>
-            <p class="text-[11px] text-stone-400">Penerimaan barang konsinyasi: auto-stok, auto-bridge &amp; auto-jurnal</p>
+            <p class="text-[11px] text-stone-400">Maks 5 produk per penerimaan • auto-stok, auto-jurnal, auto-WA</p>
           </div>
         </div>
-        <button 
-          type="button" 
-          @click="scanReceiveModal = false" 
+        <button type="button" @click="scanReceiveModal = false" 
           class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <!-- Scan Barcode / Input SKU Cepat -->
+      <!-- STEP 1: Scan Input -->
       <div class="space-y-1.5">
-        <label class="block font-bold text-stone-700 text-xs">Scan Barcode atau Ketik SKU Produk:</label>
+        <label class="block font-bold text-stone-700 text-xs">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">1</span>
+            Scan Barcode / Ketik SKU Produk
+          </span>
+        </label>
         <div class="flex items-center gap-2">
-          <input 
-            type="text" 
-            x-model="scanReceiveForm.skuQuery" 
+          <input type="text" x-model="scanReceiveForm.skuQuery" 
             @keydown.enter.prevent="onReceiveSkuQueryChange()" 
             placeholder="Scan atau ketik SKU / Barcode..." 
-            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-          />
-          <button 
-            type="button" 
+            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <button type="button" 
             @click="openScanModal('receive_goods', 'camera', (code) => { scanReceiveForm.skuQuery = code; onReceiveSkuQueryChange(); })" 
             class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
             <i class="fa-solid fa-camera"></i>
             <span>Scan</span>
           </button>
-          <button 
-            type="button" 
-            @click="onReceiveSkuQueryChange()" 
+          <button type="button" @click="onReceiveSkuQueryChange()" 
             class="min-h-[44px] px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <span>Cari</span>
+            <i class="fa-solid fa-plus"></i>
+            <span>Tambah</span>
           </button>
+        </div>
+        <p class="text-[10px] text-stone-400 italic">Scan berturut-turut. Item otomatis masuk list. Duplikat di-merge otomatis.</p>
+      </div>
+
+      <!-- STEP 2: List Item -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="font-bold text-stone-700 text-xs inline-flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">2</span>
+            Daftar Produk Diterima
+          </label>
+          <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md" 
+            :class="(scanReceiveForm.items?.length || 0) >= 5 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'"
+            x-text="(scanReceiveForm.items?.length || 0) + ' / 5'"></span>
+        </div>
+
+        <div x-show="!scanReceiveForm.items || scanReceiveForm.items.length === 0" 
+          class="p-6 text-center border-2 border-dashed border-stone-200 rounded-2xl bg-stone-50/50">
+          <i class="fa-solid fa-inbox text-3xl text-stone-300 block mb-2"></i>
+          <p class="text-xs text-stone-400 font-semibold">Belum ada produk di-scan. Ketik SKU / scan di atas.</p>
+        </div>
+
+        <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <template x-for="(it, idx) in (scanReceiveForm.items || [])" :key="'rcv-' + it.id + '-' + idx">
+            <div class="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] font-mono font-bold text-emerald-700 px-1.5 py-0.5 rounded bg-emerald-100" x-text="it.sku"></span>
+                    <span class="text-[10px] text-stone-400" x-text="'#' + (idx + 1)"></span>
+                  </div>
+                  <h4 class="font-bold text-xs text-stone-900 mt-1 truncate" x-text="it.name"></h4>
+                </div>
+                <button type="button" @click="removeItemFromReceiveList(idx)" 
+                  class="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center transition cursor-pointer flex-shrink-0">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Qty</label>
+                  <input type="number" min="1" step="any" x-model.number="it.qty" 
+                    @input="updateReceiveItemTotal(it)" 
+                    class="w-full h-9 px-2 rounded-lg border border-stone-300 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Harga (Rp)</label>
+                  <input type="number" min="0" step="500" x-model.number="it.price" 
+                    @input="updateReceiveItemTotal(it)" 
+                    class="w-full h-9 px-2 rounded-lg border border-stone-300 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Total</label>
+                  <div class="h-9 px-2 rounded-lg bg-white border border-stone-200 flex items-center justify-end">
+                    <span class="font-mono font-black text-emerald-800 text-xs" x-text="formatRupiah(it.total || 0)"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 
-      <!-- Kartu Produk Terdeteksi -->
-      <template x-if="scanReceiveForm.matchedItem">
-        <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs">
-          <div class="flex items-start justify-between">
-            <div>
-              <span class="text-[10px] text-emerald-700 font-bold block">Produk Terdaftar:</span>
-              <h4 class="font-black text-sm text-emerald-950" x-text="scanReceiveForm.matchedItem.name"></h4>
-            </div>
-            <span class="px-2 py-0.5 rounded-md bg-emerald-200 text-emerald-900 text-[10px] font-mono font-bold" x-text="scanReceiveForm.matchedItem.sku || scanReceiveForm.matchedItem.barcode"></span>
-          </div>
-          <div class="flex items-center gap-4 text-[11px] text-emerald-900 pt-1 border-t border-emerald-100">
-            <span>Stok Saat Ini: <strong class="font-mono" x-text="(scanReceiveForm.matchedItem.stock || 0) + ' ' + (scanReceiveForm.matchedItem.unit || 'porsi')"></strong></span>
-            <span>Supplier: <strong x-text="scanReceiveForm.matchedItem.supplierName || 'Umum'"></strong></span>
-          </div>
-        </div>
-      </template>
-
-      <!-- Alert jika SKU Belum Terdaftar -->
-      <template x-if="!scanReceiveForm.matchedItem && scanReceiveForm.skuQuery">
-        <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 text-xs">
-          <div class="flex items-center gap-2 text-amber-900">
-            <i class="fa-solid fa-circle-question text-amber-600 text-base"></i>
-            <span>Kode belum terdaftar di inventori.</span>
-          </div>
-          <button 
-            type="button" 
-            @click="openPreRegisterModal()" 
-            class="h-8 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition">
-            <i class="fa-solid fa-plus text-[10px]"></i>
-            <span>+ Daftarkan Produk Baru</span>
-          </button>
-        </div>
-      </template>
-
-      <!-- Form Detail Penerimaan Barang -->
-      <form @submit.prevent="submitReceiveGoods()" class="space-y-3.5 text-xs">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block font-bold text-stone-700 mb-1">Qty Diterima <span class="text-red-500">*</span></label>
-            <input 
-              type="number" 
-              min="1" 
-              step="any" 
-              x-model.number="scanReceiveForm.qty" 
-              required 
-              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-            />
-          </div>
-          <div>
-            <label class="block font-bold text-stone-700 mb-1">Harga Beli Supplier (Rp) <span class="text-red-500">*</span></label>
-            <input 
-              type="number" 
-              min="0" 
-              step="500" 
-              x-model.number="scanReceiveForm.purchasePrice" 
-              required 
-              class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-            />
-          </div>
-        </div>
+      <!-- STEP 3: Supplier & WA -->
+      <div class="space-y-3 pt-3 border-t border-stone-100">
+        <label class="font-bold text-stone-700 text-xs inline-flex items-center gap-1.5">
+          <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">3</span>
+          Info Supplier & WA Bukti Terima
+        </label>
 
         <div>
-          <label class="block font-bold text-stone-700 mb-1">Supplier Titipan <span class="text-red-500">*</span></label>
-            <select 
-            x-model="scanReceiveForm.supplierId" 
-            @change="onReceiveSupplierChange()"
-            required 
+          <label class="block text-[11px] font-bold text-stone-600 mb-1">Supplier Titipan <span class="text-red-500">*</span></label>
+          <select x-model="scanReceiveForm.supplierId" @change="onReceiveSupplierChange()" required 
             class="w-full min-h-[42px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">-- Pilih Supplier --</option>
             <template x-for="sup in suppliersList" :key="sup.id">
-              <option :value="sup.id" x-text="sup.name"></option>
+              <option :value="sup.id" x-text="sup.name + (sup.contact ? ' • ' + sup.contact : '')"></option>
             </template>
           </select>
         </div>
 
-        <!-- ✅ FITUR: Nomor WA Supplier — auto-terisi dari master, bisa diedit -->
         <div>
-          <label class="block font-bold text-stone-700 mb-1">
+          <label class="block text-[11px] font-bold text-stone-600 mb-1">
             <i class="fa-brands fa-whatsapp text-emerald-600 mr-1"></i>
-            Nomor WA Supplier untuk Bukti Terima
+            Nomor WA untuk Kirim Bukti Terima
           </label>
-          <input 
-            type="tel" 
-            inputmode="numeric" 
-            x-model="scanReceiveForm.waPhone" 
+          <input type="tel" inputmode="numeric" x-model="scanReceiveForm.waPhone" 
             placeholder="08xxxxxxxxxx — auto-terisi dari master supplier"
-            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-          />
-          <p class="text-[10px] text-stone-400 mt-1 italic">
-            Struk tanda terima akan otomatis dikirim ke nomor ini setelah klik Simpan.
-          </p>
-        </div>
-        <!-- Total Nilai Penerimaan -->
-        <div class="p-3 rounded-2xl bg-stone-50 border border-stone-200 flex items-center justify-between">
-          <span class="font-extrabold text-stone-700">Total Nilai Terima:</span>
-          <span class="font-black text-base font-mono text-emerald-700" x-text="formatRupiah((scanReceiveForm.qty || 0) * (scanReceiveForm.purchasePrice || 0))"></span>
+            class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
 
-        <!-- Auto-Jurnal Penjelasan Konsinyasi (Opsi B: Debit 1004 / Kredit 2001) -->
-        <div class="p-2.5 rounded-xl bg-stone-100 border border-stone-200 text-[11px] text-stone-600">
-          <span class="font-bold text-stone-800">Auto-Jurnal Akuntansi:</span> Debit 1004 (Persediaan) / Kredit 2001 (Hutang Supplier). Hutang dibayar hari itu juga saat tutup hari.
+        <div>
+          <label class="block text-[11px] font-bold text-stone-600 mb-1">Catatan (Opsional)</label>
+          <input type="text" x-model="scanReceiveForm.notes" placeholder="Contoh: Titipan pagi, kondisi baik" 
+            class="w-full min-h-[40px] px-3 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
+      </div>
 
-        <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
-          <button 
-            type="button" 
-            @click="scanReceiveModal = false" 
-            class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
-            Batal
-          </button>
-          <button type="submit" class="... bg-emerald-600 ...">
-  <i class="fa-solid fa-paper-plane"></i>
-  <span>Simpan, Download &amp; Kirim WA</span>
-</button>
+      <!-- Total & Info Jurnal -->
+      <div class="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-extrabold text-stone-700 text-sm">Total Nilai Penerimaan:</span>
+          <span class="font-black text-lg font-mono text-emerald-700" x-text="formatRupiah(getReceiveTotal())"></span>
         </div>
-      </form>
+        <div class="text-[10px] text-stone-500 italic border-t border-stone-200 pt-1.5">
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          Auto-Jurnal: Debit 1004 Persediaan / Kredit 2001 Hutang Supplier. Struk akan di-download & siap kirim WA ke supplier.
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+        <button type="button" @click="scanReceiveModal = false" 
+          class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Batal
+        </button>
+        <button type="button" @click="submitReceiveGoods()" 
+          :disabled="!scanReceiveForm.items || scanReceiveForm.items.length === 0"
+          :class="(!scanReceiveForm.items || scanReceiveForm.items.length === 0) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-emerald-700 cursor-pointer'"
+          class="h-11 px-5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-2 transition shadow-xs shadow-emerald-600/20">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span x-text="'Simpan, Download & Kirim WA (' + (scanReceiveForm.items?.length || 0) + ' item)'"></span>
+        </button>
+      </div>
     </div>
   </div>
 
