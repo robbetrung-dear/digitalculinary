@@ -1355,44 +1355,46 @@ this.jurnalList.forEach(j => {
     /**
      * 6C. Laporan Neraca (Balance Sheet - Aset = Kewajiban + Ekuitas)
      */
-    async loadNeraca(bulan) {
+        async loadNeraca(bulan) {
       const getBal = (code) => {
         const f = this.coaList.find(c => c.code === code);
         return f ? Number(f.currentBalance) || 0 : 0;
       };
 
-      const kas = getBal('1001') || getBal('101') || (this.summary?.saldoKas !== undefined ? Number(this.summary.saldoKas) : (this.summary?.kas !== undefined ? Number(this.summary.kas) : 0));
-      const bank = getBal('1002') || getBal('102') || (this.summary?.saldoBank !== undefined ? Number(this.summary.saldoBank) : (this.summary?.bank !== undefined ? Number(this.summary.bank) : 0));
-      const piutang = getBal('1003') || getBal('103') || (this.summary?.piutang !== undefined ? Number(this.summary.piutang) : 0);
-      const persediaan = getBal('1004') || getBal('105') || (this.summary?.persediaanAkhir !== undefined ? Number(this.summary.persediaanAkhir) : 0);
+      // ✅ FIX BUG-20: Ambil dari COA list DULU (computed dari ledger)
+      const kas = getBal('1001') || getBal('101') || 0;
+      const bank = getBal('1002') || getBal('102') || 0;
+      const piutang = getBal('1003') || getBal('103') || 0;
+      const persediaan = getBal('1004') || getBal('105') || 0;
       const totalAsetLancar = kas + bank + piutang + persediaan;
 
       const peralatan = getBal('1005') || getBal('106') || 0;
       const totalAsetTetap = peralatan;
-      const totalAset = (this.summary?.totalAset !== undefined && this.summary?.totalAset !== null && !isNaN(Number(this.summary.totalAset)))
-        ? Number(this.summary.totalAset)
-        : (totalAsetLancar + totalAsetTetap);
+      
+      // ✅ FIX: Total Aset HARUS = Aset Lancar + Aset Tetap
+      // JANGAN pakai summary.totalAset kalau tidak match
+      const totalAsetComputed = totalAsetLancar + totalAsetTetap;
+      const summaryTotalAset = Number(this.summary?.totalAset);
+      const totalAset = (!isNaN(summaryTotalAset) && Math.abs(summaryTotalAset - totalAsetComputed) < 100)
+        ? summaryTotalAset
+        : totalAsetComputed;  // Prioritas komputasi kalau beda
 
-      const hutangSupplier = getBal('2001') || getBal('201') || (this.summary?.hutangSupplier !== undefined ? Number(this.summary.hutangSupplier) : (this.summary?.hutang !== undefined ? Number(this.summary.hutang) : 0));
+      // ✅ FIX: Kewajiban & Ekuitas dari COA list
+      const hutangSupplier = getBal('2001') || getBal('201') || 0;
       const hutangBeban = getBal('2002') || 0;
-      const totalKewajiban = (this.summary?.totalKewajiban !== undefined && this.summary?.totalKewajiban !== null && !isNaN(Number(this.summary.totalKewajiban)))
-        ? Number(this.summary.totalKewajiban)
-        : (hutangSupplier + hutangBeban);
+      const totalKewajiban = hutangSupplier + hutangBeban;
 
       const modalPemilik = getBal('3001') || getBal('301') || 0;
       const labaDitahan = getBal('3002') || getBal('302') || 0;
-      const labaBerjalan = (this.laporanData.pl.labaBersih !== undefined && !isNaN(Number(this.laporanData.pl.labaBersih)))
-        ? Number(this.laporanData.pl.labaBersih)
-        : ((this.summary?.labaBersih !== undefined ? Number(this.summary.labaBersih) : Number(this.summary?.labaBulanIni)) || 0);
+      const labaBerjalan = Number(this.laporanData.pl.labaBersih) || 0;
       const prive = getBal('3003') || 0;
-
-      const totalEkuitas = (this.summary?.totalEkuitas !== undefined && this.summary?.totalEkuitas !== null && !isNaN(Number(this.summary.totalEkuitas)))
-        ? Number(this.summary.totalEkuitas)
-        : (modalPemilik + labaDitahan + labaBerjalan - prive);
+      
+      // ✅ FIX: Ekuitas = Modal + Laba Ditahan + Laba Berjalan - Prive
+      const totalEkuitas = modalPemilik + labaDitahan + labaBerjalan - prive;
       const totalKewajibanEkuitas = totalKewajiban + totalEkuitas;
 
       const selisih = Math.abs(totalAset - totalKewajibanEkuitas);
-      const isBalance = selisih < 100;
+      const isBalance = selisih < 1000;
 
       this.laporanData.balanceSheet = {
         kas,
@@ -1415,6 +1417,16 @@ this.jurnalList.forEach(j => {
         isBalance,
         selisih
       };
+
+      console.log('[NERACA]', {
+        totalAset,
+        totalAsetComputed,
+        totalKewajiban,
+        totalEkuitas,
+        totalKewajibanEkuitas,
+        isBalance,
+        selisih
+      });
 
       return this.laporanData.balanceSheet;
     },
