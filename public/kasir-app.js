@@ -1187,23 +1187,18 @@ try {
    * Mengambil stok porsi tampilan produk di grid transaksi kasir
    */
   getMenuDisplayStock(menuItem) {
-  if (!menuItem) return 0;
-  // 1. Recipe-based (BOM)
-  if (this.menuRecipes && this.menuRecipes[menuItem.id]) {
-    return this.getMenuCalculatedStock(menuItem.id);
-  }
-  // 2. ✅ FIX BUG-6: Dual-role linked inventory
-  if (menuItem.inventoryId) {
-    const inv = (this.inventoryList || []).find(i => i.id === menuItem.inventoryId);
-    if (inv) return Number(inv.stock || inv.stok || 0);
-  }
-  const linkedInv = (this.inventoryList || []).find(i => i.linkedMenuId === menuItem.id);
-  if (linkedInv) return Number(linkedInv.stock || linkedInv.stok || 0);
-  // 3. Direct stock field
-  if (typeof menuItem.stok !== 'undefined' && menuItem.stok !== null) return Number(menuItem.stok) || 0;
-  if (typeof menuItem.stock !== 'undefined' && menuItem.stock !== null) return Number(menuItem.stock) || 0;
-  return 0;
-}
+    if (!menuItem) return 0;
+    // 1. Jika ada resep bahan baku terhubung
+    if (this.menuRecipes && this.menuRecipes[menuItem.id]) {
+      return this.getMenuCalculatedStock(menuItem.id);
+    }
+    // 2. Jika menu memiliki properti stok langsung
+    if (typeof menuItem.stok !== 'undefined' && menuItem.stok !== null) return Number(menuItem.stok) || 0;
+    if (typeof menuItem.stock !== 'undefined' && menuItem.stock !== null) return Number(menuItem.stock) || 0;
+
+    // Default 0 jika stok kosong
+    return 0;
+  },
 
   /**
    * Hapus item dari keranjang
@@ -5052,16 +5047,7 @@ try {
   getMenuCalculatedStock(menuId) {
     const recipe = this.menuRecipes[menuId];
     if (!recipe || !Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
-     // ✅ FIX BUG-6: Fallback ke dual-role inventory link
-    const menu = (this.menuList || []).find(m => m.id === menuId);
-    if (menu && menu.inventoryId) {
-      const inv = (this.inventoryList || []).find(i => i.id === menu.inventoryId);
-      if (inv) return Number(inv.stock || inv.stok || 0);
-    }
-    const linkedInv = (this.inventoryList || []).find(i => i.linkedMenuId === menuId);
-    if (linkedInv) return Number(linkedInv.stock || linkedInv.stok || 0); 
-     return 0; 
-     // Default stok = 0 jika belum diset bahan bakunya
+      return 0; // Default stok = 0 jika belum diset bahan bakunya
     }
 
     let minPossiblePortions = Infinity;
