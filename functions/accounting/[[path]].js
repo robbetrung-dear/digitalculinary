@@ -16,6 +16,31 @@ const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+/**
+ * ✅ FIX BUG-23: Fetch with retry — handle network glitch pada Firebase REST API
+ * Retry 3x dengan exponential backoff (500ms, 1s, 2s).
+ * Throw error hanya kalau SEMUA attempt gagal.
+ */
+async function fetchWithRetry(url, options = {}, maxAttempts = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok || (res.status >= 400 && res.status < 500)) {
+        return res;
+      }
+      lastErr = new Error(`HTTP ${res.status} ${res.statusText}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (attempt < maxAttempts) {
+      const backoffMs = 500 * Math.pow(2, attempt - 1);
+      await new Promise(r => setTimeout(r, backoffMs));
+      console.warn(`[RETRY] Attempt ${attempt} failed for ${url.split('?')[0]}, retrying in ${backoffMs}ms...`);
+    }
+  }
+  throw lastErr || new Error('fetchWithRetry: all attempts failed');
+}
 
 // Default Chart of Accounts jika database belum diinisialisasi
 const DEFAULT_COA = {
@@ -163,37 +188,40 @@ async function updateLedgerAfterApprove(dbUrl, bulan, lines, apiKey, journalId) 
   const auth = apiKey ? `?auth=${encodeURIComponent(apiKey)}` : '';
   const validLines = Array.isArray(lines) ? lines : [];
 
+  // ✅ FIX BUG-23: Return results untuk audit
+  const results = [];
+
   for (const line of validLines) {
     const rawAcc = String(line.acc || '').trim();
-    // ✅ FIX: Normalisasi kode akun 3-digit → 4-digit sebelum write ke ledger
     const acc = normalizeAcc(rawAcc);
-    if (!acc) continue;
+    if (!acc) {
+      results.push({ acc: rawAcc, ok: false, error: 'invalid acc' });
+      continue;
+    }
 
     const debit = Math.max(0, Number(line.debit) || 0);
     const credit = Math.max(0, Number(line.credit) || 0);
-    if (debit === 0 && credit === 0) continue;
+    if (debit === 0 && credit === 0) {
+      results.push({ acc, ok: true, skipped: true });
+      continue;
+    }
 
     try {
       const ledgerUrl = `${dbUrl}/accounting/ledger/${encodeURIComponent(acc)}/${encodeURIComponent(bulan)}.json${auth}`;
-      const res = await fetch(ledgerUrl);
+
+      // ✅ FIX BUG-23: Pakai fetchWithRetry
+      const res = await fetchWithRetry(ledgerUrl);
       let existing = null;
       if (res.ok) {
         existing = await res.json();
       }
 
       if (!existing || typeof existing !== 'object') {
-        existing = {
-          opening: 0,
-          debit: 0,
-          credit: 0,
-          closing: 0
-        };
+        existing = { opening: 0, debit: 0, credit: 0, closing: 0 };
       }
 
       existing.debit = (Number(existing.debit) || 0) + debit;
       existing.credit = (Number(existing.credit) || 0) + credit;
-      // Normal balance: Kewajiban (2), Modal/Ekuitas (3 non-prive), Pendapatan (4) bertambah di Kredit
-      // Aset (1), Prive (302/3002/3003), HPP (5), Beban (6) bertambah di Debit
       const isKreditNormal = acc.startsWith('2') || (acc.startsWith('3') && acc !== '302' && acc !== '3002' && acc !== '3003') || acc.startsWith('4');
       if (isKreditNormal) {
         existing.closing = (Number(existing.opening) || 0) + existing.credit - existing.debit;
@@ -202,17 +230,46 @@ async function updateLedgerAfterApprove(dbUrl, bulan, lines, apiKey, journalId) 
       }
       existing.updatedAt = Date.now();
 
-      await fetch(ledgerUrl, {
+      // ✅ FIX BUG-23: PUT dengan retry juga
+      const putRes = await fetchWithRetry(ledgerUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(existing)
       });
 
-      console.log(`[LEDGER] Updated acc ${acc} bulan ${bulan}: debit+${debit}, credit+${credit}, closing=${existing.closing} (from journal ${journalId})`);
+      if (putRes.ok) {
+        console.log(`[LEDGER] ✅ acc ${acc} ${bulan}: debit+${debit}, credit+${credit}, closing=${existing.closing} (journal ${journalId})`);
+        results.push({ acc, ok: true, closing: existing.closing });
+      } else {
+        const errText = await putRes.text().catch(() => '');
+        console.error(`[LEDGER] ❌ PUT failed for acc ${acc}: HTTP ${putRes.status} ${errText}`);
+        results.push({ acc, ok: false, error: `PUT HTTP ${putRes.status}` });
+      }
     } catch (err) {
-      console.error(`[ACCOUNTING-API] Gagal update ledger acc ${acc} bulan ${bulan}:`, err);
+      // ✅ FIX BUG-23: JANGAN swallow — log detail
+      console.error(`[LEDGER] ❌ Exception for acc ${acc} ${bulan}:`, err.message || err);
+      results.push({ acc, ok: false, error: err.message || 'unknown' });
+
+      // ✅ FIX BUG-23: Log ke Firebase untuk audit
+      try {
+        const errorLogUrl = `${dbUrl}/accounting/ledger_errors/${bulan}/${journalId}_${acc}_${Date.now()}.json${auth}`;
+        await fetch(errorLogUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            acc, bulan, journalId, error: err.message || 'unknown',
+            line: { debit, credit },
+            at: Date.now(),
+            rawAcc
+          })
+        });
+      } catch (logErr) {
+        console.error(`[LEDGER] Failed to log error for ${acc}:`, logErr.message);
+      }
     }
   }
+
+  return results;
 }
 
 /**
