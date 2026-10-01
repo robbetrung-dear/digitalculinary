@@ -323,11 +323,12 @@ window.kasirApp = () => ({
     autoPrintBarcode: true
   },
   scanReceiveModal: false,
-  scanReceiveForm: {
+    scanReceiveForm: {
     skuQuery: '',
     matchedItem: null,
     supplierId: '',
     supplierName: '',
+    waPhone: '',   // ✅ FITUR: nomor WA supplier (auto-fill dari master, editable)
     qty: 1,
     purchasePrice: 0,
     paymentMethod: 'payable',
@@ -7941,15 +7942,16 @@ try {
   /**
    * 2E. Scan Receive Barang Konsinyasi dari Supplier
    */
-  openScanReceiveModal() {
+    openScanReceiveModal() {
     this.scanReceiveForm = {
       skuQuery: '',
       matchedItem: null,
       supplierId: '',
       supplierName: '',
+      waPhone: '',
       qty: 1,
       purchasePrice: 0,
-      paymentMethod: 'payable', // Konsinyasi: default Hutang Supplier 2001
+      paymentMethod: 'payable',
       notes: ''
     };
     this.scanReceiveModal = true;
@@ -7978,14 +7980,25 @@ try {
       (i.id && i.id.toLowerCase() === cleanCode)
     );
 
-    if (item) {
+      if (item) {
       this.scanReceiveForm.matchedItem = item;
       this.scanReceiveForm.skuQuery = item.sku || item.barcode;
       this.scanReceiveForm.supplierId = item.supplierId || '';
       this.scanReceiveForm.supplierName = item.supplierName || 'Umum';
       this.scanReceiveForm.purchasePrice = item.purchasePrice || item.hargaBeli || 0;
+
+      // ✅ FITUR: Auto-fill nomor WA supplier dari master (masih editable)
+      const matchedSupplier = (this.suppliersList || []).find(s =>
+        s && (s.id === item.supplierId || s.name === item.supplierName)
+      );
+      this.scanReceiveForm.waPhone = matchedSupplier?.contact || '';
+      console.log('[RECEIVE] Auto-fill WA:', this.scanReceiveForm.waPhone, '| Supplier:', matchedSupplier?.name);
+
       this.playSound('success');
-      this.showToast(`Item ditemukan: ${item.name}`, 'success');
+      this.showToast(
+        `Item ditemukan: ${item.name}${matchedSupplier?.contact ? ' • WA supplier terisi' : ' • WA supplier kosong, isi manual'}`,
+        'success'
+      );
     } else {
       this.playSound('error');
       if (confirm(`SKU/Barcode "${code}" belum terdaftar.\nApakah Anda ingin mendaftarkan produk baru konsinyasi sekarang?`)) {
@@ -8101,7 +8114,35 @@ try {
       this.scanReceiveModal = false;
       this.receiveReceiptModal = true;
       this.playSound('success');
-      this.showToast(`Penerimaan barang #${receiveId} berhasil dicatat!`, 'success');
+
+      // ✅ FITUR: Auto-download struk + auto-kirim WA ke supplier
+      const waPhoneSnapshot = String(this.scanReceiveForm.waPhone || '').trim();
+
+      // 1. Auto-download struk PNG tanda terima (delay 300ms biar modal render dulu)
+      setTimeout(() => {
+        try { this.downloadReceiveReceiptImage(receiveRecord); }
+        catch (e) { console.warn('[AUTO-RECEIPT] Download error:', e); }
+      }, 300);
+
+      // 2. Auto-kirim WA ke supplier (kalau nomor terisi)
+      if (waPhoneSnapshot) {
+        const itemsText = (receiveRecord.items || [])
+          .map(i => `- ${i.name} (${i.sku}): ${i.qty} ${i.unit} x Rp ${this.formatNumber(i.price)} = Rp ${this.formatNumber(i.total)}`)
+          .join('\n');
+        const msg = `*BUKTI TANDA TERIMA BARANG KONSINYASI*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nNo. Terima: ${receiveRecord.receiveId}\nTanggal: ${receiveRecord.date} ${receiveRecord.time || ''}\nSupplier: ${receiveRecord.supplierName}\n\n*Daftar Barang:*\n${itemsText}\n\n*Total Nilai: Rp ${this.formatNumber(receiveRecord.totalValue)}*\n\nBarang titipan konsinyasi telah diterima dengan baik. Terima kasih! 🙏`;
+
+        setTimeout(() => {
+          try {
+            console.log('[AUTO-RECEIPT] Sending WA to:', waPhoneSnapshot);
+            this.sendWhatsAppNotification(waPhoneSnapshot, msg, 'consignment_receipt');
+          } catch (e) { console.warn('[AUTO-RECEIPT] Send WA error:', e); }
+        }, 1200);
+      }
+
+      this.showToast(
+        `Penerimaan #${receiveId} dicatat${waPhoneSnapshot ? ' • Auto-kirim WA ke supplier…' : ' • WA supplier belum diisi'}`,
+        'success'
+      );
     } catch (err) {
       console.error('submitReceiveGoods error:', err);
       this.showToast(`Gagal memproses penerimaan: ${err.message}`, 'error');
