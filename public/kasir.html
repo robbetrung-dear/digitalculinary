@@ -6665,11 +6665,12 @@
           </div>
           <div>
             <label class="block font-bold text-stone-700 mb-1">Harga Jual Pelanggan (Rp) <span class="text-red-500">*</span></label>
-            <input 
+              <input 
               type="number" 
               min="0" 
               step="500" 
               x-model.number="preRegisterForm.sellingPrice" 
+              @input="preRegisterForm.sellingPriceManual = true"
               required 
               class="w-full min-h-[42px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 focus:bg-white text-xs font-black font-mono text-emerald-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
             />
