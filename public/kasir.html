@@ -2755,6 +2755,13 @@
               <i class="fa-solid fa-plus-circle text-xs"></i>
               <span>+ Input Jurnal Manual</span>
             </button>
+            <button 
+              type="button"
+              @click="if (confirm('Rebuild ledger dari semua jurnal approved? Data ledger lama akan ditimpa. Lanjutkan?')) { fetch('/accounting/rebuild-ledger', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) }).then(r => r.json()).then(d => { showToast(d.success ? 'Ledger rebuilt: ' + d.written + ' entries' : 'Gagal: ' + d.error, d.success ? 'success' : 'error'); loadAccountingSummary(true); loadCOAListFromBackend(); }).catch(e => showToast('Error: ' + e.message, 'error')); }"
+              class="min-h-[44px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-2 transition shadow-xs cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+              <span>Rebuild Ledger</span>
+            </button>
             <a 
               href="/accounting.html" 
               target="_blank"
