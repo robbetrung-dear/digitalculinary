@@ -2220,37 +2220,59 @@ try {
       doc.text(`Metode    : ${(order.paymentMethod || order.pm || 'CASH').toUpperCase()}`, 5, y); y += 4;
       doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
 
-              (order.items || []).forEach(it => {
+                    (order.items || []).forEach(it => {
         const name = it.name || (Array.isArray(it) ? it[0] : 'Menu');
         const qty = it.qty || (Array.isArray(it) ? it[1] : 1);
         const price = it.price || (Array.isArray(it) ? it[2] : 0);
+        const itemDiscount = Number(it.itemDiscount) || 0;
         const itemTotal = qty * price;
 
-        // ✅ Nama menu wrap max 50mm (sisakan ruang untuk harga kanan)
         doc.setFont('courier', 'bold');
         const nameLines = doc.splitTextToSize(String(name), 50);
         nameLines.forEach((line, idx) => {
           doc.text(line, 5, y);
           if (idx === nameLines.length - 1) {
-            // Baris terakhir → harga di kanan
             doc.text(`${qty}x = ${this.formatRupiah(itemTotal)}`, 75, y, { align: 'right' });
           }
           y += 3.5;
         });
 
+        // ✅ BUG-27: Baris diskon per item
+        if (itemDiscount > 0) {
+          doc.setFont('courier', 'normal');
+          doc.setFontSize(6.5);
+          const discLabel = it.itemDiscountType === 'nominal' 
+            ? `Disc Rp ${this.formatNumber(it.itemDiscountValue)}` 
+            : `Disc ${it.itemDiscountValue}%`;
+          doc.text(`  ${discLabel}`, 5, y);
+          doc.text(`-${this.formatRupiah(itemDiscount)}`, 75, y, { align: 'right' });
+          y += 3;
+          doc.setFontSize(7.5);
+        }
+
         doc.setFont('courier', 'normal');
-        y += 1; // spacing kecil antar item
+        y += 1;
       });
 
       doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
       doc.text(`Subtotal : ${this.formatRupiah(order.subtotal || order.sub || this.getCartSubtotal())}`, 5, y); y += 4;
+
+      // ✅ Diskon order dulu
+      const orderDisc = Number(order.discount || order.disc) || 0;
+      if (orderDisc > 0) {
+        doc.text(`Diskon   : -${this.formatRupiah(orderDisc)}`, 5, y); y += 4;
+      }
+
+      // ✅ Service charge conditional
       const sCharge = order.serviceCharge !== undefined ? order.serviceCharge : this.getCartServiceCharge();
       if (sCharge > 0) {
         doc.text(`Service  : ${this.formatRupiah(sCharge)}`, 5, y); y += 4;
       }
-      doc.text(`Pajak 11%: ${this.formatRupiah(order.tax || this.getCartTax())}`, 5, y); y += 4;
-      if ((order.discount || order.disc || this.discountAmount) > 0) {
-        doc.text(`Diskon   : -${this.formatRupiah(order.discount || order.disc || this.discountAmount)}`, 5, y); y += 4;
+
+      // ✅ PPN conditional
+      const taxVal = order.tax !== undefined ? order.tax : this.getCartTax();
+      if (taxVal > 0) {
+        doc.text(`PPN 11%  : ${this.formatRupiah(taxVal)}`, 5, y); y += 4;
       }
       doc.setFont('courier', 'bold');
       doc.setFontSize(8.5);
@@ -2304,8 +2326,7 @@ try {
         doc.text(`Kasir     : ${this.kasirInfo.name}`, 5, y); y += 4;
         doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
 
-          (order.items || []).forEach(it => {
-          // ✅ FIX: Wrap nama menu (bukan truncate)
+                  (order.items || []).forEach(it => {
           const itemName = it.name || 'Menu';
           const nameLines = doc.splitTextToSize(itemName, 50);
           nameLines.forEach((line, idx) => {
@@ -2314,19 +2335,38 @@ try {
           });
           doc.text(`   = ${this.formatRupiah((it.price || 0) * (it.qty || 1))}`, 5, y);
           y += 4;
+
+          // ✅ BUG-27: Baris diskon per item
+          if (Number(it.itemDiscount) > 0) {
+            doc.setFontSize(6.5);
+            const discLabel = it.itemDiscountType === 'nominal' 
+              ? `Disc Rp ${this.formatNumber(it.itemDiscountValue)}` 
+              : `Disc ${it.itemDiscountValue}%`;
+            doc.text(`   ${discLabel}: -${this.formatRupiah(it.itemDiscount)}`, 5, y);
+            y += 3.5;
+            doc.setFontSize(7.5);
+          }
         });
 
         doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
         doc.text(`Subtotal : ${this.formatRupiah(order.subtotal || order.sub || this.getCartSubtotal())}`, 5, y); y += 4;
+
+        // ✅ Diskon order dulu
+        const orderDisc = Number(order.discount || order.disc) || 0;
+        if (orderDisc > 0) {
+          doc.text(`Diskon   : -${this.formatRupiah(orderDisc)}`, 5, y); y += 4;
+        }
+
+        // ✅ Service conditional
         const sCharge = order.serviceCharge !== undefined ? order.serviceCharge : this.getCartServiceCharge();
         if (sCharge > 0) {
           doc.text(`Service  : ${this.formatRupiah(sCharge)}`, 5, y); y += 4;
         }
-        if ((order.tax || this.getCartTax()) > 0) {
-          doc.text(`Pajak 11%: ${this.formatRupiah(order.tax || this.getCartTax())}`, 5, y); y += 4;
-        }
-        if ((order.discount || order.disc || this.discountAmount) > 0) {
-          doc.text(`Diskon   : -${this.formatRupiah(order.discount || order.disc || this.discountAmount)}`, 5, y); y += 4;
+
+        // ✅ PPN conditional
+        const taxVal = order.tax !== undefined ? order.tax : this.getCartTax();
+        if (taxVal > 0) {
+          doc.text(`PPN 11%  : ${this.formatRupiah(taxVal)}`, 5, y); y += 4;
         }
         doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
         doc.setFont('courier', 'bold');
@@ -2352,7 +2392,7 @@ try {
     const sCharge = order.serviceCharge !== undefined ? order.serviceCharge : this.getCartServiceCharge();
     const subtotal = order.subtotal || order.sub || this.getCartSubtotal();
     const tax = order.tax || this.getCartTax();
-    const disc = order.discount || order.disc || this.discountAmount;
+        const disc = Number(order.discount || order.disc || this.getOrderDiscountAmount()) || 0;
 
     let itemsText = '';
     (order.items || []).forEach(it => {
@@ -2363,10 +2403,11 @@ try {
       itemsText += `• ${name} x${qty} = ${this.formatRupiah(qty * price)}\n`;
     });
 
-    let details = `Subtotal: ${this.formatRupiah(subtotal)}\n`;
+        let details = `Subtotal: ${this.formatRupiah(subtotal)}\n`;
+    // ✅ Reorder: Diskon → Service → Pajak
+    if (disc > 0) details += `Diskon Total: -${this.formatRupiah(disc)}\n`;
     if (sCharge > 0) details += `Service Charge (5%): ${this.formatRupiah(sCharge)}\n`;
-    if (tax > 0) details += `Pajak (11%): ${this.formatRupiah(tax)}\n`;
-    if (disc > 0) details += `Diskon: -${this.formatRupiah(disc)}\n`;
+    if (tax > 0) details += `PPN (11%): ${this.formatRupiah(tax)}\n`;
 
     const text = `*DAPUR KULINER VIRAL - STRUK TRANSAKSI*\n\n` +
       `No. Order: *${order.id}*\n` +
