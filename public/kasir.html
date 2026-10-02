@@ -3924,7 +3924,7 @@
             <div>
                 <div class="flex justify-between font-bold items-start gap-2">
                 <span class="break-words whitespace-normal leading-tight" x-text="it.name"></span>
-                <span class="whitespace-nowrap flex-shrink-0" x-text="formatRupiah(it.price * it.qty)"></span>
+                <span class="whitespace-nowrap flex-shrink-0" x-text="formatRupiah((it.basePrice !== undefined ? it.basePrice : it.price) * it.qty)"></span>
               </div>
               <div class="text-[10px] text-stone-500 flex justify-between">
                 <span x-text="it.qty + ' x ' + formatRupiah(it.basePrice !== undefined ? it.basePrice : it.price)"></span>
