@@ -8126,8 +8126,9 @@ try {
     this.multiScanCart = [];
     this.multiScanQuery = '';
   },
- 
-      this.scanReceiveForm = {
+
+  openScanReceiveModal() {
+    this.scanReceiveForm = {
       skuQuery: '',
       matchedItem: null,
       items: [],
@@ -8140,6 +8141,8 @@ try {
       notes: '',
       searched: false
     };
+    this.scanReceiveModal = true;
+  },
 
    /**
    * Handler tombol "Cari" / Enter di input SKU Receive
