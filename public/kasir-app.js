@@ -2127,11 +2127,15 @@ try {
               price: Number(it[2]) || 0
             };
           }
-          return {
+            return {
             id: it.id || it.menuId || ('it_' + Math.random()),
             name: it.name || it.menuName || it.id || 'Menu Pesanan',
             qty: Number(it.qty || it.quantity || 1),
-            price: Number(it.price || it.harga || 0)
+            price: Number(it.price || it.harga || 0),
+            basePrice: (it.basePrice !== undefined) ? Number(it.basePrice) : Number(it.price || it.harga || 0),
+            itemDiscount: Number(it.itemDiscount) || 0,
+            itemDiscountType: it.itemDiscountType || null,
+            itemDiscountValue: Number(it.itemDiscountValue) || 0
           };
         });
       } else {
@@ -2220,13 +2224,12 @@ try {
       doc.text(`Metode    : ${(order.paymentMethod || order.pm || 'CASH').toUpperCase()}`, 5, y); y += 4;
       doc.text('--------------------------------', 40, y, { align: 'center' }); y += 4;
 
-                    (order.items || []).forEach(it => {
+        (order.items || []).forEach(it => {
         const name = it.name || (Array.isArray(it) ? it[0] : 'Menu');
         const qty = it.qty || (Array.isArray(it) ? it[1] : 1);
-        const price = it.price || (Array.isArray(it) ? it[2] : 0);
+        const basePrice = (it.basePrice !== undefined) ? Number(it.basePrice) : (Number(it.price) || (Array.isArray(it) ? Number(it[2]) : 0));
         const itemDiscount = Number(it.itemDiscount) || 0;
-        const itemTotal = qty * price;
-
+        const itemTotal = qty * basePrice;
         doc.setFont('courier', 'bold');
         const nameLines = doc.splitTextToSize(String(name), 50);
         nameLines.forEach((line, idx) => {
@@ -2333,7 +2336,8 @@ try {
             doc.text(line + (idx === nameLines.length - 1 ? ` x${it.qty || 1}` : ''), 5, y);
             y += 4;
           });
-          doc.text(`   = ${this.formatRupiah((it.price || 0) * (it.qty || 1))}`, 5, y);
+          const printBasePrice = (it.basePrice !== undefined) ? Number(it.basePrice) : (Number(it.price) || 0);
+          doc.text(`   = ${this.formatRupiah(printBasePrice * (it.qty || 1))}`, 5, y);
           y += 4;
 
           // ✅ BUG-27: Baris diskon per item
@@ -2394,13 +2398,33 @@ try {
     const tax = order.tax || this.getCartTax();
         const disc = Number(order.discount || order.disc || this.getOrderDiscountAmount()) || 0;
 
-    let itemsText = '';
+      let itemsText = '';
     (order.items || []).forEach(it => {
       const menu = (this.menuList || []).find(m => m.id === (it.id || it.menuId));
       const name = it.name || (menu && menu.name) || it.id || 'Menu';
-      const qty = it.qty || 1;
-      const price = it.price || 0;
-      itemsText += `• ${name} x${qty} = ${this.formatRupiah(qty * price)}\n`;
+      const qty = Number(it.qty) || 1;
+
+      // ✅ PATCH G: harga tetap base price + baris diskon terpisah
+      let basePrice, itemDisc, itemDiscType, itemDiscVal;
+      if (Array.isArray(it)) {
+        basePrice = Number(it[2]) || 0;
+        itemDisc = 0; itemDiscType = null; itemDiscVal = 0;
+      } else {
+        basePrice = (it.basePrice !== undefined) ? Number(it.basePrice) : (Number(it.price) || 0);
+        itemDisc = Number(it.itemDiscount) || 0;
+        itemDiscType = it.itemDiscountType || null;
+        itemDiscVal = Number(it.itemDiscountValue) || 0;
+      }
+
+      itemsText += `• ${name} x${qty} = ${this.formatRupiah(qty * basePrice)}\n`;
+
+      // Sub-baris diskon per item
+      if (itemDisc > 0) {
+        const discLabel = itemDiscType === 'nominal'
+          ? `Disc Rp ${this.formatNumber(itemDiscVal)}`
+          : `Disc ${itemDiscVal}%`;
+        itemsText += `   ${discLabel}: -${this.formatRupiah(itemDisc)}\n`;
+      }
     });
 
         let details = `Subtotal: ${this.formatRupiah(subtotal)}\n`;
