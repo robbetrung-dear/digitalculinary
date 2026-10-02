@@ -6753,10 +6753,14 @@
           </span>
         </label>
         <div class="flex items-center gap-2">
-          <input type="text" x-model="scanReceiveForm.skuQuery" 
+            <input 
+            type="text" 
+            x-model="scanReceiveForm.skuQuery" 
+            @input="onReceiveSkuQueryInput()"
             @keydown.enter.prevent="onReceiveSkuQueryChange()" 
             placeholder="Scan atau ketik SKU / Barcode..." 
-            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+          />
           <button type="button" 
             @click="openScanModal('receive_goods', 'camera', (code) => { scanReceiveForm.skuQuery = code; onReceiveSkuQueryChange(); })" 
             class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
