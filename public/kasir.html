@@ -3972,8 +3972,8 @@
 
           <!-- ✅ Pajak conditional — hanya tampil kalau > 0 -->
           <template x-if="((currentOrder ? currentOrder.tax : getCartTax()) > 0)">
-            <div class="flex justify-between">
-              <span>PPN (11%):</span>
+              <div class="flex justify-between">
+              <span x-text="(currentOrder && currentOrder.taxIncluded) ? 'PPN (11%) [Include]:' : 'PPN (11%):'"></span>
               <span x-text="formatRupiah(currentOrder ? currentOrder.tax : getCartTax())"></span>
             </div>
           </template>
