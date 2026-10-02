@@ -1818,7 +1818,7 @@ try {
       : this.getCartServiceCharge();
     const disc = orderData 
       ? (Number(orderData.discount || orderData.disc) || 0) 
-      : (Number(this.discountAmount) || 0);
+      : (Number(this.getOrderDiscountAmount()) || 0);   // ✅ FIX: pakai getter yang benar
     const pm = (paymentData.method || (orderData && (orderData.paymentMethod || orderData.payment_type || orderData.pm)) || this.selectedPaymentMethod || 'cash').toLowerCase();
 
     // ✅ FIX #2: Normalize items — handle object / array / array-of-arrays
