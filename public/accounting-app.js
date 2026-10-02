@@ -810,10 +810,19 @@ window.accountingApp = function() {
       });
 
       // Update current balance per akun dan simpan total mutasi debit & kredit
-            // ✅ BUG-5: PRIORITAS data ledger (opening/closing real) di atas hitungan jurnal lokal
-      const ledgerMap = this._ledgerMapByMonth[this.bulanAktif] || {};
-      const hasLedgerData = Object.keys(ledgerMap).length > 0;
+      // ✅ BUG-5: PRIORITAS data ledger (opening/closing real) di atas hitungan jurnal lokal
+      const rawLedgerMap = this._ledgerMapByMonth[this.bulanAktif] || {};
 
+      // ✅ BUG-5 FIX v2: Normalize ledger map keys — COA dari /accounting/coa pakai 3-digit
+      // (101), tapi ledger Firebase pakai 4-digit (1001). Bangun alias bidirectional.
+      const ledgerMap = {};
+      for (const [code, val] of Object.entries(rawLedgerMap)) {
+        ledgerMap[code] = val;
+        const alias = CODE_MAP[code];   // CODE_MAP sudah bidirectional: '1001'→'101', '101'→'1001'
+        if (alias) ledgerMap[alias] = val;
+      }
+      const hasLedgerData = Object.keys(rawLedgerMap).length > 0;
+      console.log(`[ACCT-APP] ledgerMap normalized: ${Object.keys(ledgerMap).length} keys (dari ${Object.keys(rawLedgerMap).length} raw)`);
       this.coaList.forEach(acc => {
         const stat = totalsByAcc[acc.code];
         const ledger = ledgerMap[acc.code];  // key di Firebase sudah 4-digit
