@@ -79,10 +79,10 @@ window.kasirApp = () => ({
   // Fitur Diskon, Pajak & Service Charge Keranjang
   orderDiscountType: 'percent', // 'percent' | 'nominal'
   orderDiscountValue: 0,
-  isTaxEnabled: true, // Pajak Restoran PB1 11%
+  isTaxEnabled: false, // ✅ PATCH H-11: Default OFF — kasir centang manual bila perlu
   isServiceChargeEnabled: false, // Service Charge 5%
   serviceChargeRate: 5,
-  isTaxIncluded: false, // ✅ PATCH H: PPN Include/Exclude toggle
+  isTaxIncluded: false, // ✅ PATCH H: PPN Include/Exclude toggle (default OFF)
 
   // Modal Diskon Per Item
   showItemDiscountModal: false,
