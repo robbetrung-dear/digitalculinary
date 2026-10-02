@@ -120,6 +120,7 @@ window.kasirApp = () => ({
   ewalletModal: false,
   splitModal: false,
   receiptModal: false,
+  receiptWAPhone: '',   // ✅ FEATURE-3: state nomor WA pelanggan untuk struk POS
   closeShiftModal: false,
   reconcileModal: false,
   pendingReconcileModal: false,
