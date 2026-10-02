@@ -82,6 +82,7 @@ window.kasirApp = () => ({
   isTaxEnabled: true, // Pajak Restoran PB1 11%
   isServiceChargeEnabled: false, // Service Charge 5%
   serviceChargeRate: 5,
+  isTaxIncluded: false, // ✅ PATCH H: PPN Include/Exclude toggle
 
   // Modal Diskon Per Item
   showItemDiscountModal: false,
@@ -1345,12 +1346,41 @@ try {
   /**
    * Hitung subtotal seluruh pesanan (setelah diskon item)
    */
-  getCartSubtotal() {
+    /**
+   * ✅ PATCH H: Subtotal BRUTO (harga normal × qty, TANPA diskon item)
+   * Ini yang ditampilkan di struk sebagai "Subtotal"
+   */
+  getCartSubtotalBruto() {
     if (!Array.isArray(this.cart)) return 0;
     return this.cart.reduce((total, item) => {
-      const unitPrice = this.getItemUnitPriceAfterDiscount(item);
-      return total + (unitPrice * (item.qty || 0));
+      const basePrice = Number(item.price) || 0;
+      return total + (basePrice * (item.qty || 0));
     }, 0);
+  },
+
+  /**
+   * ✅ PATCH H: Total diskon per item (nominal)
+   */
+  getCartItemDiscountTotal() {
+    if (!Array.isArray(this.cart)) return 0;
+    return this.cart.reduce((total, item) => {
+      return total + this.getItemDiscountNominal(item);
+    }, 0);
+  },
+
+  /**
+   * ✅ PATCH H: Net Sales = Subtotal Bruto − Diskon Item (sebelum diskon total)
+   */
+  getCartNetSalesBeforeOrderDiscount() {
+    return Math.max(0, this.getCartSubtotalBruto() - this.getCartItemDiscountTotal());
+  },
+
+  /**
+   * ✅ PATCH H: Subtotal setelah diskon item (= Net Sales sebelum diskon total)
+   * Ini tetap ada untuk kompatibilitas backward — dipakai di getOrderDiscountAmount()
+   */
+  getCartSubtotal() {
+    return this.getCartNetSalesBeforeOrderDiscount();
   },
 
   /**
@@ -1373,16 +1403,20 @@ try {
   /**
    * Subtotal bersih setelah Diskon Total Belanja
    */
+      /**
+   * ✅ PATCH H: Net Sales FINAL = Subtotal Bruto − Diskon Item − Diskon Total
+   * Ini basis untuk hitung Service Charge & PPN
+   */
   getCartSubtotalAfterOrderDiscount() {
-    const subtotal = this.getCartSubtotal();
-    const disc = this.getOrderDiscountAmount();
-    return Math.max(0, subtotal - disc);
+    const netSalesBeforeOrderDisc = this.getCartNetSalesBeforeOrderDiscount();
+    const orderDisc = this.getOrderDiscountAmount();
+    return Math.max(0, netSalesBeforeOrderDisc - orderDisc);
   },
 
   /**
    * Hitung pajak PB1 11% (Restoran)
    */
-  getCartTax() {
+    getCartTax() {
     if (!this.isTaxEnabled) return 0;
     const base = this.getCartSubtotalAfterOrderDiscount();
     return Math.round(base * 0.11);
@@ -1391,21 +1425,33 @@ try {
   /**
    * Hitung Service Charge (5%)
    */
-  getCartServiceCharge() {
+    getCartServiceCharge() {
     if (!this.isServiceChargeEnabled) return 0;
-    const base = this.getCartSubtotalAfterOrderDiscount();
+    // ✅ PATCH H: Service Charge dihitung dari NetSales (setelah diskon total)
+    const netSales = this.getCartSubtotalAfterOrderDiscount();
     const rate = (Number(this.serviceChargeRate) || 5) / 100;
-    return Math.round(base * rate);
+    return Math.round(netSales * rate);
   },
 
   /**
    * Hitung total akhir tagihan (Subtotal + Tax + Service Charge - Diskon Order)
    */
+    /**
+   * ✅ PATCH H: Grand Total
+   * - Exclude: NetSales + Service + PPN
+   * - Include: NetSales + Service (PPN sudah di dalam NetSales)
+   */
   getCartGrandTotal() {
-    const base = this.getCartSubtotalAfterOrderDiscount();
-    const tax = this.getCartTax();
+    const netSales = this.getCartSubtotalAfterOrderDiscount();
     const service = this.getCartServiceCharge();
-    return Math.max(0, base + tax + service);
+
+    if (this.isTaxIncluded) {
+      // PPN sudah termasuk dalam NetSales — jangan ditambahkan lagi
+      return Math.max(0, netSales + service);
+    }
+
+    const tax = this.getCartTax();
+    return Math.max(0, netSales + service + tax);
   },
 
   /**
