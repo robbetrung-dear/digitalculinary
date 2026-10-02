@@ -903,17 +903,31 @@
                   <span class="font-bold text-stone-900 font-mono" x-text="formatRupiah(getCartSubtotal())"></span>
                 </div>
 
-                <!-- Checkbox Opsional Pajak Restoran (PB1 11%) -->
-                <div class="flex items-center justify-between py-0.5">
-                  <label class="flex items-center gap-2 cursor-pointer select-none">
-                    <input 
-                      type="checkbox" 
-                      x-model="isTaxEnabled" 
-                      class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-stone-300 cursor-pointer" 
-                    />
-                    <span class="font-semibold text-stone-700">Pajak Restoran PB1 (11%)</span>
-                  </label>
-                  <span class="font-bold font-mono" :class="isTaxEnabled ? 'text-stone-900' : 'text-stone-400 line-through'" x-text="formatRupiah(getCartTax())"></span>
+                                <!-- Checkbox Opsional Pajak Restoran (PB1 11%) -->
+                <div class="py-0.5 space-y-1">
+                  <div class="flex items-center justify-between">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        x-model="isTaxEnabled" 
+                        class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-stone-300 cursor-pointer" 
+                      />
+                      <span class="font-semibold text-stone-700">Pajak Restoran PB1 (11%)</span>
+                    </label>
+                    <span class="font-bold font-mono" :class="isTaxEnabled ? 'text-stone-900' : 'text-stone-400 line-through'" x-text="formatRupiah(getCartTax())"></span>
+                  </div>
+
+                  <!-- ✅ PATCH H: Sub-toggle Include/Exclude PPN -->
+                  <div x-show="isTaxEnabled" x-cloak class="flex items-center justify-between pl-6 text-[11px]">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        x-model="isTaxIncluded" 
+                        class="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 border-stone-300 cursor-pointer" 
+                      />
+                      <span class="font-semibold text-stone-600">Harga sudah <strong>termasuk</strong> PPN (Include)</span>
+                    </label>
+                  </div>
                 </div>
 
                 <!-- Checkbox Opsional Service Charge (5%) -->
