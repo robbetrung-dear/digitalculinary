@@ -3922,14 +3922,19 @@
         <div class="space-y-1.5 border-b border-dashed border-stone-300 pb-3">
             <template x-for="it in (currentOrder ? currentOrder.items : cart)" :key="it.id">
             <div>
-              <div class="flex justify-between font-bold items-start gap-2">
-                <!-- ✅ FIX: Nama menu wrap (break-words) + flex-shrink biar tidak terpotong -->
+                <div class="flex justify-between font-bold items-start gap-2">
                 <span class="break-words whitespace-normal leading-tight" x-text="it.name"></span>
                 <span class="whitespace-nowrap flex-shrink-0" x-text="formatRupiah(it.price * it.qty)"></span>
               </div>
               <div class="text-[10px] text-stone-500 flex justify-between">
-                <span x-text="it.qty + ' x ' + formatRupiah(it.price)"></span>
+                <span x-text="it.qty + ' x ' + formatRupiah(it.basePrice !== undefined ? it.basePrice : it.price)"></span>
               </div>
+              <template x-if="Number(it.itemDiscount) > 0">
+                <div class="text-[10px] text-amber-700 flex justify-between">
+                  <span x-text="'Disc ' + (it.itemDiscountType === 'nominal' ? 'Rp ' + formatNumber(it.itemDiscountValue) : it.itemDiscountValue + '%')"></span>
+                  <span x-text="'-' + formatRupiah(it.itemDiscount)"></span>
+                </div>
+              </template>
             </div>
           </template>
         </div>
@@ -3937,27 +3942,35 @@
         <!-- Rincian Pembayaran -->
         <div class="space-y-1 text-[11px]">
           <div class="flex justify-between"><span>Subtotal:</span><span x-text="formatRupiah(currentOrder ? currentOrder.subtotal : getCartSubtotal())"></span></div>
-          <template x-if="(currentOrder && currentOrder.serviceCharge !== undefined ? currentOrder.serviceCharge : getCartServiceCharge()) > 0">
-            <div class="flex justify-between"><span>Service Charge (5%):</span><span x-text="formatRupiah(currentOrder && currentOrder.serviceCharge !== undefined ? currentOrder.serviceCharge : getCartServiceCharge())"></span></div>
+
+          <!-- ✅ Order-level Diskon (muncul dulu sebelum service & pajak) -->
+          <template x-if="(currentOrder ? (currentOrder.discount || currentOrder.disc) : getOrderDiscountAmount()) > 0">
+            <div class="flex justify-between"><span>Diskon Total:</span><span x-text="'-' + formatRupiah(currentOrder ? (currentOrder.discount || currentOrder.disc) : getOrderDiscountAmount())"></span></div>
           </template>
-          <div class="flex justify-between"><span>Pajak (11%):</span><span x-text="formatRupiah(currentOrder ? currentOrder.tax : getCartTax())"></span></div>
-          <template x-if="(currentOrder ? (currentOrder.discount || currentOrder.disc) : discountAmount) > 0">
-            <div class="flex justify-between"><span>Diskon:</span><span x-text="'-' + formatRupiah(currentOrder ? (currentOrder.discount || currentOrder.disc) : discountAmount)"></span></div>
+
+          <!-- ✅ Service Charge conditional -->
+          <template x-if="((currentOrder && currentOrder.serviceCharge !== undefined ? currentOrder.serviceCharge : getCartServiceCharge()) > 0)">
+            <div class="flex justify-between">
+              <span>Service Charge (5%):</span>
+              <span x-text="formatRupiah(currentOrder && currentOrder.serviceCharge !== undefined ? currentOrder.serviceCharge : getCartServiceCharge())"></span>
+            </div>
           </template>
+
+          <!-- ✅ Pajak conditional — hanya tampil kalau > 0 -->
+          <template x-if="((currentOrder ? currentOrder.tax : getCartTax()) > 0)">
+            <div class="flex justify-between">
+              <span>PPN (11%):</span>
+              <span x-text="formatRupiah(currentOrder ? currentOrder.tax : getCartTax())"></span>
+            </div>
+          </template>
+
           <div class="flex justify-between font-black text-xs pt-1 border-t border-dashed border-stone-300">
             <span>TOTAL:</span>
             <span x-text="formatRupiah(currentOrder ? currentOrder.total : getCartGrandTotal())"></span>
           </div>
           <div class="flex justify-between"><span>Bayar:</span><span x-text="formatRupiah(cashReceived || (currentOrder ? currentOrder.total : getCartGrandTotal()))"></span></div>
-          <div class="flex justify-between"><span>Kembali:</span><span x-text="formatRupiah(currentOrder ? (currentOrder.cashChange || 0) : Math.max(0, getCashChange()))"></span>
-          </div>
-          </div>
-
-        <div class="text-center pt-2 text-[10px] text-stone-500">
-          <p>Terima kasih telah berkunjung!</p>
-          <p>Dapur Kami, Viral di Meja Anda.</p>
+          <div class="flex justify-between"><span>Kembali:</span><span x-text="formatRupiah(currentOrder ? (currentOrder.cashChange || 0) : Math.max(0, getCashChange()))"></span></div>
         </div>
-      </div>
       <!-- ✅ FEATURE-3: Input nomor WA pelanggan -->
       <div class="mb-1">
         <label class="block text-xs font-bold text-stone-600 mb-1.5">
