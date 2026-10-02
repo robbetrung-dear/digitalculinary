@@ -529,30 +529,7 @@ window.kasirApp = () => ({
   accountingSummaryLastFetch: 0,
   accountingSummaryError: null,
 
-  // Inventory Modals & Recipe State
-  editStockModal: false,
-  selectedStockItem: {
-    id: '',
-    name: '',
-    category: 'Bahan Baku',
-    stock: 0,
-    stok: 0,
-    minStock: 0,
-    unit: 'unit',
-    purchasePrice: 0,
-    isCountable: true
-  },
-  newStockValue: 0,
-  stockChangeReason: '',
-  addInventoryModal: false,
-  newInventoryForm: {
-    nama: '',
-    category: 'Bahan Baku',
-    stok: 10,
-    min: 5,
-    unit: 'kg',
-    isCountable: true
-  },
+  // (Inventory Modals state sudah dideklarasi di blok awal ~line 460 — blok ini dihapus untuk hindari duplikasi key)
 
   // Menu Baru & Produk Resep Bahan Baku State
   newMenuModal: false,
