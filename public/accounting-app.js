@@ -139,7 +139,8 @@ window.accountingApp = function() {
     coaFilterType: 'all',
     jurnalFilterAkun: 'all',
     jurnalSearch: '',
-    ledgerAkun: '1001',
+        ledgerAkun: '1001',
+    _ledgerMapByMonth: {},  // ✅ BUG-5: cache closing per akun dari /accounting/ledger
 
     // Trial/Live State
     isProductionMode: false,
@@ -325,8 +326,9 @@ window.accountingApp = function() {
       await this.initFirebaseConfig();
             await this.loadSiteName();
 
-      // 3. Muat Data Real dari Backend (Summary, COA, Journal)
+            // 3. Muat Data Real dari Backend (Summary, Ledger, COA, Journal)
       await this.loadSummary(this.bulanAktif);
+      await this.loadLedgerMap(this.bulanAktif);  // ✅ BUG-5: load dulu sebelum COA
       await this.loadCOA();
       await this.loadJournal(this.bulanAktif);
 
@@ -337,11 +339,13 @@ window.accountingApp = function() {
       this.loadExportHistory();
 
       // 6. Listener perubahan periode bulan
-      this.$watch('bulanAktif', async (newVal) => {
+            this.$watch('bulanAktif', async (newVal) => {
         console.log(`[ACCT-APP] Bulan aktif changed to: ${newVal}`);
         this.exportForm.period = newVal;
         this.loading = true;
         await this.loadSummary(newVal);
+        await this.loadLedgerMap(newVal);  // ✅ BUG-5: refresh ledger map
+        await this.loadCOA();              // ✅ BUG-5: recalculate dengan ledger baru
         await this.loadJournal(newVal);
         await this.loadDashboard();
         if (this.activeTab === 'ledger') {
@@ -566,6 +570,51 @@ window.accountingApp = function() {
     // 3. CHART OF ACCOUNTS (COA)
     // ------------------------------------------------------------------------
     
+        /**
+     * ✅ BUG-5: Fetch /accounting/ledger/{bulan} → dapat opening/debit/credit/closing
+     * untuk SEMUA akun di bulan tersebut. Sumber kebenaran saldo akumulatif.
+     */
+    async loadLedgerMap(bulan) {
+      const targetBulan = bulan || this.bulanAktif;
+      try {
+        const res = await fetch(`/accounting/ledger?bulan=${encodeURIComponent(targetBulan)}`);
+        // Endpoint versi 1: GET /accounting/ledger (no acc) sudah return semua akun untuk bulan aktif
+        // Fallback: pakai endpoint /accounting/ledger tanpa path param, backend pakai bulan berjalan
+        // Untuk aman, coba 2 endpoint:
+        let data = null;
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.success && json.data) {
+            data = json.data;
+          }
+        }
+
+        // Fallback: fetch langsung Firebase REST
+        if (!data) {
+          const fbUrl = (this._fbConfig?.databaseURL || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app').replace(/\/$/, '');
+          const rawRes = await fetch(`${fbUrl}/accounting/ledger.json`);
+          if (rawRes.ok) {
+            const all = await rawRes.json();
+            const monthMap = {};
+            if (all && typeof all === 'object') {
+              for (const [code, months] of Object.entries(all)) {
+                if (months && months[targetBulan]) {
+                  monthMap[code] = months[targetBulan];
+                }
+              }
+            }
+            data = monthMap;
+          }
+        }
+
+        this._ledgerMapByMonth[targetBulan] = data || {};
+        console.log(`[ACCT-APP] ✅ Ledger map loaded for ${targetBulan}: ${Object.keys(this._ledgerMapByMonth[targetBulan]).length} akun`);
+      } catch (e) {
+        console.warn('[ACCT-APP] loadLedgerMap error:', e);
+        this._ledgerMapByMonth[targetBulan] = {};
+      }
+    },
+
     /**
      * GET /accounting/coa & hitung saldo berjalan berdasarkan mutasi jurnal
      */
@@ -761,14 +810,29 @@ window.accountingApp = function() {
       });
 
       // Update current balance per akun dan simpan total mutasi debit & kredit
+            // ✅ BUG-5: PRIORITAS data ledger (opening/closing real) di atas hitungan jurnal lokal
+      const ledgerMap = this._ledgerMapByMonth[this.bulanAktif] || {};
+      const hasLedgerData = Object.keys(ledgerMap).length > 0;
+
       this.coaList.forEach(acc => {
         const stat = totalsByAcc[acc.code];
-        if (stat) {
+        const ledger = ledgerMap[acc.code];  // key di Firebase sudah 4-digit
+
+        if (ledger && (ledger.opening !== undefined || ledger.closing !== undefined)) {
+          // ✅ Pakai data ledger — authoritative
+          acc.initialBalance = Number(ledger.opening) || 0;
+          acc.totalDebit = Number(ledger.debit) || 0;
+          acc.totalCredit = Number(ledger.credit) || 0;
+          acc.currentBalance = Number(ledger.closing) || 0;
+        } else if (stat) {
+          // Fallback: hitung dari jurnal lokal (kalau ledger belum tersedia)
           acc.totalDebit = stat.debit;
           acc.totalCredit = stat.credit;
           acc.currentBalance = hitungSaldo(stat.initial, stat.debit, stat.credit, stat.type);
         }
       });
+
+      console.log(`[ACCT-APP] recalculate: ${hasLedgerData ? 'using LEDGER' : 'using JURNAL fallback'}`);
     },
 
     // ------------------------------------------------------------------------
