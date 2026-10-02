@@ -322,7 +322,12 @@ window.kasirApp = () => ({
     barcode: '',
     autoPrintBarcode: true
   },
-  scanReceiveModal: false,
+  
+ // ✅ FITUR BARU: Multi-Scan Transaksi POS (Maks 50 Menu)
+  multiScanModal: false,
+  multiScanCart: [],
+  multiScanQuery: '', 
+ scanReceiveModal: false,
     scanReceiveForm: {
     skuQuery: '',
     matchedItem: null,
@@ -7943,7 +7948,180 @@ try {
   /**
    * 2E. Scan Receive Barang Konsinyasi dari Supplier
    */
-      openScanReceiveModal() {
+      // =========================================================================
+  // ✅ FITUR BARU: MULTI-SCAN TRANSAKSI POS (Maks 50 Menu per Sesi)
+  // =========================================================================
+
+  openMultiScanModal() {
+    this.multiScanModal = true;
+    this.multiScanCart = [];
+    this.multiScanQuery = '';
+    this.playSound('click');
+    this.$nextTick(() => {
+      setTimeout(() => {
+        const el = document.getElementById('multiScanInput');
+        if (el) el.focus();
+      }, 150);
+    });
+  },
+
+  onMultiScanQueryChange() {
+    const code = String(this.multiScanQuery || '').trim();
+    if (!code) {
+      this.showToast('Masukkan kode SKU / barcode menu dulu', 'error');
+      this.playSound('error');
+      return;
+    }
+    this.processMultiScan(code);
+  },
+
+  _resolveMenuFromScanCode(code) {
+    const clean = String(code || '').trim().toLowerCase();
+    if (!clean) return null;
+
+    let menu = (this.menuList || []).find(m =>
+      (m.sku && String(m.sku).toLowerCase() === clean) ||
+      (m.barcode && String(m.barcode).toLowerCase() === clean) ||
+      (m.id && String(m.id).toLowerCase() === clean)
+    );
+    if (menu) return menu;
+
+    const inv = (this.inventoryList || []).find(i =>
+      (i.sku && String(i.sku).toLowerCase() === clean) ||
+      (i.barcode && String(i.barcode).toLowerCase() === clean) ||
+      (i.id && String(i.id).toLowerCase() === clean)
+    );
+    if (inv) {
+      menu = (this.menuList || []).find(m => m.inventoryId === inv.id);
+      if (menu) return menu;
+      if (inv.linkedMenuId) {
+        menu = (this.menuList || []).find(m => m.id === inv.linkedMenuId);
+        if (menu) return menu;
+      }
+    }
+    return null;
+  },
+
+  processMultiScan(code) {
+    const menu = this._resolveMenuFromScanCode(code);
+    if (!menu) {
+      this.showToast(`Kode "${code}" tidak cocok dengan menu mana pun`, 'error');
+      this.playSound('error');
+      return;
+    }
+    this._addToMultiScanList(menu, 1);
+    this.multiScanQuery = '';
+    this.$nextTick(() => {
+      const el = document.getElementById('multiScanInput');
+      if (el) el.focus();
+    });
+  },
+
+  _addToMultiScanList(menu, qty = 1) {
+    if (!menu) return false;
+    if (!Array.isArray(this.multiScanCart)) this.multiScanCart = [];
+
+    if (this.multiScanCart.length >= 50) {
+      this.showToast('Maksimal 50 menu per sesi scan. Selesaikan dulu sesi ini.', 'error');
+      this.playSound('error');
+      return false;
+    }
+
+    const numQty = Math.max(1, Number(qty) || 1);
+    const existing = this.multiScanCart.find(it => it.id === menu.id);
+    if (existing) {
+      const stock = this.getMenuCalculatedStock(menu.id);
+      if (existing.qty + numQty > stock) {
+        this.showToast(`Stok "${menu.name}" tinggal ${stock} porsi`, 'error');
+        this.playSound('error');
+        return false;
+      }
+      existing.qty += numQty;
+      existing.subtotal = existing.qty * existing.price;
+      this.showToast(`"${menu.name}" qty → ${existing.qty}`, 'notify');
+      this.playSound('click');
+      return true;
+    }
+
+    this.multiScanCart.push({
+      id: menu.id,
+      name: menu.name,
+      price: Number(menu.price) || 0,
+      qty: numQty,
+      subtotal: (Number(menu.price) || 0) * numQty
+    });
+    this.showToast(`✅ "${menu.name}" ditambah (${this.multiScanCart.length}/50)`, 'success');
+    this.playSound('success');
+    return true;
+  },
+
+  removeFromMultiScanList(idx) {
+    if (!Array.isArray(this.multiScanCart)) return;
+    if (idx < 0 || idx >= this.multiScanCart.length) return;
+    const removed = this.multiScanCart.splice(idx, 1)[0];
+    if (removed) {
+      this.showToast(`"${removed.name}" dihapus`, 'notify');
+      this.playSound('click');
+    }
+  },
+
+  updateMultiScanTotal(item) {
+    if (!item) return;
+    item.qty = Math.max(1, Number(item.qty) || 1);
+    item.price = Math.max(0, Number(item.price) || 0);
+    item.subtotal = item.qty * item.price;
+  },
+
+  getMultiScanTotal() {
+    if (!Array.isArray(this.multiScanCart)) return 0;
+    return this.multiScanCart.reduce((s, it) => s + (Number(it.subtotal) || 0), 0);
+  },
+
+  confirmMultiScanToCart() {
+    if (!Array.isArray(this.multiScanCart) || this.multiScanCart.length === 0) {
+      this.showToast('Belum ada menu di-scan', 'error');
+      return;
+    }
+
+    const errors = [];
+    for (const it of this.multiScanCart) {
+      const stock = this.getMenuCalculatedStock(it.id);
+      const inCart = (this.cart.find(c => c.id === it.id)?.qty) || 0;
+      const totalNeeded = inCart + it.qty;
+      if (totalNeeded > stock) {
+        errors.push(`"${it.name}" butuh ${totalNeeded}, stok ${stock}`);
+      }
+    }
+    if (errors.length) {
+      this.showToast(`Stok tidak cukup: ${errors.join('; ')}`, 'error');
+      this.playSound('error');
+      return;
+    }
+
+    let added = 0;
+    for (const it of this.multiScanCart) {
+      const existing = this.cart.find(c => c.id === it.id);
+      if (existing) {
+        existing.qty += it.qty;
+      } else {
+        this.cart.push({
+          id: it.id,
+          name: it.name,
+          price: Number(it.price) || 0,
+          qty: Number(it.qty) || 1
+        });
+      }
+      added++;
+    }
+
+    this.showToast(`✅ ${added} menu ditambahkan ke keranjang`, 'success');
+    this.playSound('success');
+    this.multiScanModal = false;
+    this.multiScanCart = [];
+    this.multiScanQuery = '';
+  },
+ 
+    openScanReceiveModal() {
     this.scanReceiveForm = {
       skuQuery: '',
       matchedItem: null,
