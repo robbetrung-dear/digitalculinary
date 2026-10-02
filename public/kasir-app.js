@@ -1015,10 +1015,9 @@ try {
 
     console.log('[ADD-CART] Menu:', menuItem.name, '| Stock:', currentStock, '| In Cart:', currentCartQty);
 
-    if (currentStock <= 0) {
-      const missing = this.getMenuMissingIngredient(menuItem.id);
-      const missingText = missing ? ` (Bahan habis: ${missing.name})` : ' (Stok fisik kosong di toko)';
-      this.showToast(`Stok "${menuItem.name}" tidak mencukupi${missingText}!`, 'error');
+        if (currentStock <= 0) {
+      // ✅ BUG-15: Single toast — jangan panggil getMenuMissingIngredient() yang bisa duplicate
+      this.showToast(`Stok "${menuItem.name}" habis`, 'error');
       this.playSound('error');
       return;
     }
@@ -2915,23 +2914,33 @@ try {
       });
     };
 
-    // === Strategi 1: Endpoint range (?start=&end=) ===
-    try {
-      const url = `/pos/transactions?start=${startDate}&end=${endDate}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const json = await res.json();
-          if (Array.isArray(json.data)) {
-            const filtered = filterByDate(json.data);
-            console.log(`[REPORT] ✅ Range endpoint: raw ${json.data.length} → filter ${filtered.length} tx`);
-            return filtered;
+    // === Strategi 1: DIHAPUS — endpoint ?start=&end= tidak ada di backend ===
+    // (BACKLOG-1) Cek dulu apakah sudah di-flag gagal permanen di localStorage
+    const rangeEndpointBroken = (() => {
+      try { return localStorage.getItem('dapur_range_endpoint_broken') === '1'; }
+      catch (e) { return false; }
+    })();
+
+    if (!rangeEndpointBroken) {
+      try {
+        const url = `/pos/transactions?start=${startDate}&end=${endDate}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const json = await res.json();
+            if (Array.isArray(json.data)) {
+              const filtered = filterByDate(json.data);
+              console.log(`[REPORT] ✅ Range endpoint: raw ${json.data.length} → filter ${filtered.length} tx`);
+              return filtered;
+            }
           }
         }
+      } catch (e) {
+        // ✅ BACKLOG-1: Tandai permanen supaya tidak spam Console tiap load
+        try { localStorage.setItem('dapur_range_endpoint_broken', '1'); } catch (err) {}
+        console.log('[REPORT] Range endpoint unavailable, cached flag set. Pakai loop harian.');
       }
-    } catch (e) {
-      console.log('[REPORT] Range endpoint error, coba fallback...');
     }
 
     // === Strategi 2: Kalau 1 bulan yang sama → pakai ?month= ===
