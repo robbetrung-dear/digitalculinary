@@ -8092,8 +8092,10 @@ try {
         errors.push(`"${it.name}" butuh ${totalNeeded}, stok ${stock}`);
       }
     }
-    if (errors.length) {
-      this.showToast(`Stok tidak cukup: ${errors.join('; ')}`, 'error');
+      if (errors.length) {
+      const shown = errors.slice(0, 3).join('; ');
+      const more = errors.length > 3 ? ` … +${errors.length - 3} item lainnya` : '';
+      this.showToast(`Stok tidak cukup: ${shown}${more}`, 'error');
       this.playSound('error');
       return;
     }
