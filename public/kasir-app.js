@@ -308,7 +308,7 @@ window.kasirApp = () => ({
   supplierForm: { id: '', name: '', contact: '', address: '', active: true },
   supplierSearch: '',
   preRegisterModal: false,
-  preRegisterForm: {
+    preRegisterForm: {
     name: '',
     supplierId: '',
     supplierName: '',
@@ -320,7 +320,8 @@ window.kasirApp = () => ({
     minStock: 5,
     sku: '',
     barcode: '',
-    autoPrintBarcode: true
+    autoPrintBarcode: true,
+    sellingPriceManual: false   // ✅ BUG-3
   },
   
  // ✅ FITUR BARU: Multi-Scan Transaksi POS (Maks 50 Menu)
@@ -7820,19 +7821,20 @@ try {
    */
   openPreRegisterModal() {
     const defaultSup = (this.suppliersList && this.suppliersList[0]) ? this.suppliersList[0] : { id: 'sp_1', name: 'Pakde' };
-    this.preRegisterForm = {
+      this.preRegisterForm = {
       name: '',
       supplierId: defaultSup.id,
       supplierName: defaultSup.name,
       purchasePrice: 15000,
-      sellingPrice: 18000, // beli + 20%
+      sellingPrice: 18000,
       category: 'rice_bowl',
       unit: 'porsi',
       initialStock: 0,
       minStock: 5,
       sku: this.generateSKU('rice_bowl', 'internal', defaultSup.name),
       barcode: '',
-      autoPrintBarcode: true
+      autoPrintBarcode: true,
+      sellingPriceManual: false   // ✅ BUG-3: reset flag saat modal dibuka
     };
     this.preRegisterForm.barcode = this.preRegisterForm.sku;
     this.preRegisterModal = true;
@@ -7844,7 +7846,8 @@ try {
     const cleanSup = (this.preRegisterForm.supplierName || 'UMUM').split(' ')[0];
     this.preRegisterForm.sku = this.generateSKU(this.preRegisterForm.category, 'internal', cleanSup);
     this.preRegisterForm.barcode = this.preRegisterForm.sku;
-    if (this.preRegisterForm.purchasePrice > 0 && !this.preRegisterForm.sellingPrice) {
+    // ✅ BUG-3: Auto +20% HANYA kalau user BELUM edit manual sellingPrice
+    if (this.preRegisterForm.purchasePrice > 0 && !this.preRegisterForm.sellingPriceManual) {
       this.preRegisterForm.sellingPrice = Math.round((this.preRegisterForm.purchasePrice * 1.2) / 1000) * 1000;
     }
   },
