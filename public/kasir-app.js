@@ -1877,17 +1877,27 @@ try {
       id: txId,
       date: this.formatDate(Date.now()),
       time: this.formatTime(Date.now()),
-            items: normalizedItems.length > 0 
+                  items: normalizedItems.length > 0 
         ? normalizedItems.map(it => {
             const menu = (this.menuList || []).find(m => m.id === it.id);
+            const cartItem = (this.cart || []).find(c => c.id === it.id);
+            // ✅ BUG-27: harga after-discount + simpan metadata diskon per item
+            const priceAfterDisc = cartItem 
+              ? this.getItemUnitPriceAfterDiscount(cartItem) 
+              : Number(it.price) || 0;
+            const itemDiscount = cartItem ? this.getItemDiscountNominal(cartItem) : 0;
             return { 
               id: it.id, 
               qty: it.qty, 
-              price: it.price, 
+              price: priceAfterDisc,
+              basePrice: Number(it.price) || 0,
+              itemDiscount: itemDiscount,
+              itemDiscountType: cartItem ? cartItem.itemDiscountType : null,
+              itemDiscountValue: cartItem ? cartItem.itemDiscountValue : 0,
               name: (menu && menu.name) ? menu.name : it.id 
             };
           })
-        : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal }],
+        : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal, basePrice: grandTotal, itemDiscount: 0 }],
       subtotal: subtotal,
       tax: tax,
       serviceCharge: serviceCharge,
