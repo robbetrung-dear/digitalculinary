@@ -182,6 +182,31 @@ function normalizeAcc(acc) {
 }
 
 /**
+ * ✅ FIX BUG-21: Helper hitung bulan sebelumnya dengan format YYYY-MM
+ * Return null kalau input tidak valid
+ */
+function getPrevMonthKey(bulan) {
+  if (!bulan || String(bulan).length !== 7) return null;
+  const [y, m] = String(bulan).split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return null;
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/**
+ * ✅ FIX BUG-21: Cek normal balance (kredit-normal vs debit-normal)
+ * Konsisten antara rebuild-ledger.js & updateLedgerAfterApprove()
+ */
+function isKreditNormal(acc) {
+  const a = String(acc || '').trim();
+  if (!a) return false;
+  if (a.startsWith('2')) return true;
+  if (a.startsWith('3') && a !== '3003' && a !== '302') return true;  // Modal & Laba Ditahan kredit-normal, Prive debit-normal
+  if (a.startsWith('4')) return true;
+  return false;
+}
+
+/**
  * Helper: Auto-update Buku Besar (Ledger) setelah Jurnal di-Approve
  */
 async function updateLedgerAfterApprove(dbUrl, bulan, lines, apiKey, journalId) {
@@ -216,18 +241,34 @@ async function updateLedgerAfterApprove(dbUrl, bulan, lines, apiKey, journalId) 
         existing = await res.json();
       }
 
-      if (!existing || typeof existing !== 'object') {
+            if (!existing || typeof existing !== 'object') {
         existing = { opening: 0, debit: 0, credit: 0, closing: 0 };
       }
 
       existing.debit = (Number(existing.debit) || 0) + debit;
       existing.credit = (Number(existing.credit) || 0) + credit;
-      const isKreditNormal = acc.startsWith('2') || (acc.startsWith('3') && acc !== '302' && acc !== '3002' && acc !== '3003') || acc.startsWith('4');
-      if (isKreditNormal) {
-        existing.closing = (Number(existing.opening) || 0) + existing.credit - existing.debit;
-      } else {
-        existing.closing = (Number(existing.opening) || 0) + existing.debit - existing.credit;
+
+      // ✅ FIX BUG-21: Kalau opening masih 0 & bukan bulan pertama, ambil closing bulan sebelumnya
+      if (!existing.opening || Number(existing.opening) === 0) {
+        const prevBulan = getPrevMonthKey(bulan);
+        if (prevBulan) {
+          try {
+            const prevData = await fetchLedgerAccount(dbUrl, acc, prevBulan, apiKey);
+            const prevClosing = Number(prevData && prevData.closing) || 0;
+            if (prevClosing !== 0) {
+              existing.opening = prevClosing;
+              console.log(`[LEDGER-BUG21] acc ${acc}: opening carry-forward dari ${prevBulan} = ${prevClosing}`);
+            }
+          } catch (e) {
+            console.warn(`[LEDGER-BUG21] Gagal ambil closing ${acc} ${bulan} dari ${prevBulan}:`, e.message);
+          }
+        }
       }
+
+      const kN = isKreditNormal(acc);
+      existing.closing = kN
+        ? (Number(existing.opening) || 0) + existing.credit - existing.debit
+        : (Number(existing.opening) || 0) + existing.debit - existing.credit;
       existing.updatedAt = Date.now();
 
       // ✅ FIX BUG-23: PUT dengan retry juga
@@ -1081,7 +1122,10 @@ export async function onRequest(context) {
         const opening = body.opening !== undefined ? Number(body.opening) : Number(existing.opening || 0);
         const debit = body.debit !== undefined ? Number(body.debit) : Number(existing.debit || 0);
         const credit = body.credit !== undefined ? Number(body.credit) : Number(existing.credit || 0);
-        const closing = opening + debit - credit;
+        // ✅ FIX BUG-21: closing sesuai normal balance akun
+        const closing = isKreditNormal(accCode)
+          ? opening + credit - debit
+          : opening + debit - credit;
 
         const ledgerPayload = {
           opening,
