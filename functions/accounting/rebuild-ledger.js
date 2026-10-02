@@ -109,7 +109,7 @@ export async function onRequest(context) {
         continue;
       }
 
-      if (!ledger[bulan]) ledger[bulan] = {};
+            if (!ledger[bulan]) ledger[bulan] = {};
 
       for (const line of entry.lines) {
         const rawAcc = String(line.acc || line.code || '').trim();
@@ -126,17 +126,46 @@ export async function onRequest(context) {
 
         ledger[bulan][acc].debit += debit;
         ledger[bulan][acc].credit += credit;
-
-        // Hitung closing berdasarkan normal balance
-        ledger[bulan][acc].closing = isKreditNormal(acc)
-          ? ledger[bulan][acc].opening + ledger[bulan][acc].credit - ledger[bulan][acc].debit
-          : ledger[bulan][acc].opening + ledger[bulan][acc].debit - ledger[bulan][acc].credit;
       }
 
       processed++;
     }
 
-    console.log(`[REBUILD-LEDGER] Processed ${processed} jurnal, skipped ${skipped}. Months:`, Object.keys(ledger));
+    // ✅ FIX BUG-21: FASE 2 — Carry-forward opening antar bulan & hitung closing
+    // Urut bulan ascending, lalu setiap bulan ambil opening = closing bulan sebelumnya
+    const sortedMonths = Object.keys(ledger).sort();
+    const allAccounts = new Set();
+    sortedMonths.forEach(b => Object.keys(ledger[b]).forEach(a => allAccounts.add(a)));
+
+    console.log(`[REBUILD-LEDGER] FASE 2: carry-forward ${sortedMonths.length} bulan × ${allAccounts.size} akun`);
+
+    for (let i = 0; i < sortedMonths.length; i++) {
+      const bulan = sortedMonths[i];
+      const prevMonth = i > 0 ? sortedMonths[i - 1] : null;
+
+      for (const acc of allAccounts) {
+        // Ambil opening dari closing bulan sebelumnya (0 untuk bulan pertama)
+        let opening = 0;
+        if (prevMonth && ledger[prevMonth] && ledger[prevMonth][acc]) {
+          opening = Number(ledger[prevMonth][acc].closing) || 0;
+        }
+
+        if (!ledger[bulan][acc]) {
+          // Akun tidak ada transaksi bulan ini, tapi perlu dicatat kalau ada saldo carry
+          if (opening !== 0) {
+            ledger[bulan][acc] = { opening, debit: 0, credit: 0, closing: opening };
+          }
+          continue;
+        }
+
+        ledger[bulan][acc].opening = opening;
+        ledger[bulan][acc].closing = isKreditNormal(acc)
+          ? opening + ledger[bulan][acc].credit - ledger[bulan][acc].debit
+          : opening + ledger[bulan][acc].debit - ledger[bulan][acc].credit;
+      }
+    }
+
+    console.log(`[REBUILD-LEDGER] Processed ${processed} jurnal, skipped ${skipped}. Months:`, sortedMonths);
 
     // 3. Hapus ledger lama (semua node)
     await fetch(`${dbUrl}/accounting/ledger.json${auth}`, { method: 'DELETE' });
