@@ -603,6 +603,16 @@
                 </button>
               </div>
 
+              <!-- ✅ FITUR BARU: Multi Scan Transaksi -->    
+              <button 
+                  type="button" 
+                  @click="openMultiScanModal()"
+                  class="min-h-[48px] px-4 rounded-xl border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-900 font-extrabold text-xs flex items-center justify-center gap-2 transition flex-1 sm:flex-initial shadow-xs cursor-pointer"
+                  title="Multi scan transaksi — maks 50 menu per sesi">
+                  <i class="fa-solid fa-barcode text-sm text-violet-600"></i>
+                  <span>Multi Scan</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-violet-200 text-violet-900">≤50</span>
+                </button>
               <!-- Quick Refresh & Riwayat Transaksi -->
               <div class="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
                 <button 
@@ -6159,6 +6169,146 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+    <!-- ===================================================================== -->
+  <!-- MODAL: MULTI SCAN TRANSAKSI POS (Maks 50 Menu)                        -->
+  <!-- ===================================================================== -->
+  <div 
+    x-show="multiScanModal" 
+    x-cloak 
+    @click.self="multiScanModal = false"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-stone-200 space-y-4 my-8">
+
+      <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-xs">
+            <i class="fa-solid fa-barcode text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-stone-900 text-base">📷 Multi Scan Transaksi</h3>
+            <p class="text-[11px] text-stone-400">Scan cepat hingga 50 menu sekaligus</p>
+          </div>
+        </div>
+        <button type="button" @click="multiScanModal = false; multiScanCart = [];" 
+          class="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center text-xs cursor-pointer transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="block font-bold text-stone-700 text-xs">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-black flex items-center justify-center">1</span>
+            Scan Barcode / Ketik SKU Menu
+          </span>
+        </label>
+        <div class="flex items-center gap-2">
+          <input 
+            id="multiScanInput"
+            type="text" 
+            x-model="multiScanQuery" 
+            @keydown.enter.prevent="onMultiScanQueryChange()" 
+            placeholder="Scan / ketik SKU menu, Enter untuk tambah..." 
+            class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          <button 
+            type="button" 
+            @click="openScanModal('multi_scan', 'camera', (code) => { multiScanQuery = code; onMultiScanQueryChange(); })" 
+            class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-camera"></i>
+            <span>Kamera</span>
+          </button>
+          <button 
+            type="button" 
+            @click="onMultiScanQueryChange()" 
+            class="min-h-[44px] px-3.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-plus"></i>
+            <span>Tambah</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-stone-400 italic">Duplikat otomatis di-merge. Maksimal 50 baris menu.</p>
+      </div>
+
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="font-bold text-stone-700 text-xs inline-flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-black flex items-center justify-center">2</span>
+            Daftar Menu Ter-scan
+          </label>
+          <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md" 
+            :class="(multiScanCart?.length || 0) >= 50 ? 'bg-red-100 text-red-700' : 'bg-violet-100 text-violet-800'"
+            x-text="(multiScanCart?.length || 0) + ' / 50'"></span>
+        </div>
+
+        <div x-show="!multiScanCart || multiScanCart.length === 0" 
+          class="p-6 text-center border-2 border-dashed border-stone-200 rounded-2xl bg-stone-50/50">
+          <i class="fa-solid fa-barcode text-3xl text-stone-300 block mb-2"></i>
+          <p class="text-xs text-stone-400 font-semibold">Belum ada menu di-scan. Scan SKU / ketik manual di atas.</p>
+        </div>
+
+        <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <template x-for="(it, idx) in (multiScanCart || [])" :key="'ms-' + it.id + '-' + idx">
+            <div class="p-3 rounded-2xl bg-violet-50/60 border border-violet-200 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] text-stone-400" x-text="'#' + (idx + 1)"></span>
+                    <span class="text-[10px] font-mono font-bold text-violet-700 px-1.5 py-0.5 rounded bg-violet-100" x-text="it.id"></span>
+                  </div>
+                  <h4 class="font-bold text-xs text-stone-900 mt-1 truncate" x-text="it.name"></h4>
+                </div>
+                <button type="button" @click="removeFromMultiScanList(idx)" 
+                  class="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center transition cursor-pointer flex-shrink-0">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Qty</label>
+                  <input type="number" min="1" step="1" x-model.number="it.qty" 
+                    @input="updateMultiScanTotal(it)" 
+                    class="w-full h-9 px-2 rounded-lg border border-stone-300 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-violet-500 bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Harga (Rp)</label>
+                  <input type="number" min="0" step="100" x-model.number="it.price" 
+                    @input="updateMultiScanTotal(it)" 
+                    class="w-full h-9 px-2 rounded-lg border border-stone-300 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-violet-500 bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 uppercase mb-0.5">Subtotal</label>
+                  <div class="h-9 px-2 rounded-lg bg-white border border-stone-200 flex items-center justify-end">
+                    <span class="font-mono font-black text-violet-800 text-xs" x-text="formatRupiah(it.subtotal || 0)"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+        <div class="flex items-center justify-between">
+          <span class="font-extrabold text-stone-700 text-sm">Total Nilai Multi Scan:</span>
+          <span class="font-black text-lg font-mono text-violet-700" x-text="formatRupiah(getMultiScanTotal())"></span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+        <button type="button" @click="multiScanModal = false; multiScanCart = [];" 
+          class="h-10 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition cursor-pointer">
+          Batal
+        </button>
+        <button type="button" @click="confirmMultiScanToCart()" 
+          :disabled="!multiScanCart || multiScanCart.length === 0"
+          :class="(!multiScanCart || multiScanCart.length === 0) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-violet-700 cursor-pointer'"
+          class="h-11 px-5 rounded-xl bg-violet-600 text-white font-extrabold text-xs flex items-center gap-2 transition shadow-xs shadow-violet-600/20">
+          <i class="fa-solid fa-cart-plus"></i>
+          <span x-text="'Tambah ke Keranjang (' + (multiScanCart?.length || 0) + ')'"></span>
+        </button>
+      </div>
     </div>
   </div>
 
