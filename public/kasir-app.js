@@ -331,14 +331,15 @@ window.kasirApp = () => ({
     scanReceiveForm: {
     skuQuery: '',
     matchedItem: null,
-    items: [],                    // ✅ NEW: array item (maks 5)
+    items: [],
     supplierId: '',
     supplierName: '',
     waPhone: '',
     qty: 1,
     purchasePrice: 0,
     paymentMethod: 'payable',
-    notes: ''
+    notes: '',
+    searched: false   // ✅ BUG-4: flag agar orange box muncul SETELAH klik Cari
   },
   receiveReceiptModal: false,
   currentReceiveRecord: null,
@@ -8123,8 +8124,7 @@ try {
     this.multiScanQuery = '';
   },
  
-    openScanReceiveModal() {
-    this.scanReceiveForm = {
+      this.scanReceiveForm = {
       skuQuery: '',
       matchedItem: null,
       items: [],
@@ -8134,16 +8134,25 @@ try {
       qty: 1,
       purchasePrice: 0,
       paymentMethod: 'payable',
-      notes: ''
+      notes: '',
+      searched: false
     };
-    this.scanReceiveModal = true;
-  },
 
    /**
    * Handler tombol "Cari" / Enter di input SKU Receive
    * Wrapper ke processScanReceive — resolve bug "Kode belum terdaftar" 
    * karena HTML memanggil onReceiveSkuQueryChange() yang tadinya tidak ada
    */
+    /**
+   * ✅ BUG-4: Reset flag searched + matchedItem saat user mengetik ulang
+   */
+  onReceiveSkuQueryInput() {
+    if (this.scanReceiveForm) {
+      this.scanReceiveForm.searched = false;
+      this.scanReceiveForm.matchedItem = null;
+    }
+  },
+
   onReceiveSkuQueryChange() {
     const code = String(this.scanReceiveForm?.skuQuery || '').trim();
     if (!code) {
@@ -8151,6 +8160,7 @@ try {
       this.playSound('error');
       return;
     }
+    this.scanReceiveForm.searched = true;  // ✅ BUG-4: tandai user sudah klik Cari
     this.processScanReceive(code);
   },
  
