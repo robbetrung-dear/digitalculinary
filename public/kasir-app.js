@@ -1416,10 +1416,20 @@ try {
   /**
    * Hitung pajak PB1 11% (Restoran)
    */
-    getCartTax() {
+      /**
+   * ✅ PATCH H-5: PPN
+   * - Exclude (default): PPN = NetSales × 11%  → ditambahkan ke total
+   * - Include: PPN diekstrak proporsional = NetSales × (11/111) → sudah di dalam total
+   */
+  getCartTax() {
     if (!this.isTaxEnabled) return 0;
-    const base = this.getCartSubtotalAfterOrderDiscount();
-    return Math.round(base * 0.11);
+    const netSales = this.getCartSubtotalAfterOrderDiscount();
+    if (netSales <= 0) return 0;
+
+    if (this.isTaxIncluded) {
+      return Math.round(netSales * (11 / 111));
+    }
+    return Math.round(netSales * 0.11);
   },
 
   /**
@@ -2054,12 +2064,8 @@ try {
       }
     } catch (e) {}
 
-    // 7. Aggregate endpoint (background, no await)
-    fetch('/aggregate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: dateStr, tx: txRecord })
-    }).catch(() => {});
+    // 7. Aggregate endpoint dihapus — endpoint tidak ada di backend, non-blocker.
+    //    Aggregate data sudah di-handle oleh /accounting/journal/pos.
 
     // 8. Receipt endpoint (background)
     fetch('/receipt', {
