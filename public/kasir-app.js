@@ -1859,12 +1859,15 @@ try {
     const tax = orderData 
       ? (Number(orderData.tax) || (grandTotal - subtotal)) 
       : this.getCartTax();
-    const serviceCharge = orderData 
+        const serviceCharge = orderData 
       ? (Number(orderData.serviceCharge || orderData.sc) || 0) 
       : this.getCartServiceCharge();
     const disc = orderData 
       ? (Number(orderData.discount || orderData.disc) || 0) 
-      : (Number(this.getOrderDiscountAmount()) || 0);   // ✅ FIX: pakai getter yang benar
+      : (Number(this.getOrderDiscountAmount()) || 0);
+    const taxIncluded = orderData 
+      ? Boolean(orderData.taxIncluded) 
+      : Boolean(this.isTaxIncluded);   // ✅ FIX: pakai getter yang benar
     const pm = (paymentData.method || (orderData && (orderData.paymentMethod || orderData.payment_type || orderData.pm)) || this.selectedPaymentMethod || 'cash').toLowerCase();
 
     // ✅ FIX #2: Normalize items — handle object / array / array-of-arrays
@@ -1903,6 +1906,7 @@ try {
       items: mappedItems,
       sub: subtotal,
       tax: tax,
+      taxIncluded: taxIncluded,
       serviceCharge: serviceCharge,
       disc: disc,
       tot: grandTotal,
@@ -1946,6 +1950,7 @@ try {
         : [{ id: 'm1', name: 'Menu Pesanan', qty: 1, price: grandTotal, basePrice: grandTotal, itemDiscount: 0 }],
       subtotal: subtotal,
       tax: tax,
+      taxIncluded: taxIncluded,
       serviceCharge: serviceCharge,
       discount: disc,
       total: grandTotal,
