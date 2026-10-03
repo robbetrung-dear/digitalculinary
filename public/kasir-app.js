@@ -354,7 +354,9 @@ window.kasirApp = () => ({
   settlementTotalSoldQty: 0,
   settlementTotalReturnQty: 0,
   loadingSettlement: false,
-  settlementReceiptModal: false,
+    settlementReceiptModal: false,
+    showOwnerReportModal: false,     // ✅ SPRINT 2: modal preview owner report
+    ownerReportText: '',             // ✅ SPRINT 2: teks laporan owner aktif
   currentSettlementRecord: null,
   generateMenuModal: false,
   generateMenuForm: {
@@ -9151,12 +9153,186 @@ try {
     this.showToast(`${countSuccess} supplier berhasil diretur (total ${totalQty} pcs)`, 'success');
   },
 
-  shareSettlementWA(supSummary) {
+     /**
+     * ✅ SPRINT 2: Generate teks laporan owner (format v4)
+     * Input: this.settlementSummary + this.settlementDate
+     * Output: string teks lengkap
+     */
+    buildOwnerReportText() {
+      const summary = Array.isArray(this.settlementSummary) ? this.settlementSummary : [];
+      if (summary.length === 0) {
+        return '⚠️ Tidak ada data konsinyasi untuk dilaporkan.';
+      }
+
+      // Header waktu & tanggal
+      const now = new Date();
+      const tanggal = now.toLocaleDateString('id-ID', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+      const waktu = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
+
+      // Aggregasi total
+      let totalBayar = 0, totalSoldQty = 0, totalReturnQty = 0, nilaiRetur = 0;
+      let omsetKonsinyasi = 0;
+
+      const activeSuppliers = summary.filter(s => Number(s.totalHutang) > 0 || Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0);
+
+      activeSuppliers.forEach(sup => {
+        totalBayar += Number(sup.isPaid ? 0 : sup.totalHutang) || 0;
+        totalSoldQty += Number(sup.soldQty) || 0;
+        totalReturnQty += Number(sup.unsoldQty) || 0;
+        nilaiRetur += Number(sup.unsoldValue) || 0;
+
+        // Omset = sum soldQty × harga jual (approx: ambil dari menu jika ada, fallback buyPrice * 2)
+        const soldItemsArr = Object.values(sup.soldItems || {});
+        soldItemsArr.forEach(it => {
+          const sellPrice = Number(it.sellPrice || it.buyPrice * 2) || 0;
+          omsetKonsinyasi += (Number(it.qty) || 0) * sellPrice;
+        });
+      });
+
+      const modalDibayar = totalBayar;
+      const labaKotor = Math.max(0, omsetKonsinyasi - modalDibayar);
+
+      // Helper: format emoji number
+      const formatNum = (idx) => {
+        if (idx < 9) {
+          const emojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+          return emojis[idx];
+        }
+        return String(idx + 1) + '.';
+      };
+
+      // Helper: format items "Nama(qty), Nama(qty)"
+      const formatItems = (arr) => {
+        if (!arr || arr.length === 0) return '—';
+        return arr
+          .filter(it => Number(it.qty) > 0)
+          .map(it => `${it.name}(${it.qty})`)
+          .join(', ') || '—';
+      };
+
+      // Build detail supplier blocks
+      const supplierBlocks = activeSuppliers.map((sup, idx) => {
+        const soldArr = Object.values(sup.soldItems || {})
+          .map(it => ({ name: it.name, qty: Number(it.qty) || 0 }))
+          .filter(it => it.qty > 0);
+
+        const unsoldArr = (sup.unsoldItems || [])
+          .map(it => ({ name: it.name, qty: Number(it.stock) || 0 }))
+          .filter(it => it.qty > 0);
+
+        const line1 = `${formatNum(idx)} ${String(sup.supplierName || 'Supplier').toUpperCase()}`;
+        const line2 = `✅ Laku: ${sup.soldQty} pcs → Rp ${this.formatNumber(sup.totalHutang || 0)}`;
+        const line3 = formatItems(soldArr);
+        const line4 = `↩️ Retur: ${formatItems(unsoldArr)}`;
+
+        return [line1, line2, line3, line4].join('\n');
+      }).join('\n\n');
+
+      // Susun final text
+      const lines = [
+        '📋 LAPORAN TUTUP KONSINYASI',
+        `${tanggal} · ${waktu}`,
+        '━━━━━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '💰 TOTAL PEMBAYARAN',
+        `Rp ${this.formatNumber(totalBayar)} ke ${activeSuppliers.length} supplier`,
+        '',
+        '📦 RINGKASAN HARI INI',
+        `✅ Terjual: ${totalSoldQty} pcs`,
+        `↩️ Diretur: ${totalReturnQty} pcs`,
+        `🏪 Supplier: ${activeSuppliers.length} aktif`,
+        `📊 Nilai retur: Rp ${this.formatNumber(nilaiRetur)}`,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━━━━━',
+        '📊 DETAIL PER SUPPLIER',
+        '━━━━━━━━━━━━━━━━━━━━━━━━',
+        '',
+        supplierBlocks,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━━━━━',
+        `📈 Omset Konsinyasi: Rp ${this.formatNumber(omsetKonsinyasi)}`,
+        `📉 Modal Dibayar: Rp ${this.formatNumber(modalDibayar)}`,
+        `💵 Laba Kotor: Rp ${this.formatNumber(labaKotor)}`,
+        '━━━━━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '🤖 Auto-report POS Digital Culinary'
+      ];
+
+      return lines.join('\n');
+    },
+
+    /**
+     * ✅ SPRINT 2: Buka modal preview laporan owner
+     */
+    previewOwnerReport() {
+      if (!Array.isArray(this.settlementSummary) || this.settlementSummary.length === 0) {
+        this.showToast('Tidak ada data konsinyasi. Hitung ulang settlement dulu.', 'error');
+        return;
+      }
+      this.ownerReportText = this.buildOwnerReportText();
+      this.showOwnerReportModal = true;
+      this.playSound('notify');
+    },
+
+    /**
+     * ✅ SPRINT 2: Copy teks laporan ke clipboard
+     */
+    async copyOwnerReportText() {
+      try {
+        await navigator.clipboard.writeText(this.ownerReportText || '');
+        this.showToast('Teks laporan dicopy ke clipboard', 'success');
+      } catch (e) {
+        this.showToast('Gagal copy: ' + e.message, 'error');
+      }
+    },
+
+ 
+ shareSettlementWA(supSummary) {
     if (!supSummary) return;
     const phone = supSummary.contact || '';
-    const soldLines = Object.values(supSummary.soldItems || {}).map(i => `- ${i.name}: ${i.qty} pcs x Rp ${this.formatNumber(i.buyPrice)} = Rp ${this.formatNumber(i.total)}`).join('\n');
-    const unsoldLines = (supSummary.unsoldItems || []).map(i => `- ${i.name} (${i.sku}): ${i.stock} pcs`).join('\n');
-    const msg = `*LAPORAN SETTLEMENT KONSINYASI HARIAN*\n${this.customKasirTitle || 'Dapur Kuliner Viral'}\n\nTanggal: ${this.settlementDate}\nSupplier: ${supSummary.supplierName}\n\n*Barang Terjual:*\n${soldLines || '- Tidak ada barang laku'}\n*Total Hutang Dibayar: Rp ${this.formatNumber(supSummary.totalHutang)}*\n\n*Barang Retur/Sisa:*\n${unsoldLines || '- Tidak ada sisa'}\nTotal Sisa: ${supSummary.unsoldQty} pcs\n\nTerima kasih atas kerja samanya! 🙏`;
+    // ✅ SPRINT 2 v2: Format ramping tanpa (Tunai) & status LUNAS
+    const soldItemsArr = Object.values(supSummary.soldItems || {});
+    const soldLines = soldItemsArr.length > 0
+      ? soldItemsArr.map(i => `• ${i.name} : ${i.qty} pcs`).join('\n')
+      : '• Tidak ada penjualan';
+
+    const unsoldArr = (supSummary.unsoldItems || []).filter(i => Number(i.stock) > 0);
+    const unsoldLines = unsoldArr.length > 0
+      ? unsoldArr.map(i => `• ${i.name} : ${i.stock} pcs`).join('\n')
+      : '• Tidak ada retur';
+
+    // Format tanggal Indonesia
+    let tglFormatted = this.settlementDate;
+    try {
+      tglFormatted = new Date(this.settlementDate + 'T00:00:00').toLocaleDateString('id-ID', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+    } catch (e) {}
+
+    const supplierFirstName = String(supSummary.supplierName || 'Supplier').split(' ')[0];
+
+    const msg =
+      `📋 LAPORAN KONSINYASI HARIAN\n` +
+      `${tglFormatted}\n\n` +
+      `Halo Kak ${supplierFirstName} 👋\n` +
+      `Berikut laporan titipan Anda hari ini:\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 BARANG TERJUAL\n` +
+      `${supSummary.soldQty} pcs → Rp ${this.formatNumber(supSummary.totalHutang)}\n\n` +
+      `Detail:\n${soldLines}\n\n` +
+      `↩️ BARANG RETUR\n` +
+      `${supSummary.unsoldQty} pcs → Rp ${this.formatNumber(supSummary.unsoldValue || 0)}\n\n` +
+      `Detail:\n${unsoldLines}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💸 PEMBAYARAN HARI INI\n` +
+      `Rp ${this.formatNumber(supSummary.totalHutang)}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Terima kasih atas kerja samanya!\n` +
+      `Besok titipan lagi ya 🙏\n\n` +
+      `_POS Digital Culinary_`;
+
     this.sendWhatsAppNotification(phone, msg, 'settlement');
   },
 
