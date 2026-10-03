@@ -2983,9 +2983,33 @@
             </div>
           </div>
 
-          <!-- TAMPILAN B: JURNAL UMUM -->
-          <div x-show="accountingTab === 'journal'" class="space-y-4">
-            <!-- Empty state kalau tidak ada jurnal -->
+                <!-- TAMPILAN B: JURNAL UMUM -->
+      <div x-show="accountingTab === 'journal'" class="space-y-4">
+
+        <!-- ✅ SPRINT 2: Filter date bar -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200">
+          <div class="flex items-center gap-2 text-xs">
+            <i class="fa-solid fa-filter text-stone-500"></i>
+            <span class="font-bold text-stone-700">Filter Tanggal:</span>
+            <span class="text-stone-400 font-mono" x-text="getAccountingJournal().length + ' jurnal'"></span>
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <input 
+              type="date" 
+              x-model="journalFilterDate"
+              class="min-h-[40px] px-3 rounded-xl border border-stone-300 bg-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none w-full sm:w-auto" />
+            <button 
+              type="button" 
+              x-show="journalFilterDate"
+              @click="journalFilterDate = ''"
+              class="min-h-[40px] px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap">
+              <i class="fa-solid fa-xmark text-[10px]"></i>
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty state kalau tidak ada jurnal -->
             <div x-show="getAccountingJournal().length === 0" class="py-10 text-center space-y-2 bg-stone-50 rounded-2xl border border-dashed border-stone-300">
               <i class="fa-solid fa-book text-stone-300 text-3xl"></i>
               <p class="font-bold text-stone-700 text-xs">Belum ada jurnal tercatat</p>
