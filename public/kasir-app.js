@@ -9123,11 +9123,32 @@ try {
     }
   },
 
-    async returSemuaBarang() {
-    if (this.settlementTotalReturnQty <= 0) {
-      this.showToast('Tidak ada barang sisa untuk diretur', 'notify');
-      return;
-    }
+        async returSemuaBarang() {
+      if (this.settlementTotalReturnQty <= 0) {
+        this.showToast('Tidak ada barang sisa untuk diretur', 'notify');
+        return;
+      }
+
+      // ✅ FIX #4: Simpan snapshot retur SEBELUM dieksekusi
+      // Karena setelah retur, unsoldItems di state jadi 0, laporan historis butuh snapshot
+      try {
+        const snapshotKey = `dapur_retur_snapshot_${this.settlementDate}`;
+        const snapshot = {
+          tanggal: this.settlementDate,
+          capturedAt: Date.now(),
+          suppliers: (this.settlementSummary || []).map(s => ({
+            supplierId: s.supplierId,
+            supplierName: s.supplierName,
+            unsoldQty: Number(s.unsoldQty) || 0,
+            unsoldValue: Number(s.unsoldValue) || 0,
+            unsoldItems: JSON.parse(JSON.stringify(s.unsoldItems || []))
+          }))
+        };
+        localStorage.setItem(snapshotKey, JSON.stringify(snapshot));
+        console.log('[RETUR-SNAPSHOT] Saved:', snapshotKey, snapshot.suppliers.length, 'suppliers');
+      } catch (e) {
+        console.warn('[RETUR-SNAPSHOT] Failed:', e);
+      }
 
     // ✅ FIX BUG-8: Filter hanya supplier yang benar-benar ada di suppliersList
     const validSupplierIds = new Set((this.suppliersList || []).map(s => s.id).filter(Boolean));
@@ -9182,6 +9203,19 @@ try {
         } catch (e) {}
       }
 
+            // ✅ FIX #4b: Baca snapshot retur historis (jika ada) untuk tampilkan retur yang BENAR-BENAR terjadi
+      let returSnapshot = null;
+      try {
+        const snapKey = `dapur_retur_snapshot_${this.settlementDate}`;
+        const raw = localStorage.getItem(snapKey);
+        if (raw) {
+          returSnapshot = JSON.parse(raw);
+          console.log('[REPORT] Menggunakan retur snapshot dari:', new Date(returSnapshot.capturedAt).toLocaleString('id-ID'));
+        }
+      } catch (e) {
+        console.warn('[REPORT] Snapshot read error:', e);
+      }
+
       // Aggregasi total
       let totalBayar = 0, totalSoldQty = 0, totalReturnQty = 0, nilaiRetur = 0;
       let omsetKonsinyasi = 0;
@@ -9196,8 +9230,19 @@ try {
         totalBayar += soldValue;
 
         totalSoldQty += Number(sup.soldQty) || 0;
-        totalReturnQty += Number(sup.unsoldQty) || 0;
-        nilaiRetur += Number(sup.unsoldValue) || 0;
+
+        // ✅ FIX #4c: Pakai snapshot retur kalau ada (historis), fallback ke state saat ini
+        let returQty = Number(sup.unsoldQty) || 0;
+        let returValue = Number(sup.unsoldValue) || 0;
+        if (returSnapshot) {
+          const snapSup = (returSnapshot.suppliers || []).find(x => x.supplierId === sup.supplierId);
+          if (snapSup) {
+            returQty = Number(snapSup.unsoldQty) || 0;
+            returValue = Number(snapSup.unsoldValue) || 0;
+          }
+        }
+        totalReturnQty += returQty;
+        nilaiRetur += returValue;
 
         // ✅ FIX #3: Omset = sum qty × harga jual riil dari menuList
         soldItemsArr.forEach(it => {
@@ -9234,9 +9279,20 @@ try {
           .map(it => ({ name: it.name, qty: Number(it.qty) || 0 }))
           .filter(it => it.qty > 0);
 
-        const unsoldArr = (sup.unsoldItems || [])
-          .map(it => ({ name: it.name, qty: Number(it.stock) || 0 }))
-          .filter(it => it.qty > 0);
+                // ✅ FIX #4d: unsoldArr dari snapshot historis kalau ada
+        let unsoldArr = [];
+        if (returSnapshot) {
+          const snapSup = (returSnapshot.suppliers || []).find(x => x.supplierId === sup.supplierId);
+          if (snapSup && Array.isArray(snapSup.unsoldItems)) {
+            unsoldArr = snapSup.unsoldItems
+              .map(it => ({ name: it.name, qty: Number(it.stock) || 0 }))
+              .filter(it => it.qty > 0);
+          }
+        } else {
+          unsoldArr = (sup.unsoldItems || [])
+            .map(it => ({ name: it.name, qty: Number(it.stock) || 0 }))
+            .filter(it => it.qty > 0);
+        }
 
         // ✅ FIX #2b: nominal laku per supplier = sum soldItems.total (bukan totalHutang)
         const soldValueSupplier = soldArr.length > 0
