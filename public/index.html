@@ -2313,6 +2313,13 @@
             <i class="fa-solid fa-shield-halved text-xs"></i>
             <span>9. Keamanan Password</span>
           </button>
+          <button 
+            @click="adminActiveTab = 'owner_wa'" 
+            :class="adminActiveTab === 'owner_wa' ? 'border-b-2 border-brand-600 text-brand-600 bg-brand-50/50' : 'hover:text-stone-900'" 
+            class="py-2.5 px-3 sm:px-3.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap transition">
+            <i class="fa-brands fa-whatsapp text-xs text-emerald-500"></i>
+            <span>10. Nomor WA Owner</span>
+          </button>
         </div>
 
         <!-- Tombol Gulir Kanan -->
@@ -4163,6 +4170,75 @@ git push -u origin main</pre>
           </div>
         </div>
 
+        <!-- TAB 10: NOMOR WA OWNER (NOTIFIKASI EOD KONSINYASI) -->
+        <div x-show="adminActiveTab === 'owner_wa'" class="space-y-5">
+          <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+            <h4 class="font-extrabold text-stone-900 text-sm flex items-center gap-2">
+              <i class="fa-brands fa-whatsapp text-emerald-600 text-base"></i>
+              <span>Nomor WA Owner (Notifikasi EOD Konsinyasi)</span>
+            </h4>
+            <p class="text-xs text-stone-600 mt-1">Laporan tutup konsinyasi akan dikirim otomatis ke nomor di bawah (maks. 5 nomor). Perubahan langsung berlaku tanpa perlu redeploy.</p>
+          </div>
+
+          <div class="p-5 rounded-2xl border border-stone-200 bg-white space-y-4">
+            <h5 class="text-xs font-black uppercase text-stone-800 tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-mobile-screen-button text-emerald-600"></i>
+              <span>Daftar Nomor WA Penerima Laporan</span>
+            </h5>
+
+            <div class="space-y-2.5">
+              <template x-for="(num, idx) in (siteConfig.ownerWaNumbers || [])" :key="'owa-'+idx">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center flex-shrink-0" x-text="idx+1"></span>
+                  <input 
+                    type="tel"
+                    inputmode="numeric"
+                    x-model="siteConfig.ownerWaNumbers[idx]"
+                    :placeholder="'62xxxxxxxxxx' + (idx === 0 ? ' — utama' : '')"
+                    class="flex-1 h-11 px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+                  <button 
+                    type="button"
+                    @click="siteConfig.ownerWaNumbers.splice(idx, 1); siteConfig.ownerWaNumbers.push('');"
+                    :disabled="(siteConfig.ownerWaNumbers || []).filter(n => String(n || '').trim()).length <= 1"
+                    :class="(siteConfig.ownerWaNumbers || []).filter(n => String(n || '').trim()).length <= 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-red-50 hover:text-red-600 cursor-pointer'"
+                    class="w-10 h-11 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center transition flex-shrink-0"
+                    title="Hapus nomor ini">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-stone-100">
+              <div class="text-[11px] text-stone-500">
+                Aktif: <strong class="text-stone-800" x-text="(siteConfig.ownerWaNumbers || []).filter(n => String(n || '').trim()).length"></strong> / 5 nomor
+              </div>
+              <button 
+                type="button"
+                @click="if ((siteConfig.ownerWaNumbers || []).length < 5) siteConfig.ownerWaNumbers.push('');"
+                :disabled="(siteConfig.ownerWaNumbers || []).length >= 5"
+                :class="(siteConfig.ownerWaNumbers || []).length >= 5 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-emerald-100 cursor-pointer'"
+                class="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+                <span>Tambah Slot Nomor</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 text-xs space-y-1.5">
+            <p class="font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>Catatan Penting:</span>
+            </p>
+            <ul class="list-disc list-inside space-y-1 leading-relaxed">
+              <li>Format nomor: <code class="font-mono bg-white px-1 rounded">62xxxxxxxxxx</code> (tanpa tanda + atau spasi)</li>
+              <li>Perubahan langsung berlaku untuk pengiriman berikutnya — tidak perlu redeploy</li>
+              <li>Kuota Fonnte: setiap nomor dihitung 1 pesan. 3 nomor = 3 pesan per laporan</li>
+              <li>Kalau semua dikosongkan, sistem otomatis fallback ke env var Cloudflare</li>
+            </ul>
+          </div>
+        </div>
+
       </div>
 
       <!-- Modal Footer -->
@@ -5203,6 +5279,7 @@ git push -u origin main</pre>
           kasirTitle: 'Kasir Pintar',
           kasirSubtitle: 'Dapur Kuliner Viral',
                     supervisorPin: '211211',
+                    ownerWaNumbers: ['', '', '', '', ''],
           
           // PENGATURAN PEMBAYARAN, QRIS & GATEWAY
           paymentConfig: {
