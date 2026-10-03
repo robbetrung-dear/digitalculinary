@@ -790,6 +790,25 @@
               class="h-10 px-3 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-800 shadow-2xs focus:ring-2 focus:ring-brand-500" 
             />
 
+            <!-- ✅ Batch B: Filter Tanggal -->
+            <div class="flex items-center gap-1">
+              <input 
+                type="date" 
+                x-model="journalFilterDate" 
+                title="Filter tanggal jurnal"
+                class="h-10 px-3 rounded-xl border border-stone-300 bg-white text-xs font-mono text-stone-800 shadow-2xs focus:ring-2 focus:ring-brand-500" 
+              />
+              <span x-show="journalFilterDate" class="text-[10px] font-mono text-stone-500 whitespace-nowrap" x-text="filteredJurnalCount + ' jr'"></span>
+              <button 
+                type="button"
+                x-show="journalFilterDate"
+                @click="journalFilterDate = ''"
+                class="h-10 w-10 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center justify-center cursor-pointer"
+                title="Clear filter tanggal">
+                <i class="fa-solid fa-xmark text-[11px]"></i>
+              </button>
+            </div>
+
             <!-- Filter Akun -->
             <select 
               x-model="jurnalFilterAkun" 
@@ -849,11 +868,7 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-stone-100 font-medium">
-                <template x-for="jrn in jurnalList.filter(j => {
-                  const matchAkun = (jurnalFilterAkun === 'all' || j.debitCode === jurnalFilterAkun || j.creditCode === jurnalFilterAkun);
-                  const matchSearch = (!jurnalSearch || j.desc.toLowerCase().includes(jurnalSearch.toLowerCase()) || j.ref.toLowerCase().includes(jurnalSearch.toLowerCase()) || j.noEntry.toLowerCase().includes(jurnalSearch.toLowerCase()));
-                  return matchAkun && matchSearch;
-                })" :key="jrn.id">
+                <template x-for="jrn in filteredJurnalList" :key="jrn.id">
                   <tr class="hover:bg-stone-50/70 transition">
                     <td class="py-3.5 px-4 sm:px-6 font-mono text-stone-800" x-text="jrn.date"></td>
                     <td class="py-3.5 px-3 font-mono font-bold text-brand-700" x-text="jrn.noEntry"></td>
@@ -909,8 +924,8 @@
             <p class="text-xs sm:text-sm text-stone-500 font-medium">Mutasi rinci debit & kredit beserta saldo berjalan per akun.</p>
           </div>
 
-          <!-- Dropdown Pilih Akun -->
-          <div class="flex items-center gap-2">
+          <!-- Dropdown Pilih Akun + Filter Tanggal -->
+          <div class="flex items-center gap-2 flex-wrap">
             <label class="text-xs font-bold text-stone-500 uppercase">Pilih Akun:</label>
             <select 
               x-model="ledgerAkun" 
@@ -919,6 +934,21 @@
                 <option :value="acc.code" x-text="acc.code + ' - ' + acc.name"></option>
               </template>
             </select>
+            <!-- ✅ Batch B: Filter Tanggal Ledger -->
+            <input 
+              type="date" 
+              x-model="ledgerFilterDate" 
+              title="Filter tanggal mutasi"
+              class="h-10 px-3 rounded-xl border border-stone-300 bg-white text-xs font-mono text-stone-800 shadow-2xs focus:ring-2 focus:ring-brand-500" 
+            />
+            <button 
+              type="button"
+              x-show="ledgerFilterDate"
+              @click="ledgerFilterDate = ''"
+              class="h-10 w-10 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs flex items-center justify-center cursor-pointer"
+              title="Clear filter tanggal">
+              <i class="fa-solid fa-xmark text-[11px]"></i>
+            </button>
           </div>
         </div>
 
@@ -968,7 +998,7 @@
                 </tr>
 
                 <!-- Mutasi Jurnal yang relevan dengan ledgerAkun -->
-                <template x-for="(t, idx) in (ledgerData.transactions || [])" :key="idx">
+                <template x-for="(t, idx) in filteredLedgerTransactions" :key="idx">
                   <tr class="hover:bg-stone-50/70 transition">
                     <td class="py-3.5 px-4 sm:px-6 font-mono text-stone-800" x-text="t.date"></td>
                     <td class="py-3.5 px-4 font-mono text-brand-700 font-bold" x-text="t.ref"></td>
