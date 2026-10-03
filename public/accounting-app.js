@@ -138,8 +138,10 @@ window.accountingApp = function() {
     tahunAktif: 2026,
     coaFilterType: 'all',
     jurnalFilterAkun: 'all',
-    jurnalSearch: '',
-        ledgerAkun: '1001',
+        jurnalSearch: '',
+    journalFilterDate: '',  // ✅ Batch B: filter tanggal Jurnal Umum (YYYY-MM-DD)
+    ledgerFilterDate: '',   // ✅ Batch B: filter tanggal Ledger (YYYY-MM-DD)
+    ledgerAkun: '1001',
     _ledgerMapByMonth: {},  // ✅ BUG-5: cache closing per akun dari /accounting/ledger
 
     // Trial/Live State
@@ -859,6 +861,56 @@ window.accountingApp = function() {
      * GET /accounting/journal/{bulan}
      * Memuat daftar jurnal real dari Firebase untuk periode tertentu
      */
+        /**
+     * ✅ Batch B: Filtered jurnal — reaktif terhadap akun + search + tanggal
+     */
+    get filteredJurnalList() {
+      const list = Array.isArray(this.jurnalList) ? this.jurnalList : [];
+      const filterAkun = String(this.jurnalFilterAkun || 'all');
+      const search = String(this.jurnalSearch || '').toLowerCase().trim();
+      const filterDate = String(this.journalFilterDate || '').trim();
+
+      return list.filter(j => {
+        if (!j) return false;
+        // Filter akun
+        if (filterAkun !== 'all') {
+          const matchDebit = String(j.debitCode || '') === filterAkun;
+          const matchCredit = String(j.creditCode || '') === filterAkun;
+          if (!matchDebit && !matchCredit) return false;
+        }
+        // Filter tanggal
+        if (filterDate) {
+          const jDate = String(j.date || '').slice(0, 10);
+          if (jDate !== filterDate) return false;
+        }
+        // Filter search
+        if (search) {
+          const desc = String(j.desc || '').toLowerCase();
+          const ref = String(j.ref || '').toLowerCase();
+          const noEntry = String(j.noEntry || '').toLowerCase();
+          if (!desc.includes(search) && !ref.includes(search) && !noEntry.includes(search)) return false;
+        }
+        return true;
+      });
+    },
+
+    get filteredJurnalCount() {
+      return this.filteredJurnalList.length;
+    },
+
+    /**
+     * ✅ Batch B: Filtered ledger transactions — reaktif terhadap ledgerFilterDate
+     */
+    get filteredLedgerTransactions() {
+      const list = Array.isArray(this.ledgerData?.transactions) ? this.ledgerData.transactions : [];
+      const filterDate = String(this.ledgerFilterDate || '').trim();
+      if (!filterDate) return list;
+      return list.filter(t => {
+        const tDate = String(t.date || '').slice(0, 10);
+        return tDate === filterDate;
+      });
+    },
+
     async loadJournal(bulan) {
       const targetBulan = bulan || this.bulanAktif;
       try {
