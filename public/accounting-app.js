@@ -308,38 +308,41 @@ window.accountingApp = function() {
     // ------------------------------------------------------------------------
     // 1. INITIALIZATION (init)
     // ------------------------------------------------------------------------
-        async init() {
+            async init() {
       console.log('[ACCT-APP] init() — PIN gate check...');
 
-      // Load PIN dari Firebase (fallback: default 211211)
+      // ✅ Load PIN dari Firebase — pakai fallback URL hostname (sama seperti loadSiteName)
       try {
         await this.initFirebaseConfig();
-        if (this._fbConfig?.databaseURL) {
-          const fbUrl = this._fbConfig.databaseURL.replace(/\/$/, '');
+        let fbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
+        if (!fbUrl && typeof window !== 'undefined' && window.location) {
+          const host = window.location.hostname || '';
+          if (host.includes('digitalculinary')) {
+            fbUrl = 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+          } else if (host.includes('dapurkulinerviral')) {
+            fbUrl = 'https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app';
+          }
+        }
+        if (fbUrl) {
           const res = await fetch(`${fbUrl}/site_config/supervisorPin.json`);
           if (res.ok) {
             const pinVal = await res.json();
-            if (pinVal) this.supervisorPin = String(pinVal).trim();
+            if (pinVal) {
+              this.supervisorPin = String(pinVal).trim();
+              console.log('[ACCT-APP] ✅ PIN loaded from Firebase:', this.supervisorPin.slice(0,2) + '****');
+            }
+          } else {
+            console.warn('[ACCT-APP] PIN fetch failed:', res.status, '— pakai fallback 211211');
           }
         }
       } catch (e) {
         console.warn('[ACCT-APP] Load PIN note:', e);
       }
 
-      // Cek session PIN (TTL 30 menit)
-      if (!this._checkFinancePinSession()) {
-        this.showFinancePinModal = true;
-        return;
-      }
-
-      await this._initApp();
-    },
-
-    _checkFinancePinSession() {
-      try {
-        const lastTs = Number(sessionStorage.getItem('dapur_finance_pin_ts') || 0);
-        return lastTs > 0 && (Date.now() - lastTs) < 30 * 60 * 1000;
-      } catch (e) { return false; }
+      // ✅ Selalu tampilkan modal PIN — no session cache
+      this.showFinancePinModal = true;
+      this.financePinInput = '';
+      this.financePinError = '';
     },
 
     async submitFinancePin() {
@@ -354,7 +357,7 @@ window.accountingApp = function() {
         this.financePinInput = '';
         return;
       }
-      try { sessionStorage.setItem('dapur_finance_pin_ts', String(Date.now())); } catch (e) {}
+      // ✅ No session cache — PIN selalu diminta saat refresh/close tab
       this.showFinancePinModal = false;
       this.financePinError = '';
       this.financePinInput = '';
