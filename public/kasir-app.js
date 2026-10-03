@@ -4223,10 +4223,27 @@ try {
         }
       }
 
-      if (item) {
+            if (item) {
         item.stock = numStok;
         item.stok = numStok;
         item.purchasePrice = newPurchasePrice;
+      }
+
+      // ✅ SPRINT 2 FIX: Catat log riwayat inventory (sebelumnya hanya dummy)
+      try {
+        this.addInventoryLog(
+          item ? item.name : itemId,
+          oldStok,
+          numStok,
+          item ? (item.unit || 'unit') : 'unit',
+          changeType === 'purchase' ? 'Restock Supplier'
+            : changeType === 'waste' ? 'Rusak / Expired'
+            : changeType === 'opname' ? 'Stok Opname'
+            : 'Penyesuaian',
+          keterangan || 'Update stok'
+        );
+      } catch (e) {
+        console.warn('[INV-LOG] Failed to add log:', e);
       }
 
       try {
@@ -9106,7 +9123,21 @@ try {
     };
 
     try {
-            // 1. ✅ FIX BUG-9 + BUG-13: Update stok SETIAP item ke 0 di Firebase LANGSUNG
+      
+      // ✅ SPRINT 2 FIX: Refresh harga retur dari inventory LIVE (bukan cache settlementSummary)
+      // Root cause: user bisa koreksi harga beli setelah load settlementSummary
+      supSummary.unsoldItems = (supSummary.unsoldItems || []).map(it => {
+        const invLive = this.inventoryList.find(x => x.id === it.id);
+        const livePrice = invLive ? Number(invLive.purchasePrice || 0) : Number(it.price || 0);
+        return {
+          ...it,
+          price: livePrice,
+          totalValue: (Number(it.stock) || 0) * livePrice
+        };
+      });
+      supSummary.unsoldValue = supSummary.unsoldItems.reduce((s, it) => s + (Number(it.totalValue) || 0), 0);
+       
+     // 1. ✅ FIX BUG-9 + BUG-13: Update stok SETIAP item ke 0 di Firebase LANGSUNG
       //    WAJIB update stock, stok, DAN seluruh object biar tidak stale
       for (const it of supSummary.unsoldItems) {
         const inv = this.inventoryList.find(i => i.id === it.id);
