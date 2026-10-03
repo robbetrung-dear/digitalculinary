@@ -49,7 +49,31 @@ export async function onRequest(context) {
   const dbUrl = (env.FIREBASE_DATABASE_URL || "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app").replace(/\/$/, "");
   const apiKey = env.FIREBASE_API_KEY || "";
   const auth = apiKey ? `?auth=${encodeURIComponent(apiKey)}` : '';
-
+      // ✅ Multi-owner WA: baca dari Firebase dulu, fallback ke env var
+    let ownerWaRaw = '';
+    try {
+      const ownersRes = await fetch(`${dbUrl}/site_config/ownerWaNumbers.json${auth}`);
+      if (ownersRes.ok) {
+        const ownersData = await ownersRes.json();
+        if (Array.isArray(ownersData) && ownersData.length > 0) {
+          ownerWaRaw = ownersData.map(n => String(n).trim()).filter(Boolean).join(',');
+          console.log('[EOD-REPORT] Owners from Firebase:', ownersData.length, 'numbers');
+        } else if (typeof ownersData === 'string' && ownersData.trim()) {
+          ownerWaRaw = ownersData.trim();
+          console.log('[EOD-REPORT] Owner from Firebase (string):', ownerWaRaw.slice(0, 8) + '****');
+        }
+      }
+    } catch (e) {
+      console.warn('[EOD-REPORT] Fetch ownerWaNumbers note:', e.message);
+    }
+    // Fallback ke env var kalau Firebase kosong
+    if (!ownerWaRaw) {
+      ownerWaRaw = String(env.OWNER_WA_NUMBER || '').trim();
+      console.log('[EOD-REPORT] Owner from env var (fallback)');
+    }
+    const ownerWaList = ownerWaRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const ownerWa = ownerWaList.join(',');
+    console.log('[EOD-REPORT] Final owners:', ownerWaList.length, 'recipients');
   const logKey = `eod_${settlementDate || 'unknown'}_${Date.now()}`;
   const logPayload = {
     at: Date.now(),
