@@ -6780,8 +6780,7 @@ try {
           status: j.status || 'approved'
         };
       })
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-      .slice(0, 20); // Tampilkan max 20 terbaru
+            .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   },
 
   // -------------------------------------------------------------------------
