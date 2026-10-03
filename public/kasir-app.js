@@ -414,7 +414,9 @@ window.kasirApp = () => ({
       { acc: '', debit: 0, credit: 0 }
     ]
   },
-  journalCategories: [
+      journalFilterDate: '',  // ✅ SPRINT 2: filter tanggal jurnal (YYYY-MM-DD, kosong = semua)
+
+    journalCategories: [
     { id: 'pembelian', name: 'Pembelian Bahan/Aset', icon: 'fa-truck-loading' },
     { id: 'operasional', name: 'Biaya Operasional', icon: 'fa-file-invoice-dollar' },
     { id: 'modal', name: 'Setoran Modal', icon: 'fa-hand-holding-dollar' },
@@ -6721,18 +6723,25 @@ try {
     };
   },
 
-    getAccountingJournal() {
+        getAccountingJournal() {
     // ✅ FIX: Fetch real dari state, fallback ke empty array (bukan dummy)
     const list = Array.isArray(this.accountingJournalList) ? this.accountingJournalList : [];
     if (list.length === 0) return [];
 
     // Transform ke format yang ditampilkan di template
     const today = new Date().toLocaleDateString('id-ID');
+    const filterDate = String(this.journalFilterDate || '').trim();  // ✅ SPRINT 2
     return list
       .filter(j => {
         // Filter hanya approved/posted (biar tidak tampil pending/draft)
         const s = String(j.status || '').toLowerCase();
-        return s === 'approved' || s === 'posted';
+        if (s !== 'approved' && s !== 'posted') return false;
+        // ✅ SPRINT 2: filter tanggal jika diisi
+        if (filterDate) {
+          const jDate = String(j.date || '').slice(0, 10);
+          if (jDate !== filterDate) return false;
+        }
+        return true;
       })
       .map(j => {
         const lines = Array.isArray(j.lines) ? j.lines : [];
