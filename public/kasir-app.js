@@ -9734,18 +9734,9 @@ try {
      * ✅ PIN Accounting: minta PIN untuk akses modul akuntansi di kasir
      * Cache session 30 menit via sessionStorage
      */
-    async requestFinancePin() {
-      try {
-        const lastTs = Number(sessionStorage.getItem('dapur_finance_pin_ts') || 0);
-        if (lastTs > 0 && (Date.now() - lastTs) < 30 * 60 * 1000) {
-          return true;
-        }
-      } catch (e) {}
-
+        async requestFinancePin() {
+      // ✅ Selalu minta PIN — no cache
       const ok = await this.requestSupervisorPin('AKSES AKUNTANSI', 'Modul Keuangan');
-      if (ok) {
-        try { sessionStorage.setItem('dapur_finance_pin_ts', String(Date.now())); } catch (e) {}
-      }
       return ok;
     },
 
