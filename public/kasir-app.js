@@ -9730,9 +9730,43 @@ try {
 
   // -------------------------------------------------------------------------
 
-  logoutKasir() {
-    this.confirmLogoutModal = true;
-  },
+      /**
+     * ✅ PIN Accounting: minta PIN untuk akses modul akuntansi di kasir
+     * Cache session 30 menit via sessionStorage
+     */
+    async requestFinancePin() {
+      try {
+        const lastTs = Number(sessionStorage.getItem('dapur_finance_pin_ts') || 0);
+        if (lastTs > 0 && (Date.now() - lastTs) < 30 * 60 * 1000) {
+          return true;
+        }
+      } catch (e) {}
+
+      const ok = await this.requestSupervisorPin('AKSES AKUNTANSI', 'Modul Keuangan');
+      if (ok) {
+        try { sessionStorage.setItem('dapur_finance_pin_ts', String(Date.now())); } catch (e) {}
+      }
+      return ok;
+    },
+
+    /**
+     * ✅ PIN Accounting: navigasi tab dengan gate PIN untuk akuntansi
+     */
+    async navigateToTab(tab) {
+      if (tab === 'akuntansi') {
+        const ok = await this.requestFinancePin();
+        if (!ok) {
+          this.showToast('Akses akuntansi dibatalkan', 'notify');
+          return;
+        }
+      }
+      this.activeTab = tab;
+      this.mobileMenuOpen = false;
+    },
+
+    logoutKasir() {
+      this.confirmLogoutModal = true;
+    },
 
   confirmLogout() {
     try {
