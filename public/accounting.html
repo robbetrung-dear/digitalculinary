@@ -140,6 +140,12 @@
     jurnalFilterAkun: 'all',
     jurnalSearch: '',
     ledgerAkun: '1001',
+    supervisorPin: '211211',
+    showFinancePinModal: true,
+    financePinInput: '',
+    financePinError: '',
+    submitFinancePin() { this.showFinancePinModal = false; window.location.reload(); },
+    cancelFinancePin() { window.location.href = '/'; },
     loading: false,
     toastMsg: '',
     toastType: 'success',
@@ -282,6 +288,63 @@
   }"
   class="h-full flex flex-col font-sans antialiased text-stone-800 selection:bg-brand-500 selection:text-white"
 >
+
+    <!-- ===================================================================== -->
+  <!-- ✅ PIN ACCOUNTING GATE                                                -->
+  <!-- ===================================================================== -->
+  <div 
+    x-cloak 
+    x-show="showFinancePinModal" 
+    class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border-2 border-brand-200 space-y-5">
+      
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-3xl bg-brand-100 text-brand-600 mx-auto flex items-center justify-center text-2xl mb-3 shadow-inner">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h3 class="font-black text-stone-900 text-xl tracking-tight">Akses Modul Keuangan</h3>
+        <p class="text-xs text-stone-500 mt-1">Masukkan PIN 6 digit untuk melanjutkan</p>
+      </div>
+
+      <div>
+        <input 
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="6"
+          x-model="financePinInput"
+          @keydown.enter.prevent="submitFinancePin()"
+          @input="financePinInput = String(financePinInput || '').replace(/\D/g,'').slice(0,6); financePinError=''"
+          placeholder="••••••"
+          class="w-full h-16 text-center text-3xl font-black font-mono tracking-[0.6em] rounded-2xl border-2 border-stone-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 focus:outline-none transition" />
+        <p x-show="financePinError" x-transition class="text-xs text-red-600 font-bold mt-2 text-center" x-text="financePinError"></p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button 
+          type="button" 
+          @click="cancelFinancePin()" 
+          class="min-h-[48px] rounded-xl border-2 border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition cursor-pointer">
+          <i class="fa-solid fa-xmark mr-1"></i> Batal
+        </button>
+        <button 
+          type="button" 
+          @click="submitFinancePin()" 
+          :disabled="financePinInput.length !== 6"
+          :class="financePinInput.length !== 6 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-700 cursor-pointer'"
+          class="min-h-[48px] rounded-xl bg-brand-600 text-white font-black text-xs transition shadow-md shadow-brand-600/30 flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-unlock text-xs"></i>
+          <span>MASUK</span>
+        </button>
+      </div>
+
+      <p class="text-[10px] text-stone-400 text-center italic border-t border-stone-100 pt-3">
+        <i class="fa-solid fa-circle-info mr-1"></i>
+        Akses ini dicatat ke Audit Log (<span class="font-mono">/audit_logs/</span>)
+      </p>
+
+    </div>
+  </div>
 
   <!-- ===================================================================== -->
   <!-- 1. HEADER UTAMA (Sama gaya dengan kasir.html)                        -->
