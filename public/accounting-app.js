@@ -132,6 +132,11 @@ window.accountingApp = function() {
     reportSubTab: 'pl',
     mobileMenuOpen: false,
     siteName: 'Dapur Kuliner Viral',  // fallback, akan di-load dari site_config/brandName
+        // ✅ PIN Accounting gate
+    supervisorPin: '211211',          // default, overwrite dari Firebase saat init
+    showFinancePinModal: false,       // modal PIN aktif
+    financePinInput: '',
+    financePinError: '',
     
     // Filter & Periode
     bulanAktif: '2026-09',
@@ -303,7 +308,67 @@ window.accountingApp = function() {
     // ------------------------------------------------------------------------
     // 1. INITIALIZATION (init)
     // ------------------------------------------------------------------------
-    async init() {
+        async init() {
+      console.log('[ACCT-APP] init() — PIN gate check...');
+
+      // Load PIN dari Firebase (fallback: default 211211)
+      try {
+        await this.initFirebaseConfig();
+        if (this._fbConfig?.databaseURL) {
+          const fbUrl = this._fbConfig.databaseURL.replace(/\/$/, '');
+          const res = await fetch(`${fbUrl}/site_config/supervisorPin.json`);
+          if (res.ok) {
+            const pinVal = await res.json();
+            if (pinVal) this.supervisorPin = String(pinVal).trim();
+          }
+        }
+      } catch (e) {
+        console.warn('[ACCT-APP] Load PIN note:', e);
+      }
+
+      // Cek session PIN (TTL 30 menit)
+      if (!this._checkFinancePinSession()) {
+        this.showFinancePinModal = true;
+        return;
+      }
+
+      await this._initApp();
+    },
+
+    _checkFinancePinSession() {
+      try {
+        const lastTs = Number(sessionStorage.getItem('dapur_finance_pin_ts') || 0);
+        return lastTs > 0 && (Date.now() - lastTs) < 30 * 60 * 1000;
+      } catch (e) { return false; }
+    },
+
+    async submitFinancePin() {
+      const pin = String(this.financePinInput || '').trim();
+      if (pin.length !== 6) {
+        this.financePinError = '⚠️ PIN harus 6 digit';
+        return;
+      }
+      const validPin = String(this.supervisorPin || '211211').trim();
+      if (pin !== validPin) {
+        this.financePinError = '❌ PIN salah. Coba lagi.';
+        this.financePinInput = '';
+        return;
+      }
+      try { sessionStorage.setItem('dapur_finance_pin_ts', String(Date.now())); } catch (e) {}
+      this.showFinancePinModal = false;
+      this.financePinError = '';
+      this.financePinInput = '';
+      await this._initApp();
+    },
+
+    cancelFinancePin() {
+      this.showFinancePinModal = false;
+      this.financePinInput = '';
+      this.financePinError = '';
+      window.location.href = '/';
+    },
+
+    async _initApp() {
       console.log('[ACCT-APP] Initializing accounting application...');
       
       // 1. Cek sesi admin / manajemen
