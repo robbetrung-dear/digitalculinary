@@ -92,8 +92,11 @@ export async function onRequest(context) {
     const provider = String(env.WA_PROVIDER || 'fonnte').toLowerCase();
     logPayload.provider = provider;
 
-    const ownerWa = String(env.OWNER_WA_NUMBER || '').trim();
-    if (!ownerWa) {
+    // ✅ Support multi-recipient (comma-separated)
+const ownerWaRaw = String(env.OWNER_WA_NUMBER || '').trim();
+const ownerWaList = ownerWaRaw.split(',').map(s => s.trim()).filter(Boolean);
+const ownerWa = ownerWaList.join(',');  // Fonnte accept comma-separated target
+if (!ownerWa) {
       logPayload.status = 'failed_no_owner';
       await fetch(`${dbUrl}/notifications_log/${logKey}.json${auth}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
