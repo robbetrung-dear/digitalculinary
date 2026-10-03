@@ -428,7 +428,7 @@
 
       <button 
         type="button"
-        @click="activeTab = 'akuntansi'; mobileMenuOpen = false"
+        @click="navigateToTab('akuntansi')"
         :class="activeTab === 'akuntansi' ? 'bg-emerald-600 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'"
         class="w-full min-h-[48px] px-3.5 rounded-xl flex items-center gap-3 text-sm transition text-left cursor-pointer">
         <i class="fa-solid fa-calculator w-5 text-center"></i>
@@ -534,7 +534,7 @@
         <!-- Menu: Akuntansi -->
         <button 
           type="button"
-          @click="activeTab = 'akuntansi'"
+          @click="navigateToTab('akuntansi')"
           :class="activeTab === 'akuntansi' ? 'bg-emerald-600 text-white font-bold shadow-sm shadow-emerald-600/30' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900 font-semibold'"
           class="w-full min-h-[48px] px-3.5 rounded-2xl flex items-center gap-3 text-sm transition-all duration-150 text-left cursor-pointer group">
           <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-colors" :class="activeTab === 'akuntansi' ? 'bg-emerald-700 text-white' : 'bg-stone-100 text-stone-500 group-hover:bg-stone-200'">
