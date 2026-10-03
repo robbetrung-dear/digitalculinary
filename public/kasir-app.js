@@ -9005,20 +9005,76 @@ try {
     }
   },
 
-  async bayarSemuaSupplier(pm = 'cash') {
-    if (this.settlementTotalHutang <= 0) {
-      this.showToast('Tidak ada hutang supplier yang perlu dibayar hari ini', 'notify');
-      return;
-    }
-    if (!confirm(`Konfirmasi pembayaran konsinyasi ke SEMUA supplier?\nTotal Nilai: Rp ${this.formatNumber(this.settlementTotalHutang)}`)) return;
+      /**
+     * ✅ SPRINT 2 Phase 1B: Kirim laporan EOD konsinyasi ke owner
+     * mode: 'test' (default, preview only) | 'live' (kirim WA via Fonnte)
+     */
+    async sendEODReportToOwner(mode = 'test') {
+      try {
+        const reportText = this.buildOwnerReportText();
+        if (!reportText || reportText.includes('Tidak ada data')) {
+          this.showToast('Tidak ada data untuk dikirim', 'notify');
+          return false;
+        }
 
-    for (const sup of this.settlementSummary) {
-      if (sup.totalHutang > 0) {
-        await this.bayarSupplier(sup, pm);
+        const activeCount = (this.settlementSummary || []).filter(s =>
+          Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
+        ).length;
+
+        const res = await fetch('/api/eod-report-konsinyasi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            settlementDate: this.settlementDate,
+            reportText,
+            mode,
+            supplierCount: activeCount,
+            totalBayar: Number(this.settlementTotalHutang) || 0
+          })
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          if (mode === 'test') {
+            this.showToast(`📤 Laporan siap (mode preview). ${json.logKey ? 'Log: ' + json.logKey : ''}`, 'success');
+          } else {
+            this.showToast('📤 Laporan terkirim ke WA owner!', 'success');
+          }
+          this.playSound('success');
+          return true;
+        } else {
+          this.showToast('Gagal: ' + (json.error || 'Unknown'), 'error');
+          this.playSound('error');
+          return false;
+        }
+      } catch (err) {
+        console.error('[EOD-REPORT] Error:', err);
+        this.showToast('Error: ' + err.message, 'error');
+        return false;
       }
-    }
-    this.showToast('Semua hutang konsinyasi berhasil diselesaikan!', 'success');
-  },
+    },
+
+    async bayarSemuaSupplier(pm = 'cash') {
+      if (this.settlementTotalHutang <= 0) {
+        this.showToast('Tidak ada hutang supplier yang perlu dibayar hari ini', 'notify');
+        return;
+      }
+      if (!confirm(`Konfirmasi pembayaran konsinyasi ke SEMUA supplier?\nTotal Nilai: Rp ${this.formatNumber(this.settlementTotalHutang)}`)) return;
+
+      for (const sup of this.settlementSummary) {
+        if (sup.totalHutang > 0) {
+          await this.bayarSupplier(sup, pm);
+        }
+      }
+      this.showToast('Semua hutang konsinyasi berhasil diselesaikan!', 'success');
+
+      // ✅ SPRINT 2: Auto-trigger EOD report ke owner
+      // Mode test dulu (tidak kirim WA). Nanti switch ke 'live' saat Fonnte siap.
+      const EOD_MODE = 'test';  // ← ganti ke 'live' setelah WA sender approved
+      setTimeout(() => {
+        this.sendEODReportToOwner(EOD_MODE);
+      }, 800);  // delay 800ms biar toast success pembayaran muncul dulu
+    },
 
   /**
    * 3E. Retur Barang: Debit 2001 Hutang / Kredit 1004 Persediaan & update stok -qty
