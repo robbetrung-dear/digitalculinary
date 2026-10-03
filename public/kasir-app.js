@@ -6723,7 +6723,22 @@ try {
     };
   },
 
-        getAccountingJournal() {
+     get filteredJournalCount() {
+      const list = Array.isArray(this.accountingJournalList) ? this.accountingJournalList : [];
+      if (list.length === 0) return 0;
+      const filterDate = String(this.journalFilterDate || '').trim();
+      return list.filter(j => {
+        const s = String(j.status || '').toLowerCase();
+        if (s !== 'approved' && s !== 'posted') return false;
+        if (filterDate) {
+          const jDate = String(j.date || '').slice(0, 10);
+          if (jDate !== filterDate) return false;
+        }
+        return true;
+      }).length;
+    },
+       
+ getAccountingJournal() {
     // ✅ FIX: Fetch real dari state, fallback ke empty array (bukan dummy)
     const list = Array.isArray(this.accountingJournalList) ? this.accountingJournalList : [];
     if (list.length === 0) return [];
