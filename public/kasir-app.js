@@ -9164,29 +9164,45 @@ try {
         return '⚠️ Tidak ada data konsinyasi untuk dilaporkan.';
       }
 
-      // Header waktu & tanggal
+      // ✅ FIX #1: Tanggal pakai settlementDate, waktu pakai jam runtime
       const now = new Date();
-      const tanggal = now.toLocaleDateString('id-ID', {
+      const waktu = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
+
+      let tanggal = now.toLocaleDateString('id-ID', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
       });
-      const waktu = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' WIB';
+      if (this.settlementDate) {
+        try {
+          const d = new Date(this.settlementDate + 'T00:00:00');
+          if (!isNaN(d.getTime())) {
+            tanggal = d.toLocaleDateString('id-ID', {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+            });
+          }
+        } catch (e) {}
+      }
 
       // Aggregasi total
       let totalBayar = 0, totalSoldQty = 0, totalReturnQty = 0, nilaiRetur = 0;
       let omsetKonsinyasi = 0;
 
-      const activeSuppliers = summary.filter(s => Number(s.totalHutang) > 0 || Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0);
+      const activeSuppliers = summary.filter(s => Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0);
 
       activeSuppliers.forEach(sup => {
-        totalBayar += Number(sup.isPaid ? 0 : sup.totalHutang) || 0;
+        // ✅ FIX #2: totalBayar = nominal kotor yang dibayarkan (sum soldItems.total)
+        // Jangan pakai totalHutang karena di-zero-kan setelah dibayar (flag isPaid)
+        const soldItemsArr = Object.values(sup.soldItems || {});
+        const soldValue = soldItemsArr.reduce((sum, it) => sum + (Number(it.total) || 0), 0);
+        totalBayar += soldValue;
+
         totalSoldQty += Number(sup.soldQty) || 0;
         totalReturnQty += Number(sup.unsoldQty) || 0;
         nilaiRetur += Number(sup.unsoldValue) || 0;
 
-        // Omset = sum soldQty × harga jual (approx: ambil dari menu jika ada, fallback buyPrice * 2)
-        const soldItemsArr = Object.values(sup.soldItems || {});
+        // ✅ FIX #3: Omset = sum qty × harga jual riil dari menuList
         soldItemsArr.forEach(it => {
-          const sellPrice = Number(it.sellPrice || it.buyPrice * 2) || 0;
+          const menu = (this.menuList || []).find(m => m.name === it.name);
+          const sellPrice = menu ? Number(menu.price) : (Number(it.buyPrice) * 2 || 0);
           omsetKonsinyasi += (Number(it.qty) || 0) * sellPrice;
         });
       });
@@ -9222,8 +9238,13 @@ try {
           .map(it => ({ name: it.name, qty: Number(it.stock) || 0 }))
           .filter(it => it.qty > 0);
 
+        // ✅ FIX #2b: nominal laku per supplier = sum soldItems.total (bukan totalHutang)
+        const soldValueSupplier = soldArr.length > 0
+          ? Object.values(sup.soldItems || {}).reduce((sum, it) => sum + (Number(it.total) || 0), 0)
+          : 0;
+
         const line1 = `${formatNum(idx)} ${String(sup.supplierName || 'Supplier').toUpperCase()}`;
-        const line2 = `✅ Laku: ${sup.soldQty} pcs → Rp ${this.formatNumber(sup.totalHutang || 0)}`;
+        const line2 = `✅ Laku: ${sup.soldQty} pcs → Rp ${this.formatNumber(soldValueSupplier)}`;
         const line3 = formatItems(soldArr);
         const line4 = `↩️ Retur: ${formatItems(unsoldArr)}`;
 
