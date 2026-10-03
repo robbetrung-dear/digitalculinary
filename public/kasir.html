@@ -2991,7 +2991,7 @@
           <div class="flex items-center gap-2 text-xs">
             <i class="fa-solid fa-filter text-stone-500"></i>
             <span class="font-bold text-stone-700">Filter Tanggal:</span>
-            <span class="text-stone-400 font-mono" x-text="(journalFilterDate ? accountingJournalList.filter(j => String(j.date || '').slice(0,10) === journalFilterDate && (String(j.status||'').toLowerCase() === 'approved' || String(j.status||'').toLowerCase() === 'posted')).length : accountingJournalList.filter(j => String(j.status||'').toLowerCase() === 'approved' || String(j.status||'').toLowerCase() === 'posted').length) + ' jurnal'"></span>
+            <span class="text-stone-400 font-mono" x-text="filteredJournalCount + ' jurnal'"></span>
           </div>
           <div class="flex items-center gap-2 w-full sm:w-auto">
             <input 
