@@ -9110,7 +9110,7 @@ try {
 
       // ✅ SPRINT 2: Auto-trigger EOD report ke owner
       // Mode test dulu (tidak kirim WA). Nanti switch ke 'live' saat Fonnte siap.
-      const EOD_MODE = 'test';  // ← ganti ke 'live' setelah WA sender approved
+      const EOD_MODE = 'live';  // ✅ Sprint 2: sudah live, auto-kirim WA ke owner
       setTimeout(() => {
         this.sendEODReportToOwner(EOD_MODE);
       }, 800);  // delay 800ms biar toast success pembayaran muncul dulu
