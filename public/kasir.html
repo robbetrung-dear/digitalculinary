@@ -7282,14 +7282,15 @@
       <!-- Footer Bulk Action -->
       <div class="flex items-center justify-between pt-3 border-t border-stone-100">
         <div class="flex items-center gap-2">
-          <button 
-  type="button" 
-  @click="bayarDanReturSemua('cash')" 
-  class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-emerald-600/30">
-  <i class="fa-solid fa-money-bill-wave"></i>
-  <i class="fa-solid fa-arrow-rotate-left -ml-1.5"></i>
-  <span>Bayar + Retur Semua (Tutup Hari)</span>
-        </button>
+              <button 
+                type="button" 
+                @click="tutupHariKonsinyasi()" 
+                class="min-h-[44px] px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 transition cursor-pointer shadow-md shadow-emerald-600/30"
+                title="Retur semua sisa + kirim laporan ke owner">
+                <i class="fa-solid fa-receipt text-xs"></i>
+                <span>🧾 Tutup Hari Konsinyasi</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-700/80 text-emerald-100">1x KIRIM</span>
+              </button>
         </div>
         <button 
           type="button" 
