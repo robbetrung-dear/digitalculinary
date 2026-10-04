@@ -117,16 +117,45 @@ export async function onRequest(context) {
     logPayload.provider = provider;
 
     // ✅ Support multi-recipient (comma-separated)
-const ownerWaRaw = String(env.OWNER_WA_NUMBER || '').trim();
-const ownerWaList = ownerWaRaw.split(',').map(s => s.trim()).filter(Boolean);
-const ownerWa = ownerWaList.join(',');  // Fonnte accept comma-separated target
-if (!ownerWa) {
+    // ✅ Opsi C: Baca owner WA dari Firebase dulu, fallback ke env var
+    let ownerWaRaw = '';
+    let ownerWaSource = 'none';
+    try {
+      const ownersRes = await fetch(`${dbUrl}/site_config/ownerWaNumbers.json${auth}`);
+      if (ownersRes.ok) {
+        const ownersData = await ownersRes.json();
+        if (Array.isArray(ownersData) && ownersData.length > 0) {
+          ownerWaRaw = ownersData.map(n => String(n).trim()).filter(Boolean).slice(0, 5).join(',');
+          ownerWaSource = 'firebase_array';
+          console.log('[EOD-REPORT] Owners from Firebase (array):', ownersData.length, 'numbers');
+        } else if (typeof ownersData === 'string' && ownersData.trim()) {
+          ownerWaRaw = ownersData.trim();
+          ownerWaSource = 'firebase_string';
+          console.log('[EOD-REPORT] Owner from Firebase (string)');
+        }
+      }
+    } catch (e) {
+      console.warn('[EOD-REPORT] Fetch ownerWaNumbers note:', e.message);
+    }
+
+    if (!ownerWaRaw) {
+      ownerWaRaw = String(env.OWNER_WA_NUMBER || '').trim();
+      ownerWaSource = 'env_var';
+      console.log('[EOD-REPORT] Owner from env var (fallback)');
+    }
+
+    const ownerWaList = ownerWaRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 5);
+    const ownerWa = ownerWaList.join(',');
+
+    console.log('[EOD-REPORT] Final owners:', ownerWaList.length, 'recipients from', ownerWaSource);
+
+    if (!ownerWa) {
       logPayload.status = 'failed_no_owner';
       await fetch(`${dbUrl}/notifications_log/${logKey}.json${auth}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(logPayload)
       }).catch(() => {});
-      return jsonResponse({ success: false, error: 'OWNER_WA_NUMBER belum diset di environment variable' }, 500);
+      return jsonResponse({ success: false, error: 'Tidak ada OWNER_WA_NUMBER di Firebase maupun env var' }, 500);
     }
 
     // Prefix R&D/Production
