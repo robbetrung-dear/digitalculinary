@@ -302,17 +302,7 @@
           <span class="hidden md:inline">Printer POS</span>
         </button>
 
-        <!-- Tombol Quick Pause/Resume Shift -->
-        <template x-if="shiftStatus === 'open'">
-          <button 
-            type="button" 
-            @click="pauseShift()"
-            class="h-10 px-3 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-            title="Pause Shift Sementara">
-            <i class="fa-solid fa-pause text-amber-700 text-xs"></i>
-            <span class="hidden xl:inline">Pause</span>
-          </button>
-        </template>
+      
         <template x-if="shiftStatus === 'paused'">
           <button 
             type="button" 
