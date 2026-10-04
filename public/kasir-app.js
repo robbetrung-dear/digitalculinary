@@ -9052,62 +9052,6 @@ try {
    * 2. Trigger EOD Report ke Owner SEKALI
    * Pelunasan hutang supplier = MANUAL via tombol "Bayar (Tunai)"/"Bayar (Bank)" per supplier.
    */
-  async tutupHariKonsinyasi() {
-    const totalRetur = Number(this.settlementTotalReturnQty) || 0;
-    const totalHutang = Number(this.settlementTotalHutang) || 0;
-    const suppliersBelumBayar = (this.settlementSummary || []).filter(s => Number(s.totalHutang) > 0);
-    const supplierCount = suppliersBelumBayar.length;
-
-    const activeSuppliers = (this.settlementSummary || []).filter(s =>
-      Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
-    ).length;
-
-    if (activeSuppliers === 0) {
-      this.showToast('Tidak ada transaksi konsinyasi untuk ditutup hari ini', 'notify');
-      return;
-    }
-
-    let infoHutang = '';
-    if (supplierCount > 0) {
-      infoHutang =
-        `📋 Info hutang:\n` +
-        `- Belum dibayar: ${supplierCount} supplier (Rp ${this.formatNumber(totalHutang)})\n\n` +
-        `⚠️ Hutang belum lunas — silakan bayar manual via tombol\n` +
-        `   "Bayar (Tunai)" / "Bayar (Bank)" per supplier.\n\n`;
-    } else {
-      infoHutang = `✅ Semua hutang sudah dibayar lunas\n\n`;
-    }
-
-    const confirmMsg =
-      `⚠️ TUTUP HARI KONSINYASI\n\n` +
-      `Aksi ini akan:\n` +
-      `1️⃣ Retur SEMUA sisa barang belum laku: ${totalRetur} pcs\n` +
-      `2️⃣ Kirim laporan ke owner via WhatsApp (sekali)\n\n` +
-      infoHutang +
-      `Tindakan ini tidak bisa dibatalkan. Lanjutkan?`;
-
-    if (!confirm(confirmMsg)) {
-      this.showToast('Tutup hari konsinyasi dibatalkan', 'notify');
-      return;
-    }
-
-    try {
-      await this.returSemuaBarang(true);
-
-      this.showToast('✅ Retur selesai! Mengirim laporan ke owner...', 'success');
-      this.playSound('success');
-
-      setTimeout(() => {
-        this.sendEODReportToOwner('live');
-      }, 800);
-
-    } catch (err) {
-      console.error('[TUTUP-HARI] Fatal error:', err);
-      this.showToast(`Gagal tutup hari: ${err.message}`, 'error');
-      this.playSound('error');
-    }
-  },
-
    /**
    * ✅ Sprint 2 Final: Bayar Semua Supplier + Retur Semua Sisa + EOD Report (1x trigger)
    * 
