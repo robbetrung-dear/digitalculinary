@@ -9357,7 +9357,7 @@ try {
     }
   },
 
-        async returSemuaBarang() {
+        async returSemuaBarang(skipConfirm = false) {
       if (this.settlementTotalReturnQty <= 0) {
         this.showToast('Tidak ada barang sisa untuk diretur', 'notify');
         return;
@@ -9398,7 +9398,7 @@ try {
     }
 
     const totalQty = candidates.reduce((acc, s) => acc + s.unsoldQty, 0);
-    if (!confirm(`Yakin ingin meretur barang konsinyasi yang belum laku?\n\nTotal Barang: ${totalQty} pcs\nSupplier: ${candidates.length}\n\n⚠️ Ghost supplier akan DILEWATI otomatis.`)) return;
+    if (!skipConfirm && !confirm(`Yakin ingin meretur barang konsinyasi yang belum laku?\n\nTotal Barang: ${totalQty} pcs\nSupplier: ${candidates.length}\n\n⚠️ Ghost supplier akan DILEWATI otomatis.`)) return;
 
     let countSuccess = 0;
     for (const sup of candidates) {
@@ -9406,6 +9406,69 @@ try {
       countSuccess++;
     }
     this.showToast(`${countSuccess} supplier berhasil diretur (total ${totalQty} pcs)`, 'success');
+  },
+
+       /**
+   * ✅ Sprint 2 Final: TUTUP HARI KONSINYASI
+   * Alur:
+   * 1. Retur semua sisa barang belum laku
+   * 2. Trigger EOD Report ke Owner SEKALI
+   * Pelunasan hutang supplier = MANUAL via tombol "Bayar (Tunai)"/"Bayar (Bank)" per supplier.
+   */
+  async tutupHariKonsinyasi() {
+    const totalRetur = Number(this.settlementTotalReturnQty) || 0;
+    const totalHutang = Number(this.settlementTotalHutang) || 0;
+    const suppliersBelumBayar = (this.settlementSummary || []).filter(s => Number(s.totalHutang) > 0);
+    const supplierCount = suppliersBelumBayar.length;
+
+    const activeSuppliers = (this.settlementSummary || []).filter(s =>
+      Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
+    ).length;
+
+    if (activeSuppliers === 0) {
+      this.showToast('Tidak ada transaksi konsinyasi untuk ditutup hari ini', 'notify');
+      return;
+    }
+
+    let infoHutang = '';
+    if (supplierCount > 0) {
+      infoHutang =
+        `📋 Info hutang:\n` +
+        `- Belum dibayar: ${supplierCount} supplier (Rp ${this.formatNumber(totalHutang)})\n\n` +
+        `⚠️ Hutang belum lunas — silakan bayar manual via tombol\n` +
+        `   "Bayar (Tunai)" / "Bayar (Bank)" per supplier.\n\n`;
+    } else {
+      infoHutang = `✅ Semua hutang sudah dibayar lunas\n\n`;
+    }
+
+    const confirmMsg =
+      `⚠️ TUTUP HARI KONSINYASI\n\n` +
+      `Aksi ini akan:\n` +
+      `1️⃣ Retur SEMUA sisa barang belum laku: ${totalRetur} pcs\n` +
+      `2️⃣ Kirim laporan ke owner via WhatsApp (sekali)\n\n` +
+      infoHutang +
+      `Tindakan ini tidak bisa dibatalkan. Lanjutkan?`;
+
+    if (!confirm(confirmMsg)) {
+      this.showToast('Tutup hari konsinyasi dibatalkan', 'notify');
+      return;
+    }
+
+    try {
+      await this.returSemuaBarang(true);
+
+      this.showToast('✅ Retur selesai! Mengirim laporan ke owner...', 'success');
+      this.playSound('success');
+
+      setTimeout(() => {
+        this.sendEODReportToOwner('live');
+      }, 800);
+
+    } catch (err) {
+      console.error('[TUTUP-HARI] Fatal error:', err);
+      this.showToast(`Gagal tutup hari: ${err.message}`, 'error');
+      this.playSound('error');
+    }
   },
 
      /**
@@ -9644,7 +9707,25 @@ try {
       `Besok titipan lagi ya 🙏\n\n` +
       `_POS Digital Culinary_`;
 
-    this.sendWhatsAppNotification(phone, msg, 'settlement');
+        // ✅ FIX: Langsung buka WhatsApp Web/App (bypass API)
+    if (!phone) {
+      this.showToast('Supplier belum punya nomor WA — isi dulu di Master Supplier', 'error');
+      return;
+    }
+
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+    else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    const win = window.open(waUrl, '_blank');
+
+    if (!win) {
+      this.showToast('Popup diblok browser — izinkan popup untuk share WA', 'error');
+    } else {
+      this.showToast(`WhatsApp dibuka ke ${cleanPhone}`, 'success');
+      this.playSound('success');
+    }
   },
 
   printSettlementPDF(supSummary) {
