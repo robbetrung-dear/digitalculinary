@@ -151,7 +151,7 @@
     <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-1.5 sm:gap-4 relative">
       
       <!-- Brand Logo & Judul 2 Baris (Dapur atas, Kuliner Viral bawah - Tanpa Subjudul) -->
-      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 min-w-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
         <!-- Logo Toko -->
         <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white shadow-md overflow-hidden transition-all flex-shrink-0" :style="{ backgroundColor: siteConfig.logoBgColor || '#ea580c' }">
           <template x-if="siteConfig.logoType === 'image' && siteConfig.logoImage">
@@ -163,15 +163,15 @@
         </div>
 
         <!-- Judul 2 Baris: Baris Atas "DAPUR", Baris Bawah "KULINER VIRAL" (Ukuran Font Sama Besar) -->
-        <div class="flex flex-col justify-center min-w-0">
+        <div class="flex flex-col justify-center min-w-0 overflow-hidden">
           <div class="font-black text-xs sm:text-base md:text-lg tracking-tight leading-tight uppercase truncate">
             <span :style="{ color: getBrandFirstWord().color }" x-text="getBrandFirstWord().text"></span>
           </div>
-          <div class="font-black text-xs sm:text-base md:text-lg tracking-tight leading-tight flex items-center gap-1 whitespace-nowrap">
-            <template x-for="(word, wIdx) in getBrandRemainingWords()" :key="'header-rem-' + wIdx">
-              <span :style="{ color: word.color }" x-text="word.text"></span>
-            </template>
-          </div>
+          <div class="font-black text-xs sm:text-base md:text-lg tracking-tight leading-tight flex items-center gap-1 min-w-0">
+  <template x-for="(word, wIdx) in getBrandRemainingWords()" :key="'header-rem-' + wIdx">
+    <span class="truncate" :style="{ color: word.color }" x-text="word.text"></span>
+  </template>
+</div>
         </div>
       </div>
 
@@ -184,7 +184,7 @@
       </nav>
 
       <!-- Action Buttons (Menu 3 Garis, Analitik, Admin Lock, Keranjang) - Responsif Bebas Potong di Mobile -->
-      <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0 pr-1">
+      <div class="flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
         <!-- Tombol Menu Navigasi 3 Garis (Hamburger Menu dengan Tombol Cepat) -->
         <button 
           type="button"
@@ -269,7 +269,7 @@
         </div>
 
         <!-- Tombol Keranjang: Selalu Utuh & Tidak Terpotong di Mobile -->
-        <button @click="isCartOpen = true" class="relative bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        <button @click="isCartOpen = true" class="relative bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl shadow-xs transition flex items-center gap-1 sm:gap-2 flex-shrink-0">
           <i class="fa-solid fa-cart-shopping text-xs sm:text-sm"></i>
           <span class="hidden sm:inline">Keranjang</span>
           <span class="bg-white text-brand-700 font-extrabold text-[11px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full" x-text="cartTotalCount"></span>
