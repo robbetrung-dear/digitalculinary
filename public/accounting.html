@@ -371,7 +371,7 @@
         <div class="h-6 w-px bg-stone-200 hidden sm:block"></div>
 
         <!-- Role Badge -->
-        <div class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-700 truncate">
+                <div class="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-700 truncate">
           <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse flex-shrink-0"></span>
           <span class="font-semibold truncate">Owner & Finance Management</span>
         </div>
@@ -845,7 +845,7 @@
             <p class="text-xs sm:text-sm text-stone-500 font-medium">Semua pencatatan transaksi ganda (Double Entry) operasional resto.</p>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3 w-full lg:w-auto">
             <!-- Filter Bulan -->
             <input 
               type="month" 
@@ -914,10 +914,15 @@
           </div>
         </div>
 
-        <!-- Tabel Jurnal Umum (Responsive) -->
+                <!-- Tabel Jurnal Umum (Responsive) -->
         <div class="bg-white rounded-3xl border border-stone-200 shadow-xs overflow-hidden">
+          <!-- ✅ Mobile scroll hint -->
+          <div class="md:hidden px-4 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-arrows-left-right text-amber-600"></i>
+            <span>Geser tabel ke kanan untuk lihat kolom <strong>Debit</strong>, <strong>Kredit</strong>, <strong>Aksi</strong></span>
+          </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-stone-600">
+            <table class="w-full min-w-[800px] text-left text-xs text-stone-600">
               <thead class="bg-stone-50/80 text-stone-500 font-extrabold uppercase border-b border-stone-200 tracking-wider">
                 <tr>
                   <th class="py-3.5 px-4 sm:px-6">Tanggal</th>
@@ -1035,8 +1040,12 @@
           </div>
         </div>
 
-        <!-- Tabel Mutasi Transaksi Ledger (Responsive) -->
+                <!-- Tabel Mutasi Transaksi Ledger (Responsive) -->
         <div class="bg-white rounded-3xl border border-stone-200 shadow-xs overflow-hidden">
+          <div class="md:hidden px-4 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-arrows-left-right text-amber-600"></i>
+            <span>Geser tabel ke kanan untuk lihat kolom <strong>Debit</strong>, <strong>Kredit</strong>, <strong>Saldo</strong></span>
+          </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-stone-600">
               <thead class="bg-stone-50/80 text-stone-500 font-extrabold uppercase border-b border-stone-200 tracking-wider">
