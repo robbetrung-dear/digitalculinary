@@ -9094,7 +9094,131 @@ try {
       }
     },
 
-    async bayarSemuaSupplier(pm = 'cash') {
+   /**
+   * ✅ Sprint 2 Final: Bayar Semua Supplier + Retur Semua Sisa + EOD Report (1x trigger)
+   * 
+   * Alur:
+   * 1. Snapshot retur (untuk laporan historis)
+   * 2. Bayar hutang semua supplier (tanpa trigger EOD)
+   * 3. Retur semua sisa barang belum laku
+   * 4. Kirim EOD report ke owner SEKALI
+   * 
+   * Barang yang mau dititip lagi harus di-scan receive ulang (siklus konsinyasi tetap rapi).
+   */
+  async bayarDanReturSemua(pm = 'cash') {
+    const totalHutang = Number(this.settlementTotalHutang) || 0;
+    const totalRetur = Number(this.settlementTotalReturnQty) || 0;
+    const activeSuppliers = (this.settlementSummary || []).filter(s =>
+      Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
+    ).length;
+
+    if (totalHutang <= 0 && totalRetur <= 0) {
+      this.showToast('Tidak ada hutang atau barang sisa untuk diproses hari ini', 'notify');
+      return;
+    }
+
+    const confirmMsg =
+      `⚠️ KONFIRMASI TUTUP HARI KONSINYASI\n\n` +
+      `Aksi ini akan:\n` +
+      `1️⃣ Bayar SEMUA hutang supplier: Rp ${this.formatNumber(totalHutang)}\n` +
+      `2️⃣ Retur SEMUA sisa barang belum laku: ${totalRetur} pcs\n` +
+      `3️⃣ Kirim laporan ke owner via WhatsApp\n\n` +
+      `Supplier aktif: ${activeSuppliers}\n` +
+      `Metode bayar: ${pm.toUpperCase()}\n\n` +
+      `⚠️ Barang yang mau dititip lagi harus di-scan masuk ulang.\n` +
+      `Tindakan ini tidak bisa dibatalkan. Lanjutkan?`;
+
+    if (!confirm(confirmMsg)) {
+      this.showToast('Tutup hari konsinyasi dibatalkan', 'notify');
+      return;
+    }
+
+    try {
+      // ============================================================
+      // STEP 1: Snapshot retur SEBELUM dieksekusi (untuk laporan historis)
+      // ============================================================
+      try {
+        const snapshotKey = `dapur_retur_snapshot_${this.settlementDate}`;
+        const snapshot = {
+          tanggal: this.settlementDate,
+          capturedAt: Date.now(),
+          suppliers: (this.settlementSummary || []).map(s => ({
+            supplierId: s.supplierId,
+            supplierName: s.supplierName,
+            unsoldQty: Number(s.unsoldQty) || 0,
+            unsoldValue: Number(s.unsoldValue) || 0,
+            unsoldItems: JSON.parse(JSON.stringify(s.unsoldItems || []))
+          }))
+        };
+        localStorage.setItem(snapshotKey, JSON.stringify(snapshot));
+        console.log('[BAYAR+RETUR] ✅ Snapshot saved:', snapshotKey);
+      } catch (e) {
+        console.warn('[BAYAR+RETUR] Snapshot warning:', e);
+      }
+
+      // ============================================================
+      // STEP 2: Bayar hutang semua supplier
+      // ============================================================
+      if (totalHutang > 0) {
+        this.showToast('💳 Memproses pembayaran supplier...', 'notify');
+        const suppliersToPay = (this.settlementSummary || []).filter(s => Number(s.totalHutang) > 0);
+        let bayarCount = 0;
+        for (const sup of suppliersToPay) {
+          try {
+            await this.bayarSupplier(sup, pm);
+            bayarCount++;
+          } catch (err) {
+            console.error(`[BAYAR+RETUR] Gagal bayar ${sup.supplierName}:`, err);
+            this.showToast(`⚠️ Gagal bayar ${sup.supplierName}: ${err.message}`, 'error');
+            // Continue ke supplier berikut — jangan stop total
+          }
+        }
+        console.log(`[BAYAR+RETUR] ✅ Bayar selesai: ${bayarCount}/${suppliersToPay.length} supplier`);
+      }
+
+      // ============================================================
+      // STEP 3: Retur semua sisa barang belum laku
+      // ============================================================
+      if (totalRetur > 0) {
+        this.showToast('↩️ Memproses retur barang sisa...', 'notify');
+        const validSupplierIds = new Set((this.suppliersList || []).map(s => s.id).filter(Boolean));
+        const candidates = (this.settlementSummary || []).filter(s =>
+          Number(s.unsoldQty) > 0 &&
+          s.supplierId &&
+          validSupplierIds.has(s.supplierId)
+        );
+
+        let returCount = 0;
+        for (const sup of candidates) {
+          try {
+            await this.returBarangSupplier(sup);
+            returCount++;
+          } catch (err) {
+            console.error(`[BAYAR+RETUR] Gagal retur ${sup.supplierName}:`, err);
+            this.showToast(`⚠️ Gagal retur ${sup.supplierName}: ${err.message}`, 'error');
+          }
+        }
+        console.log(`[BAYAR+RETUR] ✅ Retur selesai: ${returCount}/${candidates.length} supplier`);
+      }
+
+      // ============================================================
+      // STEP 4: Trigger EOD Report ke Owner (SEKALI)
+      // ============================================================
+      this.showToast('✅ Tutup hari selesai! Mengirim laporan ke owner...', 'success');
+      this.playSound('success');
+
+      setTimeout(() => {
+        this.sendEODReportToOwner('live');
+      }, 800);
+
+    } catch (err) {
+      console.error('[BAYAR+RETUR] Fatal error:', err);
+      this.showToast(`Gagal memproses tutup hari: ${err.message}`, 'error');
+      this.playSound('error');
+    }
+  },
+   
+ async bayarSemuaSupplier(pm = 'cash') {
       if (this.settlementTotalHutang <= 0) {
         this.showToast('Tidak ada hutang supplier yang perlu dibayar hari ini', 'notify');
         return;
