@@ -8140,11 +8140,12 @@ try {
     this.processMultiScan(code);
   },
 
-  _resolveMenuFromScanCode(code) {
+    _resolveMenuFromScanCode(code) {
     const clean = String(code || '').trim().toLowerCase();
     if (!clean) return null;
 
     let menu = (this.menuList || []).find(m =>
+      (m.barcodeShort && String(m.barcodeShort).toLowerCase() === clean) ||
       (m.sku && String(m.sku).toLowerCase() === clean) ||
       (m.barcode && String(m.barcode).toLowerCase() === clean) ||
       (m.id && String(m.id).toLowerCase() === clean)
@@ -8152,6 +8153,7 @@ try {
     if (menu) return menu;
 
     const inv = (this.inventoryList || []).find(i =>
+      (i.barcodeShort && String(i.barcodeShort).toLowerCase() === clean) ||   // ← BARIS BARU
       (i.sku && String(i.sku).toLowerCase() === clean) ||
       (i.barcode && String(i.barcode).toLowerCase() === clean) ||
       (i.id && String(i.id).toLowerCase() === clean)
