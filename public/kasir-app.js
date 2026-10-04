@@ -9045,54 +9045,68 @@ try {
     }
   },
 
-      /**
-     * ✅ SPRINT 2 Phase 1B: Kirim laporan EOD konsinyasi ke owner
-     * mode: 'test' (default, preview only) | 'live' (kirim WA via Fonnte)
-     */
-    async sendEODReportToOwner(mode = 'test') {
-      try {
-        const reportText = this.buildOwnerReportText();
-        if (!reportText || reportText.includes('Tidak ada data')) {
-          this.showToast('Tidak ada data untuk dikirim', 'notify');
-          return false;
-        }
+        /**
+   * ✅ Sprint 2 Final: TUTUP HARI KONSINYASI
+   * Alur:
+   * 1. Retur semua sisa barang belum laku
+   * 2. Trigger EOD Report ke Owner SEKALI
+   * Pelunasan hutang supplier = MANUAL via tombol "Bayar (Tunai)"/"Bayar (Bank)" per supplier.
+   */
+  async tutupHariKonsinyasi() {
+    const totalRetur = Number(this.settlementTotalReturnQty) || 0;
+    const totalHutang = Number(this.settlementTotalHutang) || 0;
+    const suppliersBelumBayar = (this.settlementSummary || []).filter(s => Number(s.totalHutang) > 0);
+    const supplierCount = suppliersBelumBayar.length;
 
-        const activeCount = (this.settlementSummary || []).filter(s =>
-          Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
-        ).length;
+    const activeSuppliers = (this.settlementSummary || []).filter(s =>
+      Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
+    ).length;
 
-        const res = await fetch('/api/eod-report-konsinyasi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            settlementDate: this.settlementDate,
-            reportText,
-            mode,
-            supplierCount: activeCount,
-            totalBayar: Number(this.settlementTotalHutang) || 0
-          })
-        });
+    if (activeSuppliers === 0) {
+      this.showToast('Tidak ada transaksi konsinyasi untuk ditutup hari ini', 'notify');
+      return;
+    }
 
-        const json = await res.json();
-        if (json.success) {
-          if (mode === 'test') {
-            this.showToast(`📤 Laporan siap (mode preview). ${json.logKey ? 'Log: ' + json.logKey : ''}`, 'success');
-          } else {
-            this.showToast('📤 Laporan terkirim ke WA owner!', 'success');
-          }
-          this.playSound('success');
-          return true;
-        } else {
-          this.showToast('Gagal: ' + (json.error || 'Unknown'), 'error');
-          this.playSound('error');
-          return false;
-        }
-      } catch (err) {
-        console.error('[EOD-REPORT] Error:', err);
-        this.showToast('Error: ' + err.message, 'error');
-        return false;
-      }
-    },
+    let infoHutang = '';
+    if (supplierCount > 0) {
+      infoHutang =
+        `📋 Info hutang:\n` +
+        `- Belum dibayar: ${supplierCount} supplier (Rp ${this.formatNumber(totalHutang)})\n\n` +
+        `⚠️ Hutang belum lunas — silakan bayar manual via tombol\n` +
+        `   "Bayar (Tunai)" / "Bayar (Bank)" per supplier.\n\n`;
+    } else {
+      infoHutang = `✅ Semua hutang sudah dibayar lunas\n\n`;
+    }
+
+    const confirmMsg =
+      `⚠️ TUTUP HARI KONSINYASI\n\n` +
+      `Aksi ini akan:\n` +
+      `1️⃣ Retur SEMUA sisa barang belum laku: ${totalRetur} pcs\n` +
+      `2️⃣ Kirim laporan ke owner via WhatsApp (sekali)\n\n` +
+      infoHutang +
+      `Tindakan ini tidak bisa dibatalkan. Lanjutkan?`;
+
+    if (!confirm(confirmMsg)) {
+      this.showToast('Tutup hari konsinyasi dibatalkan', 'notify');
+      return;
+    }
+
+    try {
+      await this.returSemuaBarang(true);
+
+      this.showToast('✅ Retur selesai! Mengirim laporan ke owner...', 'success');
+      this.playSound('success');
+
+      setTimeout(() => {
+        this.sendEODReportToOwner('live');
+      }, 800);
+
+    } catch (err) {
+      console.error('[TUTUP-HARI] Fatal error:', err);
+      this.showToast(`Gagal tutup hari: ${err.message}`, 'error');
+      this.playSound('error');
+    }
+  },
 
    /**
    * ✅ Sprint 2 Final: Bayar Semua Supplier + Retur Semua Sisa + EOD Report (1x trigger)
