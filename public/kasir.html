@@ -5036,15 +5036,69 @@
 
             <div class="grid grid-cols-12 gap-2">
               <!-- Pilihan Item Inventory -->
-              <div class="col-span-6">
-                <select 
-                  x-model="ing.itemId"
-                  @change="onRecipeItemChange(ing)"
-                  class="w-full h-10 px-2 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                  <template x-for="inv in inventoryList" :key="inv.id">
-                    <option :value="inv.id" x-text="inv.name + ' (' + (inv.stock || 0) + ' ' + inv.unit + ' @' + formatRupiah(inv.purchasePrice || inv.hargaBeli || 0) + ')'"></option>
+                            <div 
+                class="col-span-6 relative"
+                x-data="{
+                  open: false,
+                  search: '',
+                  syncFromSelection() {
+                    const sel = inventoryList.find(i => i.id === ing.itemId);
+                    this.search = sel ? sel.name : '';
+                  },
+                  filtered() {
+                    const sel = inventoryList.find(i => i.id === ing.itemId);
+                    const selName = sel ? sel.name : '';
+                    if (!this.search || this.search === selName) return inventoryList;
+                    const q = this.search.toLowerCase();
+                    return inventoryList.filter(i =>
+                      (i.name || '').toLowerCase().includes(q) ||
+                      (i.sku || '').toLowerCase().includes(q) ||
+                      (i.category || '').toLowerCase().includes(q)
+                    );
+                  },
+                  selectItem(inv) {
+                    ing.itemId = inv.id;
+                    this.search = inv.name;
+                    this.open = false;
+                    onRecipeItemChange(ing);
+                  },
+                  onBlur() {
+                    setTimeout(() => {
+                      this.open = false;
+                      this.syncFromSelection();
+                    }, 180);
+                  }
+                }"
+                x-init="syncFromSelection()"
+                x-effect="if (!open) syncFromSelection()">
+                <input 
+                  type="text"
+                  x-model="search"
+                  @focus="open = true"
+                  @input="open = true"
+                  @blur="onBlur()"
+                  placeholder="Ketik cari bahan baku..."
+                  class="w-full h-10 px-2 pr-7 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <i class="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 text-[10px] pointer-events-none"></i>
+                <div 
+                  x-show="open" 
+                  x-cloak
+                  x-transition:enter="transition ease-out duration-100"
+                  x-transition:enter-start="opacity-0 -translate-y-1"
+                  class="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white border border-stone-300 rounded-xl shadow-xl">
+                  <template x-for="inv in filtered()" :key="'cb-' + inv.id">
+                    <button 
+                      type="button"
+                      @mousedown.prevent="selectItem(inv)"
+                      class="w-full text-left px-3 py-2 text-xs font-semibold text-stone-800 hover:bg-amber-50 hover:text-amber-900 transition border-b border-stone-100 last:border-0 cursor-pointer flex items-center justify-between gap-2">
+                      <span class="truncate" x-text="inv.name"></span>
+                      <span class="text-[10px] text-stone-400 font-mono flex-shrink-0" x-text="(inv.stock || 0) + ' ' + inv.unit"></span>
+                    </button>
                   </template>
-                </select>
+                  <div x-show="filtered().length === 0" class="px-3 py-3 text-[11px] text-stone-400 text-center italic">
+                    Bahan tidak ditemukan — daftarkan dulu di tab Inventory.
+                  </div>
+                </div>
               </div>
 
               <!-- Takaran / Kebutuhan -->
@@ -5235,16 +5289,69 @@
 
                 <div class="grid grid-cols-12 gap-2 items-center">
                   <!-- Dropdown Bahan Baku (Full inventoryList) -->
-                  <div class="col-span-6">
-                    <select 
-                      x-model="ing.itemId"
-                      @change="onRecipeItemChange(ing)"
-                      class="w-full h-9 px-2 rounded-lg border border-stone-300 bg-stone-50 text-xs font-bold text-stone-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
-                      <option value="">-- Pilih Bahan Baku --</option>
-                      <template x-for="inv in inventoryList" :key="inv.id">
-                        <option :value="inv.id" x-text="inv.name + ' (' + formatRupiah(inv.purchasePrice || inv.hargaBeli || 0) + '/' + inv.unit + ')'"></option>
+                                    <div 
+                    class="col-span-6 relative"
+                    x-data="{
+                      open: false,
+                      search: '',
+                      syncFromSelection() {
+                        const sel = inventoryList.find(i => i.id === ing.itemId);
+                        this.search = sel ? sel.name : '';
+                      },
+                      filtered() {
+                        const sel = inventoryList.find(i => i.id === ing.itemId);
+                        const selName = sel ? sel.name : '';
+                        if (!this.search || this.search === selName) return inventoryList;
+                        const q = this.search.toLowerCase();
+                        return inventoryList.filter(i =>
+                          (i.name || '').toLowerCase().includes(q) ||
+                          (i.sku || '').toLowerCase().includes(q) ||
+                          (i.category || '').toLowerCase().includes(q)
+                        );
+                      },
+                      selectItem(inv) {
+                        ing.itemId = inv.id;
+                        this.search = inv.name;
+                        this.open = false;
+                        onRecipeItemChange(ing);
+                      },
+                      onBlur() {
+                        setTimeout(() => {
+                          this.open = false;
+                          this.syncFromSelection();
+                        }, 180);
+                      }
+                    }"
+                    x-init="syncFromSelection()"
+                    x-effect="if (!open) syncFromSelection()">
+                    <input 
+                      type="text"
+                      x-model="search"
+                      @focus="open = true"
+                      @input="open = true"
+                      @blur="onBlur()"
+                      placeholder="Ketik cari bahan baku..."
+                      class="w-full h-9 px-2 pr-7 rounded-lg border border-stone-300 bg-stone-50 text-xs font-bold text-stone-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                    <i class="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 text-[10px] pointer-events-none"></i>
+                    <div 
+                      x-show="open" 
+                      x-cloak
+                      x-transition:enter="transition ease-out duration-100"
+                      x-transition:enter-start="opacity-0 -translate-y-1"
+                      class="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white border border-stone-300 rounded-xl shadow-xl">
+                      <template x-for="inv in filtered()" :key="'cb-' + inv.id">
+                        <button 
+                          type="button"
+                          @mousedown.prevent="selectItem(inv)"
+                          class="w-full text-left px-3 py-2 text-xs font-semibold text-stone-800 hover:bg-amber-50 hover:text-amber-900 transition border-b border-stone-100 last:border-0 cursor-pointer flex items-center justify-between gap-2">
+                          <span class="truncate" x-text="inv.name"></span>
+                          <span class="text-[10px] text-stone-400 font-mono flex-shrink-0" x-text="(inv.stock || 0) + ' ' + inv.unit"></span>
+                        </button>
                       </template>
-                    </select>
+                      <div x-show="filtered().length === 0" class="px-3 py-3 text-[11px] text-stone-400 text-center italic">
+                        Bahan tidak ditemukan — daftarkan dulu di tab Inventory.
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Jumlah Takaran -->
