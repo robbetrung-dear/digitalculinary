@@ -8971,7 +8971,56 @@ try {
   /**
    * 3D. Bayar Supplier: Debit 2001 Hutang / Kredit 1001 Kas (atau 1002 Bank)
    */
-  async bayarSupplier(supSummary, pm = 'cash') {
+   /**
+   * ✅ SPRINT 2 Phase 1B: Kirim laporan EOD konsinyasi ke owner
+   * mode: 'test' (preview only) | 'live' (kirim WA via Fonnte)
+   */
+  async sendEODReportToOwner(mode = 'test') {
+    try {
+      const reportText = this.buildOwnerReportText();
+      if (!reportText || reportText.includes('Tidak ada data')) {
+        this.showToast('Tidak ada data untuk dikirim', 'notify');
+        return false;
+      }
+
+      const activeCount = (this.settlementSummary || []).filter(s =>
+        Number(s.soldQty) > 0 || Number(s.unsoldQty) > 0 || Number(s.totalHutang) > 0
+      ).length;
+
+      const res = await fetch('/api/eod-report-konsinyasi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settlementDate: this.settlementDate,
+          reportText,
+          mode,
+          supplierCount: activeCount,
+          totalBayar: Number(this.settlementTotalHutang) || 0
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        if (mode === 'test') {
+          this.showToast('📤 Laporan siap (mode preview).', 'success');
+        } else {
+          this.showToast('📤 Laporan terkirim ke WA owner!', 'success');
+        }
+        this.playSound('success');
+        return true;
+      } else {
+        this.showToast('Gagal: ' + (json.error || 'Unknown'), 'error');
+        this.playSound('error');
+        return false;
+      }
+    } catch (err) {
+      console.error('[EOD-REPORT] Error:', err);
+      this.showToast('Error: ' + err.message, 'error');
+      return false;
+    }
+  },
+ 
+ async bayarSupplier(supSummary, pm = 'cash') {
     if (!supSummary || supSummary.totalHutang <= 0) {
       this.showToast('Tidak ada hutang yang harus dibayar untuk supplier ini', 'notify');
       return;
