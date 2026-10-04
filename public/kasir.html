@@ -2547,15 +2547,6 @@
                   </button>
                   <button 
                     type="button" 
-                    @click="returBarangSupplier(sup)" 
-                    :disabled="sup.unsoldQty <= 0" 
-                    :class="sup.unsoldQty <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer'" 
-                    class="min-h-[40px] px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition">
-                    <i class="fa-solid fa-arrow-rotate-left text-xs"></i>
-                    <span>Retur Barang Sisa</span>
-                  </button>
-                  <button 
-                    type="button" 
                     @click="bayarSupplier(sup, 'cash')" 
                     :disabled="sup.totalHutang <= 0" 
                     :class="sup.totalHutang <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-xs shadow-violet-600/20'" 
@@ -7256,14 +7247,6 @@
               </button>
               <button 
                 type="button" 
-                @click="returBarangSupplier(sup)" 
-                :disabled="sup.unsoldQty <= 0" 
-                :class="sup.unsoldQty <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer'" 
-                class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition">
-                <span>Retur</span>
-              </button>
-              <button 
-                type="button" 
                 @click="bayarSupplier(sup, 'cash')" 
                 :disabled="sup.totalHutang <= 0" 
                 :class="sup.totalHutang <= 0 ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400' : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer'" 
@@ -7339,7 +7322,7 @@
       <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
         <i class="fa-solid fa-circle-info text-amber-600 mt-0.5 flex-shrink-0"></i>
         <span>
-  <strong>Mode Preview:</strong> teks ini hanya tampilan. Laporan akan otomatis terkirim ke owner saat Anda klik tombol <strong class="text-emerald-700">Bayar + Retur Semua</strong>.
+  <strong>Mode Preview:</strong> teks ini hanya tampilan. Laporan akan otomatis terkirim ke owner saat Anda klik tombol <strong class="text-emerald-700">🧾 Tutup Hari Konsinyasi</strong>.
         </span>
       </div>
 
