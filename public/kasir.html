@@ -6578,14 +6578,23 @@
       <!-- Preview Item & Barcode -->
       <div class="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-3 text-center">
         <h4 class="font-black text-sm text-stone-900" x-text="barcodeLabelItem?.name"></h4>
-        <div class="bg-white p-3 rounded-xl border border-stone-200 inline-block shadow-xs">
+                <div class="bg-white p-3 rounded-xl border border-stone-200 inline-block shadow-xs">
           <img 
-            :src="generateBarcodeDataURL(barcodeLabelItem?.sku || barcodeLabelItem?.barcode || barcodeLabelItem?.id || 'SKU-DEMO', barcodeLabelItem?.barcodeFormat || 'CODE128')" 
+            :src="generateBarcodeDataURL(
+              barcodeLabelItem?.skuSource === 'external' 
+                ? (barcodeLabelItem?.barcode || barcodeLabelItem?.sku || barcodeLabelItem?.id || 'SKU-DEMO')
+                : (barcodeLabelItem?.barcodeShort || barcodeLabelItem?.sku || 'SKU-DEMO'),
+              barcodeLabelItem?.barcodeFormat || 'CODE128'
+            )" 
             alt="Barcode Preview" 
             class="h-12 max-w-[220px] object-contain mx-auto" 
           />
         </div>
-        <div class="text-[11px] font-mono text-stone-600 font-bold" x-text="barcodeLabelItem?.sku || barcodeLabelItem?.barcode || barcodeLabelItem?.id"></div>
+        <div class="text-[11px] font-mono text-stone-600 font-bold" x-text="
+          barcodeLabelItem?.skuSource === 'external' 
+            ? (barcodeLabelItem?.barcode || barcodeLabelItem?.sku || barcodeLabelItem?.id)
+            : (barcodeLabelItem?.barcodeShort || barcodeLabelItem?.sku)
+        "></div>
       </div>
 
       <!-- Pilihan Ukuran Label (Fitur 1I) -->
