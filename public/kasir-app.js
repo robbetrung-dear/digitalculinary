@@ -7559,20 +7559,24 @@ try {
     return String(Date.now()).slice(-8); // fallback
   },
 
-  /** Persist barcodeShort ke Firebase + backend */
-  _persistShortCode(item) {
+    /** Persist barcodeShort ke Firebase + backend (write FULL item — hindari race dengan loadInventory auto-save) */
+  async _persistShortCode(item) {
     if (!item || !item.id || !item.barcodeShort) return;
+    // ✅ Tulis FULL ITEM — biar konsisten dengan auto-save loadInventory
     if (this._fbDb && this._fbSet && this._fbRef) {
       try {
-        const ref = this._fbRef(this._fbDb, `inventory/${item.id}/barcodeShort`);
-        this._fbSet(ref, item.barcodeShort);
-      } catch (e) {}
+        const ref = this._fbRef(this._fbDb, `inventory/${item.id}`);
+        const plain = JSON.parse(JSON.stringify(item));
+        await this._fbSet(ref, plain);
+      } catch (e) { console.warn('[PERSIST-SHORT] FB error:', e); }
     }
-    fetch(`/inventory/${encodeURIComponent(item.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ barcodeShort: item.barcodeShort })
-    }).catch(() => {});
+    try {
+      await fetch(`/inventory/${encodeURIComponent(item.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcodeShort: item.barcodeShort })
+      });
+    } catch (e) { console.warn('[PERSIST-SHORT] Backend error:', e); }
   },
  
  generateBarcodeDataURL(text, format) {
@@ -7708,15 +7712,23 @@ try {
    /**
    * ✅ Opsi C: Bulk-generate barcodeShort untuk item lama yang belum punya
    */
-  async regenShortCodeForExistingItems() {
+    async regenShortCodeForExistingItems() {
     if (!Array.isArray(this.inventoryList)) return;
     let count = 0;
+    const promises = [];
     for (const item of this.inventoryList) {
       if (!item || item.barcodeShort) continue;
       if (item.skuSource === 'external') continue;
       item.barcodeShort = this.generateShortCode();
       count++;
-      this._persistShortCode(item);
+      promises.push(this._persistShortCode(item));
+    }
+    // ✅ AWAIT semua write selesai sebelum toast
+    try {
+      await Promise.all(promises);
+      console.log(`[REGEN-SHORT] ✅ ${count} short codes persisted`);
+    } catch (e) {
+      console.warn('[REGEN-SHORT] Some writes failed:', e);
     }
     try {
       localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
@@ -8112,7 +8124,7 @@ try {
       supplierName: supName,
       isReadyToSell: true,
       linkedMenuId: menuId,
-      barcodeShort: this.generateShortCode(),
+      barcodeShort: this.generateShortCode(),   // ✅ Opsi C: 8-digit short code
       createdAt: Date.now()
     };
 
