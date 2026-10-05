@@ -158,9 +158,30 @@ export async function onRequest(context) {
       return jsonResponse({ success: false, error: 'Tidak ada OWNER_WA_NUMBER di Firebase maupun env var' }, 500);
     }
 
-    // Prefix R&D/Production
-    const prefix = String(env.EOD_HEADER_PREFIX || '');
-    const finalMessage = prefix ? (prefix + '\n' + reportText) : reportText;
+        // ✅ EOD Prefix Dinamis: baca brandName dari Firebase, fallback ke env
+    let brandName = '';
+    try {
+      const brandRes = await fetch(`${dbUrl}/site_config/brandName.json${auth}`);
+      if (brandRes.ok) {
+        const brandVal = await brandRes.json();
+        if (brandVal && typeof brandVal === 'string' && brandVal.trim()) {
+          brandName = brandVal.trim();
+          console.log('[EOD-REPORT] brandName from Firebase:', brandName);
+        }
+      }
+    } catch (e) {
+      console.warn('[EOD-REPORT] Fetch brandName note:', e.message);
+    }
+
+    // Prefix: [NamaToko] kalau brandName ada; fallback ke env kalau kosong
+    let prefix = '';
+    if (brandName) {
+      prefix = `[${brandName}] `;
+    } else {
+      prefix = String(env.EOD_HEADER_PREFIX || '');
+      console.log('[EOD-REPORT] brandName kosong, pakai env EOD_HEADER_PREFIX');
+    }
+    const finalMessage = prefix ? (prefix + reportText) : reportText;
 
     if (provider === 'fonnte') {
       const token = String(env.WA_FONNTE_TOKEN || '').trim();
