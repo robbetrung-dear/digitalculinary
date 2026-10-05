@@ -4928,6 +4928,7 @@ try {
       supplierName: form.supplierName || '',
       isReadyToSell: Boolean(form.isReadyToSell),
       linkedMenuId: form.linkedMenuId || null,
+           barcodeShort: form.barcodeShort || this.generateShortCode(),
       lastUpdate: Date.now(),
       createdAt: Date.now()
     };
@@ -7542,7 +7543,39 @@ try {
    * Helper: Generate Barcode Data URL (PNG) dari teks SKU atau barcode string
    * Mendukung auto-detect EAN13 (13 digit), UPC (12 digit), dan default CODE128
    */
-  generateBarcodeDataURL(text, format) {
+   /**
+   * ✅ Opsi C: Generate 8-digit numeric short code untuk barcode
+   * Random + uniqueness check di inventoryList
+   */
+  generateShortCode() {
+    const MAX_ATTEMPTS = 20;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      const code = String(Math.floor(10000000 + Math.random() * 90000000));
+      const exists = (this.inventoryList || []).some(inv =>
+        inv && String(inv.barcodeShort) === code
+      );
+      if (!exists) return code;
+    }
+    return String(Date.now()).slice(-8); // fallback
+  },
+
+  /** Persist barcodeShort ke Firebase + backend */
+  _persistShortCode(item) {
+    if (!item || !item.id || !item.barcodeShort) return;
+    if (this._fbDb && this._fbSet && this._fbRef) {
+      try {
+        const ref = this._fbRef(this._fbDb, `inventory/${item.id}/barcodeShort`);
+        this._fbSet(ref, item.barcodeShort);
+      } catch (e) {}
+    }
+    fetch(`/inventory/${encodeURIComponent(item.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcodeShort: item.barcodeShort })
+    }).catch(() => {});
+  },
+ 
+ generateBarcodeDataURL(text, format) {
     if (!text) return '';
     try {
       if (typeof window.JsBarcode === 'undefined') return '';
@@ -7672,6 +7705,25 @@ try {
     } catch(e){}
     this.showToast(`Berhasil men-generate SKU untuk ${count} item lama`, 'success');
   },
+   /**
+   * ✅ Opsi C: Bulk-generate barcodeShort untuk item lama yang belum punya
+   */
+  async regenShortCodeForExistingItems() {
+    if (!Array.isArray(this.inventoryList)) return;
+    let count = 0;
+    for (const item of this.inventoryList) {
+      if (!item || item.barcodeShort) continue;
+      if (item.skuSource === 'external') continue;
+      item.barcodeShort = this.generateShortCode();
+      count++;
+      this._persistShortCode(item);
+    }
+    try {
+      localStorage.setItem('dapur_inventory_list', JSON.stringify(this.inventoryList));
+    } catch (e) {}
+    this.showToast(`✅ Short code ter-generate untuk ${count} item lama`, 'success');
+  },
+
 
   /**
    * Buka modal scanner kamera Html5-QRCode dengan fallback manual input
@@ -7781,10 +7833,11 @@ try {
   handleJournalScanBahan(code) {
     const targetCode = String(code || '').trim().toLowerCase();
     const item = (this.inventoryList || []).find(i => 
-      (i.sku && i.sku.toLowerCase() === targetCode) ||
-      (i.barcode && i.barcode.toLowerCase() === targetCode) ||
-      (i.id && i.id.toLowerCase() === targetCode)
-    );
+  (i.barcodeShort && i.barcodeShort.toLowerCase() === targetCode) ||   // ← TAMBAH
+  (i.sku && i.sku.toLowerCase() === targetCode) ||
+  (i.barcode && i.barcode.toLowerCase() === targetCode) ||
+  (i.id && i.id.toLowerCase() === targetCode)
+);
     if (!item) {
       this.showToast(`Bahan dengan kode "${code}" tidak ditemukan di inventori`, 'error');
       return;
@@ -7820,9 +7873,21 @@ try {
       return;
     }
 
-    try {
-      const code = item.sku || item.barcode || item.id;
-      const barcodeDataUrl = this.generateBarcodeDataURL(code, item.barcodeFormat || 'CODE128');
+        try {
+      // ✅ Opsi C: pakai barcodeShort untuk item internal
+      let code, format;
+      if (item.skuSource === 'external') {
+        code = item.barcode || item.sku || item.id;
+        format = item.barcodeFormat || 'CODE128';
+      } else {
+        if (!item.barcodeShort) {
+          item.barcodeShort = this.generateShortCode();
+          this._persistShortCode(item);
+        }
+        code = item.barcodeShort;
+        format = 'CODE128';
+      }
+      const barcodeDataUrl = this.generateBarcodeDataURL(code, format);
       if (!barcodeDataUrl) {
         this.showToast('Gagal membentuk data barcode', 'error');
         return;
@@ -8047,6 +8112,7 @@ try {
       supplierName: supName,
       isReadyToSell: true,
       linkedMenuId: menuId,
+      barcodeShort: this.generateShortCode(),
       createdAt: Date.now()
     };
 
@@ -8439,7 +8505,8 @@ try {
 
    processScanReceive(code) {
     const cleanCode = String(code || '').trim().toLowerCase();
-    const item = (this.inventoryList || []).find(i => 
+        const item = (this.inventoryList || []).find(i => 
+      (i.barcodeShort && String(i.barcodeShort).toLowerCase() === cleanCode) ||
       (i.sku && i.sku.toLowerCase() === cleanCode) ||
       (i.barcode && i.barcode.toLowerCase() === cleanCode) ||
       (i.id && i.id.toLowerCase() === cleanCode)
