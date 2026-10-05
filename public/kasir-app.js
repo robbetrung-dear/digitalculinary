@@ -4101,17 +4101,21 @@ try {
         }
       }
 
-      const res = await fetch('/inventory');
-      if (res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          try {
-            const json = await res.json();
-            if (Array.isArray(json.data) && json.data.length > 0) {
-              this.inventoryList = json.data;
+      // ✅ FIX: Fetch backend HANYA kalau Firebase listener belum kasih data
+      // Jangan override Firebase state (source of truth) dengan backend stale
+      if (!this.inventoryList || this.inventoryList.length === 0) {
+        const res = await fetch('/inventory');
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            try {
+              const json = await res.json();
+              if (Array.isArray(json.data) && json.data.length > 0) {
+                this.inventoryList = json.data;
+              }
+            } catch (jsonErr) {
+              console.warn('Gagal parse JSON dari /inventory:', jsonErr);
             }
-          } catch (jsonErr) {
-            console.warn('Gagal parse JSON dari /inventory:', jsonErr);
           }
         }
       }
@@ -4136,20 +4140,8 @@ try {
         ];
       }
 
-      // ✅ AUTO-SAVE semua inventory ke Firebase (agar sync antar device)
-      if (this._fbDb && this._fbSet && this._fbRef) {
-        try {
-          const cleanList = JSON.parse(JSON.stringify(this.inventoryList));
-          for (const item of cleanList) {
-            if (!item.id) continue;
-            const itemRef = this._fbRef(this._fbDb, `inventory/${item.id}`);
-            await this._fbSet(itemRef, item);
-          }
-          console.log(`✅ Auto-saved ${cleanList.length} inventory items ke Firebase`);
-        } catch (fbErr) {
-          console.warn('Firebase auto-save inventory error:', fbErr);
-        }
-      }
+      // ❌ REMOVED: auto-save Firestore — ini bikin race condition & timpa data retur
+      // Firebase listener sudah jadi source of truth, write langsung via _persistShortCode dkk.
 
     } catch (e) {
       console.warn('loadInventory exception:', e);
