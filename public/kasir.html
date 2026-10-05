@@ -4472,7 +4472,7 @@
           <!-- Tombol Scan External -->
           <button 
             type="button" 
-            @click="openScanModal('edit_stock', 'camera', (code) => { if (selectedStockItem) { selectedStockItem.sku = code; selectedStockItem.barcode = code; selectedStockItem.skuSource = 'external'; } })"
+            @click="openScanModal('edit_stock', 'camera', (code) => { if ($data.selectedStockItem) { $data.selectedStockItem.sku = code; $data.selectedStockItem.barcode = code; $data.selectedStockItem.skuSource = 'external'; } })"
             class="min-h-[44px] px-2 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer border border-sky-200"
             title="Scan barcode dari kemasan produk">
             <i class="fa-solid fa-barcode text-[10px]"></i>
@@ -5934,7 +5934,7 @@
         </div>
         <button 
           type="button" 
-          @click="openScanModal('journal', 'camera', (code) => handleJournalScanBahan(code))" 
+          @click="openScanModal('journal', 'camera', (code) => $data.handleJournalScanBahan(code))" 
           class="min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-sm transition">
           <i class="fa-solid fa-camera"></i>
           <span>Scan Sekarang</span>
@@ -6369,7 +6369,7 @@
             class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500" />
           <button 
             type="button" 
-            @click="openScanModal('multi_scan', 'camera', (code) => { multiScanQuery = code; onMultiScanQueryChange(); })" 
+            @click="openScanModal('multi_scan', 'camera', (code) => { $data.multiScanQuery = code; $data.onMultiScanQueryChange(); })" 
             class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
             <i class="fa-solid fa-camera"></i>
             <span>Kamera</span>
@@ -6926,7 +6926,7 @@
             class="flex-1 min-h-[44px] px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" 
           />
           <button type="button" 
-            @click="openScanModal('receive_goods', 'camera', (code) => { scanReceiveForm.skuQuery = code; onReceiveSkuQueryChange(); })" 
+            @click="openScanModal('receive_goods', 'camera', (code) => { $data.scanReceiveForm.skuQuery = code; $data.onReceiveSkuQueryChange(); })" 
             class="min-h-[44px] px-3.5 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
             <i class="fa-solid fa-camera"></i>
             <span>Scan</span>
