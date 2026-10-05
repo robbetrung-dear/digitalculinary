@@ -7732,9 +7732,7 @@ try {
   /**
    * Buka modal scanner kamera Html5-QRCode dengan fallback manual input
    */
-    openScanModal(target = 'inventory_edit', mode = 'camera', onScanned = null) {
-    console.log('[SCAN-OPEN] target:', target, '| mode:', mode, '| hasCallback:', typeof onScanned === 'function');
-    this.scanModal = {
+  openScanModal(target = 'inventory_edit', mode = 'camera', onScanned = null) {
     this.scanModal = {
       open: true,
       target: target,
@@ -7790,21 +7788,13 @@ try {
   /**
    * Callback scan berhasil
    */
-    _onScanSuccess(decodedText) {
+  _onScanSuccess(decodedText) {
     const text = String(decodedText || '').trim();
-    console.log('[SCAN-SUCCESS] code:', text, '| target:', this.scanModal.target, '| hasCallback:', typeof this.scanModal._onScanned === 'function');
     if (!text) return;
     this.playSound('success');
     this.scanModal.result = text;
     if (typeof this.scanModal._onScanned === 'function') {
-      try {
-        this.scanModal._onScanned(text);
-        console.log('[SCAN-SUCCESS] callback executed OK');
-      } catch (err) {
-        console.error('[SCAN-SUCCESS] callback ERROR:', err);
-      }
-    } else {
-      console.warn('[SCAN-SUCCESS] callback MISSING — _onScanned is', this.scanModal._onScanned);
+      this.scanModal._onScanned(text);
     }
     this.closeScanModal();
   },
@@ -8517,10 +8507,8 @@ try {
     return this.scanReceiveForm.items.reduce((s, it) => s + (Number(it.total) || 0), 0);
   },
 
-     processScanReceive(code) {
-    console.log('[SCAN-PROCESS] code:', code);
+   processScanReceive(code) {
     const cleanCode = String(code || '').trim().toLowerCase();
-    console.log('[SCAN-PROCESS] clean:', cleanCode);
         const item = (this.inventoryList || []).find(i => 
       (i.barcodeShort && String(i.barcodeShort).toLowerCase() === cleanCode) ||
       (i.sku && i.sku.toLowerCase() === cleanCode) ||
