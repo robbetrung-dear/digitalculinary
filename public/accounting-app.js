@@ -1148,6 +1148,15 @@ this.jurnalList.forEach(j => {
       } catch (e) {
         console.warn('[ACCT-APP] Re-fetch after POST note:', e);
       }
+            // ✅ FIX: Re-fetch dari server biar ID & state konsisten
+      try {
+        await new Promise(r => setTimeout(r, 600));
+        await this.loadJournal(bulanKey);
+        await this.loadLedgerMap(bulanKey);
+        await this.loadCOA();
+      } catch (e) {
+        console.warn('[ACCT-APP] Re-fetch after POST note:', e);
+      }
       this.recalculateAllAccountBalances();
       await this.loadSummary(this.bulanAktif);
       await this.loadDashboard();
