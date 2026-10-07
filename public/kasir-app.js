@@ -5047,6 +5047,14 @@ try {
       setTimeout(() => { window.location.href = '/'; }, 800);
       return;
     }
+        // ✅ FIX BUG-4: Block kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Tidak bisa edit stok.', 'error');
+      this.playSound('error');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
+
     // 🔒 PIN GATE (khusus untuk koreksi manual / waste / edit harga)
     const isDestructive = ['adjustment', 'waste', 'opname'].includes(this.stockChangeType);
     if (isDestructive) {
