@@ -1022,11 +1022,34 @@ try {
               try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
               try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
 
-              // Alert + redirect
-              setTimeout(() => {
-                alert('⚠️ Shift telah ditutup oleh operator lain (kasir utama).\n\nSesi kasir Anda akan diakhiri. Silakan hubungi admin untuk lanjut shift baru.');
-                window.location.href = '/';
-              }, 300);
+              // ✅ FIX BUG-4: Overlay fullscreen (alert diblokir di tab background)
+              // Buat overlay
+              const overlay = document.createElement('div');
+              overlay.id = 'shift-closed-overlay';
+              overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;font-family:"Plus Jakarta Sans",sans-serif;';
+              overlay.innerHTML = `
+                <div style="background:#fff;border-radius:24px;max-width:440px;width:100%;padding:32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+                  <div style="width:64px;height:64px;border-radius:20px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">⚠️</div>
+                  <h3 style="font-size:20px;font-weight:900;color:#1c1917;margin:0 0 8px;letter-spacing:-.02em;">Shift Telah Ditutup</h3>
+                  <p style="font-size:13px;color:#57534e;line-height:1.5;margin:0 0 20px;">Shift <strong>${this.kasirInfo?.shiftId || '-'}</strong> telah ditutup oleh operator lain (kasir utama).<br><br>Sesi kasir Anda akan diakhiri dalam <strong id="shift-closed-countdown">5</strong> detik.</p>
+                  <button onclick="try{sessionStorage.removeItem('dapur_kasir_session');localStorage.removeItem('dapur_kasir_session');}catch(e){};window.location.href='/';" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;height:48px;border-radius:14px;background:#ea580c;color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer;box-shadow:0 8px 20px rgba(234,88,12,.3);">
+                    ← Keluar Sekarang
+                  </button>
+                </div>
+              `;
+              document.body.appendChild(overlay);
+
+              // Countdown 5 detik → redirect paksa
+              let countdown = 5;
+              const cdEl = document.getElementById('shift-closed-countdown');
+              const cdInterval = setInterval(() => {
+                countdown--;
+                if (cdEl) cdEl.textContent = countdown;
+                if (countdown <= 0) {
+                  clearInterval(cdInterval);
+                  window.location.href = '/';
+                }
+              }, 1000);
             }
           }
         });
@@ -1196,8 +1219,15 @@ try {
   /**
    * Tambah item menu ke keranjang dengan validasi stok bahan baku
    */
-    addToCart(menuItem) {
+      addToCart(menuItem) {
     if (!menuItem) return;
+
+    // ✅ FIX BUG-4: Block add-to-cart kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Tidak bisa tambah item.', 'error');
+      this.playSound('error');
+      return;
+    }
 
     // ✅ FIX BUG-14: Block kalau stok 0 atau negatif (konsisten dengan UI badge)
     const currentStock = this.getMenuCalculatedStock(menuItem.id);
@@ -2015,7 +2045,15 @@ try {
   /**
    * Simpan Transaksi Lengkap ke Firebase Cloud & Jalankan Otomasi POS
    */
-    async simpanTransaksi(paymentData = {}) {
+      async simpanTransaksi(paymentData = {}) {
+    // ✅ FIX BUG-4: Block transaksi kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Transaksi ditolak.', 'error');
+      this.playSound('error');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
+
     const txId = paymentData.txId || ('T' + Date.now());
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -7114,7 +7152,7 @@ try {
     '6002': 'Beban Sewa Tempat & Outlet',
     '6003': 'Beban Listrik, Air & Gas',
     '6004': 'Beban Marketing & Iklan',
-    '6005': 'Beban Operasional & Kurir',
+        '6005': 'Beban Operasional (Kurir/Ekspedisi/Lainnya)',
     '6006': 'Beban Penyusutan',
     // Legacy 3-digit untuk kompatibilitas
     '101': 'Kas di Tangan',
@@ -7131,7 +7169,7 @@ try {
     '602': 'Beban Sewa',
     '603': 'Beban Listrik & Air',
     '604': 'Beban Marketing',
-    '605': 'Beban Kurir',
+        '605': 'Beban Operasional (Kurir/Ekspedisi/Lainnya)',
     '606': 'Beban Penyusutan'
   };
   return coa[String(accCode)] || ('Akun ' + accCode);
