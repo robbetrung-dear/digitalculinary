@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kasir Pintar - Dapur Kuliner Viral</title>
 
-  <!-- ✅ Security Guard: Wajib login kasir sebelum akses /kasir -->
+    <!-- ✅ Security Guard: Wajib login kasir sebelum akses /kasir -->
   <script>
     (function() {
       try {
@@ -27,11 +27,7 @@
         }
       } catch (e) {
         try {
-      // 3. Clear sessionStorage + localStorage 'dapur_kasir_session'
-      try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-      try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-
-      // 4. Redirect ke /
+          sessionStorage.removeItem('dapur_kasir_session');
           localStorage.removeItem('dapur_kasir_session');
         } catch (_) {}
         window.location.replace('/');
@@ -44,7 +40,6 @@
     // Handle AudioContext autoplay policy
     window.__userInteracted = false;
     window.resumeAudioContext = function() {
-      // Dipanggil dari kasir-app.js saat akan play sound
       if (window.__audioCtx && window.__audioCtx.state === 'suspended') {
         window.__audioCtx.resume().catch(() => {});
       }
@@ -59,7 +54,7 @@
       }, { once: false });
     });
 
-    // Error Shield: Hanya log error nyata, hindari log noise undefined
+    // Error Shield
     (function() {
       const origWarn = console.warn;
       console.warn = function(...args) {
@@ -90,23 +85,7 @@
       if (event.stopImmediatePropagation) event.stopImmediatePropagation();
     });
   </script>
-
-  <!-- Cek Otentikasi Sesi Kasir Sebelum Render (Fallback Demo Aman) -->
-  <script>
-    (function() {
-      try {
-        let session = sessionStorage.getItem("dapur_kasir_session");
-        if (!session) {
-          session = JSON.stringify({
-            username: "kasir",
-            name: "Kasir Utama",
-            shiftId: "S-" + new Date().toISOString().slice(0, 10) + "-01"
-          });
-          sessionStorage.setItem("dapur_kasir_session", session);
-        }
-      } catch (e) {}
-    })();
-  </script>
+  <!-- ✅ Legacy "Fallback Demo Aman" script DIHAPUS — tidak boleh auto-create session palsu -->
 
   <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
