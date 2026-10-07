@@ -7137,13 +7137,13 @@ git push -u origin main</pre>
             }
 
             // OTENTIKASI BERHASIL
-            const shiftId = 'S-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+            // ✅ FIX: shiftId TIDAK digenerate di sini. Biar initKasir() yang cek
+            // shift aktif di Firebase atau bikin baru via prompt modal awal.
             const sessionData = {
               username: matchedAcc.username,
               kasirName: matchedAcc.name,
               role: matchedAcc.role || 'kasir',
-              loginAt: new Date().toISOString(),
-              shiftId: shiftId
+              loginAt: new Date().toISOString()
             };
 
             sessionStorage.setItem("dapur_kasir_session", JSON.stringify(sessionData));
@@ -7184,10 +7184,10 @@ git push -u origin main</pre>
             }
 
             const sessionData = {
-              username: data.username || cleanUser,
-              kasirName: data.kasirName || ('Kasir ' + cleanUser),
-              loginAt: data.loginAt || new Date().toISOString(),
-              shiftId: data.shiftId || ('SHIFT-' + Date.now().toString(36).toUpperCase())
+              username: matchedAcc.username,
+              kasirName: matchedAcc.name,
+              role: matchedAcc.role || 'kasir',
+              loginAt: new Date().toISOString()
             };
 
             sessionStorage.setItem("dapur_kasir_session", JSON.stringify(sessionData));
