@@ -1086,9 +1086,11 @@ try {
       // 3. Tidak ada shift aktif → prompt modal awal → buka shift baru
       console.log('[ENSURE-SHIFT] Tidak ada shift aktif, prompt buka baru');
       const modalInput = prompt('🆕 Buka shift baru.\n\nMasukkan modal kas awal laci (Rp):', '200000');
-      if (modalInput === null) {
-        // User cancel → kembali ke landing
-        this.showToast('Buka shift dibatalkan, kembali ke halaman utama', 'notify');
+        if (modalInput === null) {
+        // User cancel → logout bersih (hindari stuck landing dengan session aktif)
+        this.showToast('Buka shift dibatalkan — Anda logout otomatis', 'notify');
+        try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+        try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
         setTimeout(() => { window.location.href = '/'; }, 800);
         return;
       }
