@@ -438,7 +438,41 @@
         <span>Akuntansi</span>
       </button>
     </div>
-  </header>
+    </header>
+
+  <!-- ✅ Banner Ubah Modal Awal (muncul setelah auto-open shift) -->
+  <div
+    x-show="showEditModalBanner"
+    x-cloak
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 -translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    class="bg-amber-50 border-b-2 border-amber-300 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap flex-shrink-0 relative z-40">
+    <div class="flex items-center gap-2 text-sm text-amber-900">
+      <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+      <span>Shift baru dibuka dengan <strong>modal default Rp 200.000</strong>. Ubah sekarang?</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <input
+        type="number"
+        x-model.number="editModalInput"
+        placeholder="200000"
+        min="0"
+        class="h-9 w-32 px-3 rounded-lg border-2 border-amber-400 text-sm font-mono font-bold bg-white focus:outline-none focus:border-amber-600" />
+      <button
+        type="button"
+        @click="updateOpenCash(editModalInput || 200000)"
+        class="h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
+        <i class="fa-solid fa-save text-[10px] mr-1"></i> Ubah
+      </button>
+      <button
+        type="button"
+        @click="showEditModalBanner = false"
+        class="h-9 px-3 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-amber-800 font-bold text-xs transition cursor-pointer">
+        <i class="fa-solid fa-xmark"></i> Tutup
+      </button>
+    </div>
+  </div>
 
   <!-- ===================================================================== -->
   <!-- MAIN WRAPPER (SIDEBAR DESKTOP + KONTEN AREA)                           -->
