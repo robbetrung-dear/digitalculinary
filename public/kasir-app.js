@@ -115,6 +115,7 @@ window.kasirApp = () => ({
   shiftPauseTime: null,
   showEditModalBanner: false,   // ✅ banner ubah modal awal
   editModalInput: 0,             // input sementara banner
+  autoJournalShiftDiff: false,  // ✅ FITUR-1: toggle auto-jurnal selisih kas close shift (sync dari site_config)
 
   // Modal State
   paymentModal: false,
@@ -666,9 +667,15 @@ try {
           };
           console.log('[KASIR] Payment config loaded:', this.paymentConfig.bankName);
            // 🔒 Load Supervisor PIN dari /site_config/supervisorPin
-        if (val.supervisorPin) {
+                if (val.supervisorPin) {
           this.supervisorPin = String(val.supervisorPin).trim();
           console.log('[KASIR-SEC] ✅ Supervisor PIN loaded from Firebase');
+        }
+
+        // ✅ FITUR-1: Load toggle auto-jurnal selisih kas
+        if (val.autoJournalShiftDiff !== undefined) {
+          this.autoJournalShiftDiff = Boolean(val.autoJournalShiftDiff);
+          console.log('[KASIR] ✅ Auto-Jurnal Shift Diff:', this.autoJournalShiftDiff);
         }
         }
       }
@@ -4268,13 +4275,52 @@ try {
         }
       }
 
-      this.closeShiftModal = false;
+            this.closeShiftModal = false;
       this.showToast(`Shift ${shiftId} berhasil ditutup. Mengunduh laporan...`, 'success');
+
+      // ✅ FITUR-1: Auto-jurnal selisih kas (kalau diff ≠ 0 & toggle ON)
+      if (this.autoJournalShiftDiff && Math.abs(diff) >= 1) {
+        try {
+          const absDiff = Math.abs(diff);
+          // diff < 0 → kas kurang → D 6005 Beban Operasional / K 1001 Kas
+          // diff > 0 → kas lebih  → D 1001 Kas / K 6005 Beban Operasional (reversal)
+          const debitAcc = diff < 0 ? '6005' : '1001';
+          const creditAcc = diff < 0 ? '1001' : '6005';
+          const desc = diff < 0
+            ? `Selisih kas kurang saat tutup shift ${shiftId}`
+            : `Selisih kas lebih saat tutup shift ${shiftId}`;
+
+          const bulan = new Date().toISOString().slice(0, 7);
+          const jurnalRes = await fetch(`/accounting/journal/${bulan}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              category: 'penyesuaian',
+              date: new Date().toISOString().slice(0, 10),
+              desc,
+              ref: `SHIFT-DIFF-${shiftId}`,
+              status: 'approved',
+              lines: [
+                { acc: debitAcc, debit: absDiff, credit: 0 },
+                { acc: creditAcc, debit: 0, credit: absDiff }
+              ],
+              createdBy: this.kasirInfo?.name || 'kasir'
+            })
+          });
+          if (jurnalRes.ok) {
+            console.log('[SHIFT-DIFF] ✅ Auto-jurnal selisih kas:', { diff, absDiff });
+          } else {
+            console.warn('[SHIFT-DIFF] ⚠️ Gagal auto-jurnal:', await jurnalRes.text());
+          }
+        } catch (err) {
+          console.warn('[SHIFT-DIFF] ❌ Error:', err);
+        }
+      }
 
       // 2. Generate PDF laporan shift & auto-download
       await this.exportLaporanPDF('shift');
 
-      // 3. Clear sessionStorage "dapur_kasir_session"
+      // 3. Clear sessionStorage + localStorage 'dapur_kasir_session'
       sessionStorage.removeItem('dapur_kasir_session');
 
       // 4. Redirect ke /
