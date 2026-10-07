@@ -27,7 +27,11 @@
         }
       } catch (e) {
         try {
-          sessionStorage.removeItem('dapur_kasir_session');
+      // 3. Clear sessionStorage + localStorage 'dapur_kasir_session'
+      try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+      try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+
+      // 4. Redirect ke /
           localStorage.removeItem('dapur_kasir_session');
         } catch (_) {}
         window.location.replace('/');
