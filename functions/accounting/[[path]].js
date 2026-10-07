@@ -942,9 +942,16 @@ export async function onRequest(context) {
           }, 400);
         }
 
-        // Tentukan Partition Bulan berdasarkan tanggal (YYYY-MM)
-        const entryMonth = dateStr.substring(0, 7);
-        const journalId = `JRN-${dateStr.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+                // ✅ FIX BUG-3: Honor path {bulan}/{entryId} kalau ada
+        let entryMonth = dateStr.substring(0, 7);
+        let journalId;
+        if (parts[1] && parts[1].length === 7 && parts[2]) {
+          entryMonth = parts[1];
+          journalId = String(parts[2]).trim();
+          console.log(`[ACCOUNTING-API] POST journal user-ID: ${journalId} @ ${entryMonth}`);
+        } else {
+          journalId = `JRN-${dateStr.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+        }
 
         const newEntry = {
           noEntry,
