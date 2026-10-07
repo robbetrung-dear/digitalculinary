@@ -1030,15 +1030,30 @@ try {
       const now = Date.now();
       const staleThreshold = 12 * 60 * 60 * 1000;
 
-      // 2a. Auto-close stale shifts
+      // ✅ Helper: parse timestamp dari shift ID format S-YYYYMMDD-XXXX
+      const parseDateFromShiftId = (sid) => {
+        const m = String(sid || '').match(/^S-(\d{8})/);
+        if (!m) return null;
+        const d = m[1];
+        const yr = Number(d.slice(0, 4));
+        const mo = Number(d.slice(4, 6)) - 1;
+        const dy = Number(d.slice(6, 8));
+        const ts = new Date(yr, mo, dy).getTime();
+        return isNaN(ts) ? null : ts;
+      };
+
+      // 2a. Auto-close stale shifts (fallback ke timestamp dari shift ID kalau field `open` kosong)
       for (const shf of list) {
-        if (shf && shf.status === 'open' && shf.open && (now - Number(shf.open)) > staleThreshold) {
-          console.log('[ENSURE-SHIFT] Auto-close stale:', shf.id);
+        if (!shf || !shf.id || shf.status !== 'open') continue;
+        const openTs = Number(shf.open) || parseDateFromShiftId(shf.id);
+        if (!openTs) continue;
+        if ((now - openTs) > staleThreshold) {
+          console.log('[ENSURE-SHIFT] Auto-close stale:', shf.id, 'open:', new Date(openTs).toLocaleString('id-ID'));
           this._patchShift(shf.id, {
             status: 'closed',
-            close: Number(shf.open) + staleThreshold,
+            close: openTs + staleThreshold,
             note: (shf.note ? shf.note + ' | ' : '') + 'Auto-closed (stale >12 jam)'
-          }).catch(() => {});
+          }).catch((err) => console.warn('[ENSURE-SHIFT] Auto-close failed:', err));
         }
       }
 
@@ -3935,6 +3950,19 @@ try {
    * Buka shift baru atau reopen shift
    * Sudah dilakukan oleh /kasir-auth saat login, fungsi ini untuk kasus kasir lupa / reopen
    */
+      /**
+   * ✅ FIX: Generate Shift ID unik format S-YYYYMMDD-XXXX
+   * Konsisten dengan format yang dipakai index.html login flow lama
+   */
+  generateShiftId() {
+    const d = new Date();
+    const dateStr = String(d.getFullYear())
+      + String(d.getMonth() + 1).padStart(2, '0')
+      + String(d.getDate()).padStart(2, '0');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `S-${dateStr}-${rand}`;
+  },
+
     async bukaShift(modalAwal, skipConfirm = false) {
     if (!skipConfirm && !confirm('Apakah Anda ingin membuka sesi shift baru? Tindakan ini akan membuat ID shift baru untuk kasir ini.')) {
       return null;
