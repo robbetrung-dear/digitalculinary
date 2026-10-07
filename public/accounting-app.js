@@ -1140,7 +1140,17 @@ this.jurnalList.forEach(j => {
       await this.loadSummary(this.bulanAktif);     // ← re-fetch summary
       await this.loadCOA();                        // ← recalc COA dengan ledger baru
       await this.loadDashboard();                  // ← refresh laba rugi, arus kas, neraca
-      this.recalculateAllAccountBalances();        // ← final recalc
+            // ✅ FIX BUG-3: Re-fetch dari server (ID & state konsisten setelah POST)
+      try {
+        await this.loadJournal(bulanKey);
+        await this.loadLedgerMap(bulanKey);
+        await this.loadCOA();
+      } catch (e) {
+        console.warn('[ACCT-APP] Re-fetch after POST note:', e);
+      }
+      this.recalculateAllAccountBalances();
+      await this.loadSummary(this.bulanAktif);
+      await this.loadDashboard();
 
       this.showToast(`Jurnal [${noEntry}] sebesar ${formatRupiah(amt)} berhasil dicatat!`, 'success');
 
