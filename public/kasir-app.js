@@ -988,7 +988,7 @@ try {
     if (this._fbDb && this._fbOnValue && this._fbRef && this.kasirInfo.shiftId) {
       try {
         const shiftRef = this._fbRef(this._fbDb, `pos/shifts/${this.kasirInfo.shiftId}`);
-        this._fbOnValue(shiftRef, (snapshot) => {
+                this._fbOnValue(shiftRef, (snapshot) => {
           const val = snapshot.val();
           if (val) {
             if (val.totalSales !== undefined) this.shiftSummary.totalSales = val.totalSales;
@@ -997,6 +997,32 @@ try {
             if (val.transactionCount !== undefined) this.shiftSummary.transactionCount = val.transactionCount;
             if (val.status) this.shiftStatus = val.status;
             if (val.pauseTime !== undefined) this.shiftPauseTime = val.pauseTime;
+
+            // ✅ FIX: Multi-kasir auto-logout saat shift ditutup device lain
+            if (val.status === 'closed' && this.kasirInfo?.shiftId) {
+              // Guard anti double-execute (kasir yang close sendiri sudah redirect)
+              if (this._shiftClosedHandled) return;
+              this._shiftClosedHandled = true;
+
+              console.warn('[SHIFT-LISTENER] Shift ditutup dari device lain → force logout');
+              this.playSound('notify');
+
+              // Cleanup intervals
+              try { if (this._clockInterval) clearInterval(this._clockInterval); } catch (e) {}
+              try { if (this._reconcileInterval) clearInterval(this._reconcileInterval); } catch (e) {}
+              try { if (this._dashboardInterval) clearInterval(this._dashboardInterval); } catch (e) {}
+              try { if (this._snapshotInterval) clearInterval(this._snapshotInterval); } catch (e) {}
+
+              // Clear session
+              try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+              try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+
+              // Alert + redirect
+              setTimeout(() => {
+                alert('⚠️ Shift telah ditutup oleh operator lain (kasir utama).\n\nSesi kasir Anda akan diakhiri. Silakan hubungi admin untuk lanjut shift baru.');
+                window.location.href = '/';
+              }, 300);
+            }
           }
         });
       } catch (e) {
