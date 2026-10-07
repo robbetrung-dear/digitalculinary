@@ -3,8 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kasir Pintar - Dapur Kuliner Viral</title>
-  
+    <title>Kasir Pintar - Dapur Kuliner Viral</title>
+
+  <!-- ✅ Security Guard: Wajib login kasir sebelum akses /kasir -->
+  <script>
+    (function() {
+      try {
+        const KEY = 'dapur_kasir_session';
+        let raw = sessionStorage.getItem(KEY) || localStorage.getItem(KEY);
+        if (!raw) {
+          window.location.replace('/');
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.username) {
+          sessionStorage.removeItem(KEY);
+          localStorage.removeItem(KEY);
+          window.location.replace('/');
+          return;
+        }
+        if (!sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, raw);
+        }
+      } catch (e) {
+        try {
+          sessionStorage.removeItem('dapur_kasir_session');
+          localStorage.removeItem('dapur_kasir_session');
+        } catch (_) {}
+        window.location.replace('/');
+      }
+    })();
+  </script>
+
   <!-- Global safety shield & AudioContext autoplay policy handler -->
   <script>
     // Handle AudioContext autoplay policy
