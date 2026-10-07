@@ -818,11 +818,16 @@ try {
         });
       };
 
-      this._fbSet = async (refObj, value) => {
+            this._fbSet = async (refObj, value) => {
         const plain = (value === null || typeof value !== 'object') 
           ? value 
           : JSON.parse(JSON.stringify(value));
         return refObj.set(plain);
+      };
+
+      // ✅ FIX BUG-1: Tambah _fbGet yang hilang — dipakai loadRiwayatPembelian
+      this._fbGet = async (refObj) => {
+        return refObj.get();
       };
 
       console.log('[FB-INIT] ✅ Firebase Compat connected:', cfg.projectId);
