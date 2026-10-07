@@ -3910,6 +3910,41 @@ git push -u origin main</pre>
 
         <!-- TAB 9: KEAMANAN PASSWORD ADMIN -->
         <div x-show="adminActiveTab === 'security'" class="space-y-5">
+        <!-- ✅ FITUR-1: Toggle Auto-Jurnal Selisih Kas Close Shift -->
+        <div class="p-5 rounded-2xl border-2 transition"
+             :class="siteConfig.autoJournalShiftDiff ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-white'">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition"
+                   :class="siteConfig.autoJournalShiftDiff ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-500'">
+                <i class="fa-solid fa-scale-balanced text-base"></i>
+              </div>
+              <div class="min-w-0">
+                <h5 class="text-xs font-black uppercase tracking-wider text-stone-900">
+                  Auto-Jurnal Selisih Kas Saat Tutup Shift
+                </h5>
+                <p class="text-xs text-stone-500 mt-1 leading-relaxed">
+                  Jika <strong>ON</strong> — saat kasir menutup shift dengan selisih kas (fisik ≠ sistem), sistem otomatis membuat jurnal penyesuaian:
+                  kas kurang → <span class="font-mono font-bold">D 6005 / K 1001</span>, kas lebih → <span class="font-mono font-bold">D 1001 / K 6005</span>.
+                  Jika <strong>OFF</strong> — user catat jurnal selisih kas manual.
+                </p>
+              </div>
+            </div>
+
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" x-model="siteConfig.autoJournalShiftDiff" class="sr-only peer">
+              <div class="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          <div class="mt-3 pt-3 border-t border-stone-200/70 flex items-center justify-between">
+            <span class="text-[11px] font-bold" :class="siteConfig.autoJournalShiftDiff ? 'text-emerald-700' : 'text-stone-500'">
+              <i :class="siteConfig.autoJournalShiftDiff ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+              <span x-text="siteConfig.autoJournalShiftDiff ? 'Status: AUTO-JURNAL AKTIF' : 'Status: MANUAL (user catat sendiri)'"></span>
+            </span>
+            <span class="text-[10px] text-stone-400 italic">Wajib klik "Simpan Semua Perubahan" untuk persist</span>
+          </div>
+        </div>
           <div class="bg-stone-50 p-4 rounded-2xl border border-stone-200">
             <h4 class="font-extrabold text-stone-900 text-sm">Ubah Password Keamanan Panel Admin</h4>
             <p class="text-xs text-stone-500">Ganti password masuk admin dengan standar keamanan ketat.</p>
