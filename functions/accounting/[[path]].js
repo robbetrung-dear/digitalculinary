@@ -520,9 +520,14 @@ export async function onRequest(context) {
     // =========================================================================
     if (parts[0] === 'coa') {
       if (method === 'GET') {
-        const res = await fetch(`${dbUrl}/accounting/coa.json${authParam}`);
+                const res = await fetch(`${dbUrl}/accounting/coa.json${authParam}`);
         const data = await res.json();
-        const coaResult = data && typeof data === 'object' && Object.keys(data).length > 0 ? data : DEFAULT_COA;
+        // ✅ FIX: Merge Firebase dengan DEFAULT_COA — Firebase override, tapi missing keys dilengkapi default
+        // Ini mencegah dropdown lock kalau Firebase korup (cuma 1-2 akun)
+        const coaResult = (data && typeof data === 'object' && Object.keys(data).length > 0)
+          ? { ...DEFAULT_COA, ...data }
+          : { ...DEFAULT_COA };
+        console.log('[ACCOUNTING-API] COA merged:', Object.keys(coaResult).length, 'akun (firebase:', Object.keys(data || {}).length + ')');
         return jsonResponse({ success: true, data: coaResult }, 200);
       }
 
