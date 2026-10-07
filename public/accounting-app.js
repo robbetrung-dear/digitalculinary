@@ -40,7 +40,7 @@ const DEFAULT_COA = [
   { code: '6002', name: 'Beban Sewa Tempat & Outlet', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 },
   { code: '6003', name: 'Beban Listrik, Air & Gas', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 },
   { code: '6004', name: 'Beban Marketing & Iklan', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 },
-  { code: '6005', name: 'Beban Operasional & Kurir', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 }
+    { code: '6005', name: 'Beban Operasional (Kurir/Ekspedisi/Lainnya)', type: 'Beban', normalBalance: 'Debit', initialBalance: 0, currentBalance: 0 }
 ];
 
 // Mapping alias akun 3-digit (POS Kasir) dan 4-digit (Akuntansi)
@@ -1026,7 +1026,7 @@ const _getAccNameById = (code) => {
     '201':'Hutang Supplier','301':'Modal Pemilik','302':'Prive Pemilik',
     '401':'Pendapatan Penjualan','402':'Pendapatan Catering','501':'HPP',
     '601':'Beban Gaji','602':'Beban Sewa','603':'Beban Listrik & Air',
-    '604':'Beban Marketing','605':'Beban Kurir','606':'Beban Penyusutan'
+    '604':'Beban Marketing','605':'Beban Operasional (Kurir/Ekspedisi/Lainnya)','606':'Beban Penyusutan'
   };
   return map[String(code)] || ('Akun ' + code);
 };
@@ -1133,9 +1133,14 @@ this.jurnalList.forEach(j => {
         console.warn('[ACCT-APP] Post journal entry note:', e);
       }
 
-      this.recalculateAllAccountBalances();
-      await this.loadSummary(this.bulanAktif);
-      await this.loadDashboard();
+            // ✅ FIX BUG-3: Tunggu backend update ledger, lalu re-fetch SEMUA
+      await new Promise(r => setTimeout(r, 800));
+      await this.loadLedgerMap(this.bulanAktif);   // ← re-fetch ledger
+      await this.loadJournal(bulanKey);            // ← re-fetch jurnal dari server
+      await this.loadSummary(this.bulanAktif);     // ← re-fetch summary
+      await this.loadCOA();                        // ← recalc COA dengan ledger baru
+      await this.loadDashboard();                  // ← refresh laba rugi, arus kas, neraca
+      this.recalculateAllAccountBalances();        // ← final recalc
 
       this.showToast(`Jurnal [${noEntry}] sebesar ${formatRupiah(amt)} berhasil dicatat!`, 'success');
 
