@@ -59,7 +59,7 @@ const DEFAULT_COA = {
   "602": { n: "Beban Sewa Tempat", t: "expense" },
   "603": { n: "Beban Listrik, Air & Gas", t: "expense" },
   "604": { n: "Beban Pemasaran & Promosi", t: "expense" },
-  "605": { n: "Beban Kurir & Ekspedisi", t: "expense" },
+    "605": { n: "Beban Operasional (Kurir/Ekspedisi/Lainnya)", t: "expense" },
   "606": { n: "Beban Penyusutan", t: "expense" }
 };
 
