@@ -1009,7 +1009,13 @@ try {
    * - Kalau masih tidak ada → prompt buka shift baru (modal awal)
    * - Auto-close stale shift (>12 jam masih open)
    */
-  async ensureActiveShift() {
+    async ensureActiveShift() {
+    // ✅ Guard: hindari double-invoke (Alpine re-render)
+    if (this._ensuringShift) {
+      console.log('[ENSURE-SHIFT] Already running, skip duplicate call');
+      return;
+    }
+    this._ensuringShift = true;
     try {
       // 1. Kalau session punya shiftId, validasi
       if (this.kasirInfo.shiftId) {
@@ -1099,8 +1105,9 @@ try {
       }
 
       // 3. Tidak ada shift aktif → prompt modal awal → buka shift baru
-      console.log('[ENSURE-SHIFT] Tidak ada shift aktif, prompt buka baru');
+      console.log('[ENSURE-SHIFT] STEP-3: Tidak ada shift aktif, akan prompt buka baru');
       const modalInput = prompt('🆕 Buka shift baru.\n\nMasukkan modal kas awal laci (Rp):', '200000');
+      console.log('[ENSURE-SHIFT] STEP-3 RESULT: modalInput =', modalInput === null ? 'NULL (cancel)' : `"${modalInput}"`);
         if (modalInput === null) {
         // User cancel → logout bersih (hindari stuck landing dengan session aktif)
         this.showToast('Buka shift dibatalkan — Anda logout otomatis', 'notify');
@@ -1111,8 +1118,11 @@ try {
       }
       const modalNum = Math.max(0, Number(String(modalInput).replace(/[^0-9]/g, '')) || 0);
       await this.bukaShift(modalNum, true);  // skip confirm (sudah konfirmasi via prompt)
-    } catch (err) {
+      } catch (err) {
       console.warn('[ENSURE-SHIFT] Error:', err);
+    } finally {
+      this._ensuringShift = false;
+      console.log('[ENSURE-SHIFT] Done (flag released)');
     }
   },
 
