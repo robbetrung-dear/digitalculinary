@@ -110,8 +110,11 @@ window.kasirApp = () => ({
   },
 
   // Shift Status & History
+    // Shift Status & History
   shiftStatus: 'open', // 'open' | 'paused' | 'closed'
   shiftPauseTime: null,
+  showEditModalBanner: false,   // ✅ banner ubah modal awal
+  editModalInput: 0,             // input sementara banner
 
   // Modal State
   paymentModal: false,
@@ -1104,20 +1107,14 @@ try {
         return;
       }
 
-      // 3. Tidak ada shift aktif → prompt modal awal → buka shift baru
-      console.log('[ENSURE-SHIFT] STEP-3: Tidak ada shift aktif, akan prompt buka baru');
-      const modalInput = prompt('🆕 Buka shift baru.\n\nMasukkan modal kas awal laci (Rp):', '200000');
-      console.log('[ENSURE-SHIFT] STEP-3 RESULT: modalInput =', modalInput === null ? 'NULL (cancel)' : `"${modalInput}"`);
-        if (modalInput === null) {
-        // User cancel → logout bersih (hindari stuck landing dengan session aktif)
-        this.showToast('Buka shift dibatalkan — Anda logout otomatis', 'notify');
-        try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-        try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-        setTimeout(() => { window.location.href = '/'; }, 800);
-        return;
-      }
-      const modalNum = Math.max(0, Number(String(modalInput).replace(/[^0-9]/g, '')) || 0);
-      await this.bukaShift(modalNum, true);  // skip confirm (sudah konfirmasi via prompt)
+      // 3. Tidak ada shift aktif → auto-buka dengan modal default 200000
+      // ✅ FIX: Hapus prompt() (auto-dismiss di Chrome) → auto-open + banner
+      console.log('[ENSURE-SHIFT] STEP-3: Tidak ada shift aktif, auto-buka dengan modal default 200000');
+      const DEFAULT_MODAL = 200000;
+      await this.bukaShift(DEFAULT_MODAL, true);
+      this.showEditModalBanner = true;
+      this.showToast('Shift baru dibuka • modal default Rp 200.000 (klik banner untuk ubah)', 'notify');
+      console.log('[ENSURE-SHIFT] Shift auto-opened');
       } catch (err) {
       console.warn('[ENSURE-SHIFT] Error:', err);
     } finally {
@@ -3973,7 +3970,27 @@ try {
     return `S-${dateStr}-${rand}`;
   },
 
-    async bukaShift(modalAwal, skipConfirm = false) {
+   /**
+   * ✅ Ubah modal awal shift aktif (PATCH ke Firebase)
+   */
+  async updateOpenCash(newAmount) {
+    const amt = Math.max(0, Number(newAmount) || 0);
+    if (!this.kasirInfo?.shiftId) {
+      this.showToast('Tidak ada shift aktif', 'error');
+      return;
+    }
+    try {
+      await this._patchShift(this.kasirInfo.shiftId, { openCash: amt });
+      this.shiftSummary.startCash = amt;
+      this.showEditModalBanner = false;
+      this.showToast(`✅ Modal awal diubah: Rp ${this.formatNumber(amt)}`, 'success');
+      this.playSound('success');
+    } catch (e) {
+      this.showToast('Gagal ubah modal: ' + e.message, 'error');
+    }
+  },
+   
+  async bukaShift(modalAwal, skipConfirm = false) {
     if (!skipConfirm && !confirm('Apakah Anda ingin membuka sesi shift baru? Tindakan ini akan membuat ID shift baru untuk kasir ini.')) {
       return null;
     }
