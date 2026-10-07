@@ -599,31 +599,28 @@ window.kasirApp = () => ({
    * Inisialisasi Aplikasi Kasir
    */
   async initKasir() {
-    // 1. Cek sessionStorage "dapur_kasir_session" (dengan demo fallback aman)
+        // 1. Cek sessionStorage "dapur_kasir_session"
     try {
-      let rawSession = sessionStorage.getItem('dapur_kasir_session');
+      let rawSession = sessionStorage.getItem('dapur_kasir_session') || localStorage.getItem('dapur_kasir_session');
       let parsed = null;
       if (rawSession) {
         try { parsed = JSON.parse(rawSession); } catch(e) {}
       }
       if (!parsed || (!parsed.username && !parsed.name)) {
-        parsed = {
-          username: 'kasir',
-          name: 'Kasir Utama',
-          shiftId: 'S-' + new Date().toISOString().slice(0, 10) + '-01'
-        };
-        try {
-          sessionStorage.setItem('dapur_kasir_session', JSON.stringify(parsed));
-        } catch (e) {}
+        // Session tidak valid → tendang ke login
+        window.location.replace('/');
+        return;
       }
 
       this.kasirInfo = {
         username: parsed.username || 'kasir',
         name: parsed.name || parsed.kasirName || parsed.username || 'Kasir Utama',
-        shiftId: parsed.shiftId || ('S-' + new Date().toISOString().slice(0, 10))
+        shiftId: parsed.shiftId || null   // null = akan di-handle ensureActiveShift()
       };
     } catch (e) {
       console.warn('Gagal membaca sesi kasir:', e);
+      window.location.replace('/');
+      return;
     }
 
     // 2. Start Realtime Clock (update tiap detik)
@@ -725,6 +722,9 @@ try {
 
     // 9. Sinkronisasi Shift antar Kasir dari /pos/shifts/{shiftId}
     this.listenShiftData();
+
+    // 9b. ✅ FIX: Pastikan ada shift aktif (auto-join / prompt modal awal)
+    await this.ensureActiveShift();
 
     // 10. Auto-save keranjang tiap 30 detik & Cek Draft saat buka kasir
     this.setupDraftTimer();
@@ -1002,10 +1002,142 @@ try {
     }
   },
 
+   /**
+   * ✅ FIX: Pastikan ada shift aktif.
+   * - Kalau session punya shiftId → validasi ke Firebase
+   * - Kalau tidak ada → cari shift aktif hari ini (multi-kasir auto-join)
+   * - Kalau masih tidak ada → prompt buka shift baru (modal awal)
+   * - Auto-close stale shift (>12 jam masih open)
+   */
+  async ensureActiveShift() {
+    try {
+      // 1. Kalau session punya shiftId, validasi
+      if (this.kasirInfo.shiftId) {
+        const existing = await this._fetchShift(this.kasirInfo.shiftId);
+        if (existing && existing.status === 'open') {
+          console.log('[ENSURE-SHIFT] Session shift valid:', this.kasirInfo.shiftId);
+          return;
+        }
+        console.log('[ENSURE-SHIFT] Session shift invalid, cari shift baru');
+        this.kasirInfo.shiftId = null;
+      }
+
+      // 2. Ambil semua shift
+      const shifts = await this._fetchAllShifts();
+      const list = Object.values(shifts || {}).filter(Boolean);
+      const today = this.getLocalDateStr ? this.getLocalDateStr() : new Date().toISOString().slice(0, 10);
+      const todayStart = new Date(today + 'T00:00:00').getTime();
+      const now = Date.now();
+      const staleThreshold = 12 * 60 * 60 * 1000;
+
+      // 2a. Auto-close stale shifts
+      for (const shf of list) {
+        if (shf && shf.status === 'open' && shf.open && (now - Number(shf.open)) > staleThreshold) {
+          console.log('[ENSURE-SHIFT] Auto-close stale:', shf.id);
+          this._patchShift(shf.id, {
+            status: 'closed',
+            close: Number(shf.open) + staleThreshold,
+            note: (shf.note ? shf.note + ' | ' : '') + 'Auto-closed (stale >12 jam)'
+          }).catch(() => {});
+        }
+      }
+
+      // 2b. Cari shift aktif hari ini
+      const activeShift = list.find(s =>
+        s && s.status === 'open' &&
+        Number(s.open) >= todayStart
+      );
+
+      if (activeShift) {
+        // ✅ Multi-kasir auto-join
+        this.kasirInfo.shiftId = activeShift.id;
+        try {
+          sessionStorage.setItem('dapur_kasir_session', JSON.stringify(this.kasirInfo));
+        } catch (e) {}
+
+        this.shiftSummary.totalSales = Number(activeShift.totalSales) || 0;
+        this.shiftSummary.cashSales = Number(activeShift.cashSales) || 0;
+        this.shiftSummary.qrisSales = Number(activeShift.qrisSales) || 0;
+        this.shiftSummary.transferSales = Number(activeShift.transferSales) || 0;
+        this.shiftSummary.ewalletSales = Number(activeShift.ewalletSales) || 0;
+        this.shiftSummary.transactionCount = Number(activeShift.transactionCount) || 0;
+        this.shiftSummary.startCash = Number(activeShift.openCash) || 0;
+        this.shiftSummary.startTime = activeShift.open ? this.formatTime(activeShift.open) : '-';
+
+        // Update activeKasirIds
+        const activeIds = Array.isArray(activeShift.activeKasirIds)
+          ? [...activeShift.activeKasirIds]
+          : (activeShift.kasir ? [activeShift.kasir] : []);
+        if (!activeIds.includes(this.kasirInfo.username)) {
+          activeIds.push(this.kasirInfo.username);
+          this._patchShift(activeShift.id, { activeKasirIds: activeIds }).catch(() => {});
+        }
+
+        const isOwner = (activeShift.kasir || '') === this.kasirInfo.username;
+        if (isOwner) {
+          this.showToast(`✅ Lanjut shift aktif ${activeShift.id}`, 'success');
+        } else {
+          this.showToast(`✅ Auto-join shift ${activeShift.id} (dibuka oleh ${activeShift.kasir})`, 'notify');
+        }
+        console.log('[ENSURE-SHIFT] Active shift:', activeShift.id);
+        return;
+      }
+
+      // 3. Tidak ada shift aktif → prompt modal awal → buka shift baru
+      console.log('[ENSURE-SHIFT] Tidak ada shift aktif, prompt buka baru');
+      const modalInput = prompt('🆕 Buka shift baru.\n\nMasukkan modal kas awal laci (Rp):', '200000');
+      if (modalInput === null) {
+        // User cancel → kembali ke landing
+        this.showToast('Buka shift dibatalkan, kembali ke halaman utama', 'notify');
+        setTimeout(() => { window.location.href = '/'; }, 800);
+        return;
+      }
+      const modalNum = Math.max(0, Number(String(modalInput).replace(/[^0-9]/g, '')) || 0);
+      await this.bukaShift(modalNum, true);  // skip confirm (sudah konfirmasi via prompt)
+    } catch (err) {
+      console.warn('[ENSURE-SHIFT] Error:', err);
+    }
+  },
+
+  // Helper: fetch 1 shift
+  async _fetchShift(shiftId) {
+    try {
+      const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+      const res = await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts/${encodeURIComponent(shiftId)}.json`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  },
+
+  // Helper: fetch semua shift
+  async _fetchAllShifts() {
+    try {
+      const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+      const res = await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts.json`);
+      if (!res.ok) return {};
+      return await res.json() || {};
+    } catch (e) { return {}; }
+  },
+
+  // Helper: PATCH shift ke Firebase
+  async _patchShift(shiftId, payload) {
+    try {
+      const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
+        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+      await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts/${encodeURIComponent(shiftId)}.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) { console.warn('[PATCH-SHIFT] Error:', e); }
+  },
+
   // =========================================================================
   // 4. MANAJEMEN KERANJANG POS (Cart)
   // =========================================================================
-
+ 
   /**
    * Tambah item menu ke keranjang dengan validasi stok bahan baku
    */
@@ -3801,8 +3933,8 @@ try {
    * Buka shift baru atau reopen shift
    * Sudah dilakukan oleh /kasir-auth saat login, fungsi ini untuk kasus kasir lupa / reopen
    */
-  async bukaShift(modalAwal) {
-    if (!confirm('Apakah Anda ingin membuka sesi shift baru? Tindakan ini akan membuat ID shift baru untuk kasir ini.')) {
+    async bukaShift(modalAwal, skipConfirm = false) {
+    if (!skipConfirm && !confirm('Apakah Anda ingin membuka sesi shift baru? Tindakan ini akan membuat ID shift baru untuk kasir ini.')) {
       return null;
     }
 
