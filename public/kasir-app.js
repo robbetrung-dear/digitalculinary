@@ -4737,7 +4737,15 @@ try {
     }
   },
 
-  async submitPembelianBahan() {
+    async submitPembelianBahan() {
+    // ✅ FIX BUG-4: Block kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Tidak bisa input pembelian.', 'error');
+      this.playSound('error');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
+
     const { date, supplier, itemId, qty, purchasePrice, paymentMethod, notes } = this.pembelianForm;
     if (!itemId) {
       this.showToast('Pilih bahan baku yang dibeli', 'error');
@@ -5029,9 +5037,16 @@ try {
       }
     },
 
-    async submitEditStock() {
+      async submitEditStock() {
     if (!this.selectedStockItem) return;
 
+    // ✅ FIX BUG-4: Block kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Tidak bisa edit stok.', 'error');
+      this.playSound('error');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
     // 🔒 PIN GATE (khusus untuk koreksi manual / waste / edit harga)
     const isDestructive = ['adjustment', 'waste', 'opname'].includes(this.stockChangeType);
     if (isDestructive) {
@@ -8871,7 +8886,15 @@ try {
     }
   },
 
-    async submitReceiveGoods() {
+      async submitReceiveGoods() {
+    // ✅ FIX BUG-4: Block kalau shift sudah closed
+    if (this.shiftStatus === 'closed' || this._shiftClosedHandled) {
+      this.showToast('⚠️ Shift sudah ditutup. Tidak bisa terima barang.', 'error');
+      this.playSound('error');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
+
     const items = Array.isArray(this.scanReceiveForm?.items) ? this.scanReceiveForm.items : [];
     if (items.length === 0) {
       this.showToast('Belum ada item di list. Scan minimal 1 produk dulu.', 'error');
