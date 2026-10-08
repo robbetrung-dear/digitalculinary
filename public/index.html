@@ -2679,6 +2679,39 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-stone-100">
+              <!-- ✅ FITUR BARU: Toggle Tombol Lacak Pesanan -->
+              <div class="sm:col-span-2 p-4 rounded-2xl border-2 transition"
+                   :class="siteConfig.showTrackerButton !== false ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-white'">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex items-start gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition"
+                         :class="siteConfig.showTrackerButton !== false ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-500'">
+                      <i :class="siteConfig.showTrackerButton !== false ? 'fa-solid fa-satellite-dish text-base' : 'fa-solid fa-motorcycle text-base'"></i>
+                    </div>
+                    <div class="min-w-0">
+                      <h5 class="text-xs font-black uppercase tracking-wider text-stone-900">
+                        Tombol Lacak Pesanan (Floating Bottom-Left)
+                      </h5>
+                      <p class="text-xs text-stone-500 mt-1 leading-relaxed">
+                        <strong>ON</strong> — tampil tombol 📡 <em>Lacak Pesanan</em> di bottom-left.<br>
+                        <strong>OFF</strong> — tampil tombol 🛵 <em>Pesan Online Platform</em> (ShopeeFood / GoFood / GrabFood).
+                      </p>
+                    </div>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input type="checkbox" x-model="siteConfig.showTrackerButton" class="sr-only peer">
+                    <div class="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+                <div class="mt-3 pt-3 border-t border-stone-200/70 flex items-center justify-between">
+                  <span class="text-[11px] font-bold" :class="siteConfig.showTrackerButton !== false ? 'text-emerald-700' : 'text-stone-600'">
+                    <i :class="siteConfig.showTrackerButton !== false ? 'fa-solid fa-circle-check' : 'fa-solid fa-motorcycle'"></i>
+                    <span x-text="siteConfig.showTrackerButton !== false ? 'Status: 📡 LACAK PESANAN AKTIF' : 'Status: 🛵 PESAN ONLINE PLATFORM AKTIF'"></span>
+                  </span>
+                  <span class="text-[10px] text-stone-400 italic">Klik "Simpan Semua Perubahan"</span>
+                </div>
+              </div>
+
               <div>
                 <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Tagline Restoran (Di Samping Judul)</label>
                 <input type="text" x-model="siteConfig.tagline" placeholder="Kuliner & Catering" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-stone-50" />
@@ -4686,16 +4719,71 @@ git push -u origin main</pre>
     <span x-text="adminToast"></span>
   </div>
 
-  <!-- FLOATING TRACKER BUTTON (ICON ONLY) -->
-  <aside aria-label="Lacak Pesanan" class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto">
-    <button 
-      type="button"
-      @click="isTrackerOpen = true" 
-      class="w-12 h-12 sm:w-14 sm:h-14 bg-white hover:bg-stone-50 text-brand-600 rounded-full flex items-center justify-center shadow-2xl border-2 border-brand-500/20 hover:scale-110 active:scale-95 transition-all duration-200 group"
-      title="Lacak Pesanan Realtime"
-      aria-label="Lacak Pesanan Realtime">
-      <i class="fa-solid fa-satellite-dish text-xl sm:text-2xl group-hover:animate-pulse"></i>
-    </button>
+  <!-- FLOATING BOTTOM-LEFT: Lacak Pesanan ATAU Pesan Online Platform -->
+  <aside aria-label="Aksi Cepat" class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
+
+    <!-- CASE A: Tracker Button ON (x-show, BUKAN <template x-if>) -->
+    <div x-show="siteConfig.showTrackerButton !== false" class="flex">
+      <button 
+        type="button"
+        @click="isTrackerOpen = true" 
+        class="w-12 h-12 sm:w-14 sm:h-14 bg-white hover:bg-stone-50 text-brand-600 rounded-full flex items-center justify-center shadow-2xl border-2 border-brand-500/20 hover:scale-110 active:scale-95 transition-all duration-200 group"
+        title="Lacak Pesanan Realtime"
+        aria-label="Lacak Pesanan Realtime">
+        <i class="fa-solid fa-satellite-dish text-xl sm:text-2xl group-hover:animate-pulse"></i>
+      </button>
+    </div>
+
+    <!-- CASE B: Tracker OFF → Pesan Online Platform (x-show, BUKAN <template x-if>) -->
+    <div x-show="siteConfig.showTrackerButton === false && availablePlatformsList.length > 0" class="flex flex-col gap-3 items-start">
+
+      <!-- Platform buttons (expanded) — stacked vertikal di atas tombol utama (dari bawah: ShopeeFood → GoFood → GrabFood) -->
+      <div x-show="showOrderPlatformMenu" class="flex flex-col gap-3 items-start">
+        <template x-for="p in availablePlatformsList.slice().reverse()" :key="'plat-' + p.id">
+          <button
+            type="button"
+            @click="$data.openPlatformRedirect(p)"
+            :class="p.bgClass"
+            class="w-11 h-11 sm:w-12 sm:h-12 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all duration-200 ring-2 ring-white/80"
+            :title="p.name"
+            :aria-label="'Pesan via ' + p.name">
+            <i :class="p.icon + ' text-lg'"></i>
+          </button>
+        </template>
+      </div>
+
+      <!-- Main button: Pesan Online Platform -->
+      <button
+        type="button"
+        @click="toggleOrderPlatformMenu()"
+        :class="showOrderPlatformMenu ? 'bg-brand-700 text-white border-brand-300/40' : 'bg-white hover:bg-stone-50 text-brand-600 border-brand-600'"
+        class="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shadow-2xl border-[3px] hover:scale-110 active:scale-95 transition-all duration-200 group overflow-hidden"
+        title="Pesan Online Platform"
+        aria-label="Pesan Online Platform">
+        <i x-show="showOrderPlatformMenu" class="fa-solid fa-xmark text-lg group-hover:scale-110 transition-transform"></i>
+        <svg x-show="!showOrderPlatformMenu" viewBox="0 0 100 100" class="w-9 h-9 sm:w-11 sm:h-11 group-hover:scale-110 transition-transform" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Cloche / Tudung Saji -->
+          <circle cx="31" cy="24.5" r="2.2" stroke="#ea580c" stroke-width="2.6"/>
+          <path d="M18 39 C18 29.5 23.8 26.5 31 26.5 C38.2 26.5 44 29.5 44 39 Z" stroke="#ea580c" stroke-width="2.8" stroke-linejoin="round"/>
+          <rect x="15.5" y="39" width="31" height="3.2" rx="1.6" stroke="#ea580c" stroke-width="2.4" fill="white"/>
+          <!-- Tulisan "food" -->
+          <text x="31" y="55.5" text-anchor="middle" fill="#ea580c" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="14.5" letter-spacing="-0.4">food</text>
+          <!-- Helm & Pengendara -->
+          <circle cx="57.5" cy="30" r="6.8" stroke="#ea580c" stroke-width="2.8"/>
+          <path d="M58.5 27.5 H64 C64 30.5 62.5 32.5 58.5 32.5 Z" stroke="#ea580c" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M53.5 36.5 C49 38.5 46.5 45 46.5 51.5 C46.5 54.5 49 55.5 55.5 56 L55.5 67 C55.5 69 59.5 69 59.5 67 L60.5 53 C60.5 51 58.5 49.5 54 49 L55 42.5 L63.5 46.5 L68.5 46.5" stroke="#ea580c" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Body Skuter & Roda -->
+          <path d="M69 44 L73.5 60 M69 44 H65 M70.5 42.5 C72.5 42.5 73.5 44 73.5 45.5 C73.5 47 72.5 48.5 70.5 48.5 Z" stroke="#ea580c" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M26 67.5 C26 59 32 56.5 40.5 56.5 H48 C49.5 64 52 67.5 61 67.5 H66 C68 59.5 75.5 58.5 82.5 63.5 L26 67.5 Z" stroke="#ea580c" stroke-width="2.8" stroke-linejoin="round" fill="white"/>
+          <circle cx="37" cy="69.5" r="8" stroke="#ea580c" stroke-width="2.8" fill="white"/>
+          <circle cx="37" cy="69.5" r="3.5" stroke="#ea580c" stroke-width="2.4"/>
+          <circle cx="74" cy="69.5" r="8" stroke="#ea580c" stroke-width="2.8" fill="white"/>
+          <circle cx="74" cy="69.5" r="3.5" stroke="#ea580c" stroke-width="2.4"/>
+        </svg>
+      </button>
+
+    </div>
+
   </aside>
 
   <!-- FLOATING WHATSAPP BUTTON (ICON ONLY) -->
@@ -5010,6 +5098,57 @@ git push -u origin main</pre>
     <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
   </audio>
 
+  <!-- ✅ MODAL: Konfirmasi Redirect ke Platform Online -->
+  <div
+    x-cloak
+    x-show="showPlatformRedirectModal"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    class="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+      @click.away="cancelPlatformRedirect()"
+      class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-stone-200 space-y-4">
+
+      <div class="flex items-center gap-3 pb-3 border-b border-stone-100">
+        <div
+          :class="platformRedirectTarget?.bgClass || 'bg-brand-600'"
+          class="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-md">
+          <i :class="platformRedirectTarget?.icon || 'fa-solid fa-motorcycle'" class="text-xl"></i>
+        </div>
+        <div class="min-w-0">
+          <h4 class="font-extrabold text-stone-900 text-base">Konfirmasi Pengalihan</h4>
+          <p class="text-xs text-stone-500" x-text="'Ke ' + (platformRedirectTarget?.name || 'platform')"></p>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
+        <p class="text-sm text-amber-900 leading-relaxed">
+          Anda akan diarahkan untuk melakukan pemesanan online melalui
+          <strong x-text="platformRedirectTarget?.name || ''"></strong>.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <button
+          type="button"
+          @click="cancelPlatformRedirect()"
+          class="min-h-[46px] rounded-xl border-2 border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition cursor-pointer">
+          <i class="fa-solid fa-xmark mr-1"></i> Batal
+        </button>
+        <button
+          type="button"
+          @click="confirmPlatformRedirect()"
+          :class="platformRedirectTarget?.bgClass || 'bg-brand-600 hover:bg-brand-700'"
+          class="min-h-[46px] rounded-xl text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer">
+          <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+          <span>Lanjutkan</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- FIREBASE MODULAR SDK (CDN) & CLIENT APPLICATION LOGIC -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -5292,6 +5431,10 @@ git push -u origin main</pre>
         isCartOpen: false,
         isHistoryModalOpen: false,
         isTrackerOpen: false,
+        availablePlatformsList: [],
+        showOrderPlatformMenu: false,
+        showPlatformRedirectModal: false,
+        platformRedirectTarget: null,
         isNavMenuOpen: false,
         isProcessingPayment: false,
         isLoadingOngkir: false,
@@ -5308,6 +5451,7 @@ git push -u origin main</pre>
           ],
           tagline: 'Kuliner & Catering',
           hideHeroBannerPermanently: false,   // ✅ Feature 2: persisted di Firebase
+          showTrackerButton: true,
           logoType: 'icon', // 'icon' | 'image'
           logoIcon: 'fa-solid fa-utensils',
           logoImage: '',
@@ -5358,9 +5502,9 @@ git push -u origin main</pre>
           footerTextColor: '#a8a29e',
           footerCopyright: 'Siap Deploy ke Cloudflare Pages.',
           deliveryLinks: {
-            shopeefood: 'https://shopee.co.id/universal-link/now-food',
-            grabfood: 'https://food.grab.com/id/id/',
-            gofood: 'https://gofood.co.id/'
+            shopeefood: '',
+            grabfood: '',
+            gofood: ''
           },
           socialLinks: {
             instagram: 'https://instagram.com/digitalculinary-app',
@@ -5899,6 +6043,8 @@ git push -u origin main</pre>
             console.warn("Error loading saved config:", e);
           }
 
+          this.refreshAvailablePlatforms();
+
           // Pastikan brandWords selalu valid dan sinkron
           if (!this.siteConfig.brandWords || !Array.isArray(this.siteConfig.brandWords) || this.siteConfig.brandWords.length === 0) {
             this.syncBrandWordsFromTitle();
@@ -5956,10 +6102,18 @@ git push -u origin main</pre>
               if (window.FirebaseBridge && window.FirebaseBridge.listenSiteConfig) {
                 window.FirebaseBridge.listenSiteConfig((liveConfig) => {
                   if (liveConfig) {
-                    this.siteConfig = { ...this.siteConfig, ...liveConfig };
+                    const mergedConfig = { ...this.siteConfig, ...liveConfig };
+                    if (liveConfig.deliveryLinks) {
+                      mergedConfig.deliveryLinks = {
+                        ...(this.siteConfig.deliveryLinks || {}),
+                        ...(liveConfig.deliveryLinks || {})
+                      };
+                    }
+                    this.siteConfig = mergedConfig;
                     if (liveConfig.cateringPackages) {
                       this.cateringPackages = liveConfig.cateringPackages;
                     }
+                    this.$nextTick(() => this.refreshAvailablePlatforms());
                   }
                 });
               }
@@ -6839,6 +6993,28 @@ git push -u origin main</pre>
             default: return 'bg-stone-100 text-stone-700';
           }
         },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ✅ FITUR BARU: Pesan Online Platform (ShopeeFood / GoFood / GrabFood)
+        // ═══════════════════════════════════════════════════════════════════
+        refreshAvailablePlatforms() {
+          const links = (this.siteConfig && this.siteConfig.deliveryLinks) || {};
+          const list = [];
+          if (links.shopeefood && String(links.shopeefood).trim()) {
+            list.push({ id: 'shopeefood', name: 'ShopeeFood', url: String(links.shopeefood).trim(), icon: 'fa-solid fa-bag-shopping', bgClass: 'bg-orange-500 hover:bg-orange-600' });
+          }
+          if (links.gofood && String(links.gofood).trim()) {
+            list.push({ id: 'gofood', name: 'GoFood', url: String(links.gofood).trim(), icon: 'fa-solid fa-motorcycle', bgClass: 'bg-red-600 hover:bg-red-700' });
+          }
+          if (links.grabfood && String(links.grabfood).trim()) {
+            list.push({ id: 'grabfood', name: 'GrabFood', url: String(links.grabfood).trim(), icon: 'fa-solid fa-car-side', bgClass: 'bg-emerald-600 hover:bg-emerald-700' });
+          }
+          this.availablePlatformsList = list;
+        },
+        toggleOrderPlatformMenu() { this.showOrderPlatformMenu = !this.showOrderPlatformMenu; },
+        openPlatformRedirect(p) { if (!p || !p.url) return; this.platformRedirectTarget = p; this.showPlatformRedirectModal = true; this.showOrderPlatformMenu = false; },
+        confirmPlatformRedirect() { if (this.platformRedirectTarget?.url) window.open(this.platformRedirectTarget.url, '_blank', 'noopener,noreferrer'); this.showPlatformRedirectModal = false; this.platformRedirectTarget = null; },
+        cancelPlatformRedirect() { this.showPlatformRedirectModal = false; this.platformRedirectTarget = null; },
 
         // TOMBOL WHATSAPP FLOATING: Buka WhatsApp dengan Ringkasan Pesanan Otomatis
         openWhatsAppOrder() {
@@ -7877,6 +8053,7 @@ git push -u origin main</pre>
         async saveSiteConfig() {
           this.siteConfig.cateringPackages = this.cateringPackages;
           await window.FirebaseBridge.saveSiteConfig(this.siteConfig);
+          this.refreshAvailablePlatforms();
           this.showToast('Pengaturan website berhasil disimpan ke Firebase!');
         },
 
