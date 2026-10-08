@@ -1638,32 +1638,7 @@
           <div class="pt-3">
             <button 
               type="button" 
-              @click="
-                if (!manualJournalForm.desc || !manualJournalForm.amount) {
-                  alert('Mohon lengkapi deskripsi dan nominal transaksi.');
-                  return;
-                }
-                if (typeof submitManualJournal === 'function') {
-                  submitManualJournal();
-                } else {
-                  jurnalList.unshift({
-                    id: 'JRN-' + Date.now(),
-                    date: manualJournalForm.date,
-                    noEntry: 'JE-' + Math.floor(1000 + Math.random() * 9000),
-                    desc: manualJournalForm.desc,
-                    debitCode: manualJournalForm.debitAccount,
-                    debitName: (coaList.find(c => c.code === manualJournalForm.debitAccount) || {}).name || '',
-                    debitAmount: manualJournalForm.amount,
-                    creditCode: manualJournalForm.creditAccount,
-                    creditName: (coaList.find(c => c.code === manualJournalForm.creditAccount) || {}).name || '',
-                    creditAmount: manualJournalForm.amount,
-                    ref: manualJournalForm.ref,
-                    proof: manualJournalForm.proofImage
-                  });
-                  alert('Jurnal berhasil dicatat ke buku akuntansi!');
-                  setTab('jurnal');
-                }
-              "
+                        @click="tambahJurnalManual()"
               class="w-full h-12 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-brand-500/20 transition cursor-pointer">
               <i class="fa-solid fa-floppy-disk"></i>
               <span>SIMPAN ENTRY JURNAL</span>
