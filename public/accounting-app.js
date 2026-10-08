@@ -1123,23 +1123,24 @@ this.jurnalList.forEach(j => {
       // Simpan ke LocalStorage & Server
       localStorage.setItem(`dapur_journal_${bulanKey}`, JSON.stringify(this.jurnalList));
 
-            try {
+        try {
         const postRes = await fetch(`/accounting/journal/${encodeURIComponent(bulanKey)}/${encodeURIComponent(entryId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newEntry)
         });
-        // ✅ FIX BUG-3: Log response detail untuk diagnose
         const postJson = await postRes.json().catch(() => ({}));
-        console.log(`[ACCT-APP] POST /journal/${bulanKey}/${entryId} → HTTP ${postRes.status}`, postJson);
+        console.log(`[ACCT-APP] POST ${bulanKey}/${entryId} → HTTP ${postRes.status}`, postJson);
         if (!postRes.ok || !postJson.success) {
-          this.showToast(`❌ Gagal simpan jurnal: ${postJson.error || 'HTTP ' + postRes.status}`, 'error');
-          this.playSound('error');
-          return;  // jangan lanjut ke re-fetch
+          alert(`❌ GAGAL SIMPAN JURNAL\n\nHTTP ${postRes.status}\nError: ${postJson.error || '(tidak ada pesan)'}`);
+          this.showToast(`Gagal: ${postJson.error || 'HTTP ' + postRes.status}`, 'error');
+          // Rollback optimistic UI
+          this.jurnalList = this.jurnalList.filter(j => j.id !== entryId);
+          return;
         }
       } catch (e) {
-        console.warn('[ACCT-APP] Post journal entry exception:', e);
-        this.showToast(`❌ Network error: ${e.message}`, 'error');
+        console.warn('[ACCT-APP] Post journal exception:', e);
+        alert(`❌ Network error: ${e.message}`);
         return;
       }
             // ✅ FIX BUG-3: Tunggu backend update ledger, lalu re-fetch SEMUA
