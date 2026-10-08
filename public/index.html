@@ -4722,12 +4722,10 @@ git push -u origin main</pre>
   </div>
 
     <!-- FLOATING BOTTOM-LEFT: Tracker ATAU Pesan Online Platform -->
-    <aside 
-    aria-label="Aksi Cepat" 
-    class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
+      <aside aria-label="Aksi Cepat" class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
 
-    <!-- CASE A: Tracker Button ON -->
-    <template x-if="siteConfig.showTrackerButton !== false">
+    <!-- CASE A: Tracker Button ON (✅ FIX: x-show instead of x-if) -->
+    <div x-show="siteConfig.showTrackerButton !== false" class="flex">
       <button 
         type="button"
         @click="isTrackerOpen = true" 
@@ -4736,42 +4734,38 @@ git push -u origin main</pre>
         aria-label="Lacak Pesanan Realtime">
         <i class="fa-solid fa-satellite-dish text-xl sm:text-2xl group-hover:animate-pulse"></i>
       </button>
-    </template>
+    </div>
 
-        <!-- CASE B: Tracker OFF → Pesan Online Platform -->
-    <template x-if="siteConfig.showTrackerButton === false && availablePlatformsList.length > 0">
-      <div class="flex flex-col gap-3 items-start">
+    <!-- CASE B: Tracker OFF → Pesan Online Platform (✅ FIX: x-show) -->
+    <div x-show="siteConfig.showTrackerButton === false && availablePlatformsList.length > 0" class="flex flex-col gap-3 items-start">
 
-        <!-- Platform buttons (expanded) — urut dari atas: GrabFood, GoFood, ShopeeFood -->
-        <template x-if="showOrderPlatformMenu">
-          <div class="flex flex-col gap-3 items-start">
-            <template x-for="p in availablePlatformsList.slice().reverse()" :key="'plat-' + p.id">
-              <button
-                type="button"
-                @click="openPlatformRedirect(p)"
-                :class="p.bgClass"
-                class="w-11 h-11 sm:w-12 sm:h-12 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all duration-200 ring-2 ring-white/80"
-                :title="p.name"
-                :aria-label="'Pesan via ' + p.name">
-                <i :class="p.icon + ' text-lg'"></i>
-              </button>
-            </template>
-          </div>
+      <!-- Platform buttons (expanded) — urut dari atas: GrabFood, GoFood, ShopeeFood -->
+      <div x-show="showOrderPlatformMenu" class="flex flex-col gap-3 items-start">
+        <template x-for="p in availablePlatformsList.slice().reverse()" :key="'plat-' + p.id">
+          <button
+            type="button"
+            @click="openPlatformRedirect(p)"
+            :class="p.bgClass"
+            class="w-11 h-11 sm:w-12 sm:h-12 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all duration-200 ring-2 ring-white/80"
+            :title="p.name"
+            :aria-label="'Pesan via ' + p.name">
+            <i :class="p.icon + ' text-lg'"></i>
+          </button>
         </template>
-
-        <!-- Main button: Pesan Online Platform (always visible) -->
-        <button
-          type="button"
-          @click="toggleOrderPlatformMenu()"
-          :class="showOrderPlatformMenu ? 'bg-brand-700' : 'bg-brand-600 hover:bg-brand-700'"
-          class="w-12 h-12 sm:w-14 sm:h-14 text-white rounded-full flex items-center justify-center shadow-2xl border-2 border-brand-300/40 hover:scale-110 active:scale-95 transition-all duration-200 group"
-          title="Pesan Online Platform"
-          aria-label="Pesan Online Platform">
-          <i :class="showOrderPlatformMenu ? 'fa-solid fa-xmark text-lg' : 'fa-solid fa-motorcycle text-xl sm:text-2xl'" class="group-hover:scale-110 transition-transform"></i>
-        </button>
-
       </div>
-    </template>
+
+      <!-- Main button: Pesan Online Platform (always visible when CASE B active) -->
+      <button
+        type="button"
+        @click="toggleOrderPlatformMenu()"
+        :class="showOrderPlatformMenu ? 'bg-brand-700' : 'bg-brand-600 hover:bg-brand-700'"
+        class="w-12 h-12 sm:w-14 sm:h-14 text-white rounded-full flex items-center justify-center shadow-2xl border-2 border-brand-300/40 hover:scale-110 active:scale-95 transition-all duration-200 group"
+        title="Pesan Online Platform"
+        aria-label="Pesan Online Platform">
+        <i :class="showOrderPlatformMenu ? 'fa-solid fa-xmark text-lg' : 'fa-solid fa-motorcycle text-xl sm:text-2xl'" class="group-hover:scale-110 transition-transform"></i>
+      </button>
+
+    </div>
 
   </aside>
 
@@ -6113,11 +6107,18 @@ git push -u origin main</pre>
                 if (window.FirebaseBridge && window.FirebaseBridge.listenSiteConfig) {
                 window.FirebaseBridge.listenSiteConfig((liveConfig) => {
                   if (liveConfig) {
-                    this.siteConfig = { ...this.siteConfig, ...liveConfig };
+                    // ✅ FIX: Deep-merge deliveryLinks + force reactivity dengan nextTick
+                    const mergedConfig = { ...this.siteConfig, ...liveConfig };
+                    if (liveConfig.deliveryLinks) {
+                      mergedConfig.deliveryLinks = {
+                        ...(this.siteConfig.deliveryLinks || {}),
+                        ...(liveConfig.deliveryLinks || {})
+                      };
+                    }
+                    this.siteConfig = mergedConfig;
                     if (liveConfig.cateringPackages) {
                       this.cateringPackages = liveConfig.cateringPackages;
                     }
-                    // ✅ DEBUG: log deliveryLinks & showTrackerButton saat sync
                     console.log('[SYNC-CONFIG] showTrackerButton:', liveConfig.showTrackerButton);
                     console.log('[SYNC-CONFIG] deliveryLinks:', liveConfig.deliveryLinks);
                   }
