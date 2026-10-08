@@ -2212,7 +2212,7 @@
 
   <!-- MODAL 2: PANEL PENGATURAN & CMS ADMIN UTAMA (LENGKAP) -->
   <div x-cloak x-show="isAdminPanelOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-    <div @click.away="isAdminPanelOpen = false" class="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+        <div @click.away="isAdminPanelOpen = false" class="bg-white rounded-3xl max-w-4xl w-full max-h-[100dvh] sm:max-h-[92vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
       
       <!-- Modal Header -->
       <div class="p-4 sm:p-6 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
@@ -4722,7 +4722,11 @@ git push -u origin main</pre>
   </div>
 
     <!-- FLOATING BOTTOM-LEFT: Tracker ATAU Pesan Online Platform -->
-  <aside aria-label="Aksi Cepat" class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
+    <aside 
+    x-show="!hasOverlayOpen"
+    x-cloak
+    aria-label="Aksi Cepat" 
+    class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
 
     <!-- CASE A: Tracker Button ON -->
     <template x-if="siteConfig.showTrackerButton !== false">
@@ -4774,7 +4778,11 @@ git push -u origin main</pre>
   </aside>
 
   <!-- FLOATING WHATSAPP BUTTON (ICON ONLY) -->
-  <aside aria-label="Bantuan WhatsApp" class="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-[60] pointer-events-auto">
+    <aside 
+    x-show="!hasOverlayOpen"
+    x-cloak
+    aria-label="Bantuan WhatsApp" 
+    class="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-[60] pointer-events-auto">
     <button 
       type="button"
       @click="openWhatsAppOrder()" 
@@ -5487,10 +5495,12 @@ git push -u origin main</pre>
           footerBgColor: '#1c1917',
           footerTextColor: '#a8a29e',
           footerCopyright: 'Siap Deploy ke Cloudflare Pages.',
-          deliveryLinks: {
-            shopeefood: 'https://shopee.co.id/universal-link/now-food',
-            grabfood: 'https://food.grab.com/id/id/',
-            gofood: 'https://gofood.co.id/'
+            deliveryLinks: {
+            // ✅ FIX BUG-1: Default kosong — user WAJIB isi sendiri link ID platform
+            // Kalau dikosongkan, icon platform tidak muncul (sesuai spec)
+            shopeefood: '',
+            grabfood: '',
+            gofood: ''
           },
           socialLinks: {
             instagram: 'https://instagram.com/digitalculinary-app',
@@ -5782,6 +5792,27 @@ git push -u origin main</pre>
           { courier_code: 'ninja', courier_name: 'Ninja Xpress', courier_service_name: 'Ninja Reguler', price: 11000, estimated_etd: '1 - 2 Hari', badge_color: 'border-rose-500 text-rose-700 bg-rose-50', icon: 'fa-mask', recommended: false },
           { courier_code: 'pos', courier_name: 'POS Indonesia', courier_service_name: 'Pos Next Day', price: 13500, estimated_etd: '1 Hari', badge_color: 'border-amber-500 text-amber-700 bg-amber-50', icon: 'fa-envelope-open-text', recommended: false }
         ],
+
+                // ✅ FIX BUG-2: Deteksi kalau ada modal/overlay aktif
+        get hasOverlayOpen() {
+          return Boolean(
+            this.isAdminPanelOpen ||
+            this.isAdminAuthModalOpen ||
+            this.isLoginGateOpen ||
+            this.isQrisModalOpen ||
+            this.isBankModalOpen ||
+            this.isEwalletModalOpen ||
+            this.isTrackerOpen ||
+            this.isCartOpen ||
+            this.isHistoryModalOpen ||
+            this.isMenuFormOpen ||
+            this.isCategoryModalOpen ||
+            this.isLocationModalOpen ||
+            this.showPlatformRedirectModal ||
+            this.showAddKasirAccountModal ||
+            this.showEditKasirAccountModal
+          );
+        },
 
         getBrandWords() {
           if (Array.isArray(this.siteConfig.brandWords) && this.siteConfig.brandWords.length > 0) {
