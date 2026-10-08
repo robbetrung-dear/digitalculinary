@@ -4738,14 +4738,14 @@ git push -u origin main</pre>
       </button>
     </template>
 
-    <!-- CASE B: Tracker OFF → Pesan Online Platform -->
-    <template x-if="siteConfig.showTrackerButton === false && getAvailablePlatforms().length > 0">
+        <!-- CASE B: Tracker OFF → Pesan Online Platform -->
+    <template x-if="siteConfig.showTrackerButton === false && availablePlatformsList.length > 0">
       <div class="flex flex-col gap-3 items-start">
 
         <!-- Platform buttons (expanded) — urut dari atas: GrabFood, GoFood, ShopeeFood -->
         <template x-if="showOrderPlatformMenu">
           <div class="flex flex-col gap-3 items-start">
-            <template x-for="p in getAvailablePlatforms().slice().reverse()" :key="'plat-' + p.id">
+            <template x-for="p in availablePlatformsList.slice().reverse()" :key="'plat-' + p.id">
               <button
                 type="button"
                 @click="openPlatformRedirect(p)"
@@ -6110,13 +6110,16 @@ git push -u origin main</pre>
           // 3. Realtime Listener dari Firebase jika aktif
           const syncFirebaseListeners = () => {
             try {
-              if (window.FirebaseBridge && window.FirebaseBridge.listenSiteConfig) {
+                if (window.FirebaseBridge && window.FirebaseBridge.listenSiteConfig) {
                 window.FirebaseBridge.listenSiteConfig((liveConfig) => {
                   if (liveConfig) {
                     this.siteConfig = { ...this.siteConfig, ...liveConfig };
                     if (liveConfig.cateringPackages) {
                       this.cateringPackages = liveConfig.cateringPackages;
                     }
+                    // ✅ DEBUG: log deliveryLinks & showTrackerButton saat sync
+                    console.log('[SYNC-CONFIG] showTrackerButton:', liveConfig.showTrackerButton);
+                    console.log('[SYNC-CONFIG] deliveryLinks:', liveConfig.deliveryLinks);
                   }
                 });
               }
@@ -6998,10 +7001,11 @@ git push -u origin main</pre>
         },
 
         // TOMBOL WHATSAPP FLOATING: Buka WhatsApp dengan Ringkasan Pesanan Otomatis
-                // ═══════════════════════════════════════════════════════════════════
-        // ✅ FITUR BARU: Pesan Online Platform (ShopeeFood / GoFood / GrabFood)
         // ═══════════════════════════════════════════════════════════════════
-        getAvailablePlatforms() {
+        // ✅ FITUR BARU: Pesan Online Platform (ShopeeFood / GoFood / GrabFood)
+        // ✅ FIX: Convert method → getter supaya Alpine reactive reliable
+        // ═══════════════════════════════════════════════════════════════════
+        get availablePlatformsList() {
           const links = (this.siteConfig && this.siteConfig.deliveryLinks) || {};
           const list = [];
           if (links.shopeefood && String(links.shopeefood).trim()) {
