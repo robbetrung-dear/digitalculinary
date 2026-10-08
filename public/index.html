@@ -2211,8 +2211,8 @@
   </div>
 
   <!-- MODAL 2: PANEL PENGATURAN & CMS ADMIN UTAMA (LENGKAP) -->
-  <div x-cloak x-show="isAdminPanelOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-        <div @click.away="isAdminPanelOpen = false" class="bg-white rounded-3xl max-w-4xl w-full max-h-[100dvh] sm:max-h-[92vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+    <div x-cloak x-show="isAdminPanelOpen" @click.self="isAdminPanelOpen = false" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+            <div class="bg-white rounded-3xl max-w-4xl w-full h-[100dvh] sm:h-[92vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
       
       <!-- Modal Header -->
       <div class="p-4 sm:p-6 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
@@ -4723,8 +4723,6 @@ git push -u origin main</pre>
 
     <!-- FLOATING BOTTOM-LEFT: Tracker ATAU Pesan Online Platform -->
     <aside 
-    x-show="!hasOverlayOpen"
-    x-cloak
     aria-label="Aksi Cepat" 
     class="fixed bottom-4 sm:bottom-6 left-3 sm:left-6 z-[60] pointer-events-auto flex flex-col gap-3 items-start">
 
@@ -4779,8 +4777,6 @@ git push -u origin main</pre>
 
   <!-- FLOATING WHATSAPP BUTTON (ICON ONLY) -->
     <aside 
-    x-show="!hasOverlayOpen"
-    x-cloak
     aria-label="Bantuan WhatsApp" 
     class="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-[60] pointer-events-auto">
     <button 
