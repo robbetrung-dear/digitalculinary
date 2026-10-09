@@ -2339,28 +2339,39 @@ this.jurnalList.forEach(j => {
     },
 
     initDebitKreditSelects() {
-      const setup = (role, field) => {
-        const sel = document.querySelector(`select[data-role="${role}"]`);
-        if (!sel) return;
-        sel.innerHTML = (this.coaList || []).map(a => 
-          `<option value="${String(a.code)}">${a.code} - ${a.name} (${a.type})</option>`
-        ).join('');
-        setTimeout(() => {
-          sel.value = this.manualJournalForm[field] || '';
-          if (sel.value && sel.value !== this.manualJournalForm[field]) {
-            this.manualJournalForm[field] = sel.value;
-          }
-        }, 100);
-        if (!sel._nativeBound) {
-          sel._nativeBound = true;
-          sel.addEventListener('change', (e) => {
-            this.manualJournalForm[field] = e.target.value;
-            console.log(`[NATIVE-${role}]`, e.target.value);
-          });
+      const self = this;
+      let attempts = 0;
+      const trySetup = () => {
+        attempts++;
+        const list = Array.isArray(self.coaList) ? self.coaList : [];
+        if (list.length === 0 && attempts < 25) {
+          setTimeout(trySetup, 200);
+          return;
         }
+        const setup = (role, field) => {
+          const sel = document.querySelector(`select[data-role="${role}"]`);
+          if (!sel) return;
+          if (sel.dataset.populated === String(list.length)) return;
+          sel.innerHTML = list.map(a =>
+            `<option value="${a.code}">${a.code} - ${a.name} (${a.type})</option>`
+          ).join('');
+          sel.dataset.populated = String(list.length);
+          setTimeout(() => {
+            sel.value = self.manualJournalForm[field] || '';
+          }, 50);
+          if (!sel._nativeBound) {
+            sel._nativeBound = true;
+            sel.addEventListener('change', (e) => {
+              self.manualJournalForm[field] = e.target.value;
+              console.log(`[NATIVE-${role}]`, e.target.value);
+            });
+          }
+        };
+        setup('debit-select', 'debitAccount');
+        setup('kredit-select', 'creditAccount');
+        console.log('[NATIVE-SETUP] Populated', list.length, 'options @ attempt', attempts);
       };
-      setup('debit-select', 'debitAccount');
-      setup('kredit-select', 'creditAccount');
+      setTimeout(trySetup, 100);
     },
 
     setTab(tab) {
