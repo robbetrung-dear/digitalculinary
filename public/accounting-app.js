@@ -2338,6 +2338,31 @@ this.jurnalList.forEach(j => {
         .join('');
     },
 
+    initDebitKreditSelects() {
+      const setup = (role, field) => {
+        const sel = document.querySelector(`select[data-role="${role}"]`);
+        if (!sel) return;
+        sel.innerHTML = (this.coaList || []).map(a => 
+          `<option value="${String(a.code)}">${a.code} - ${a.name} (${a.type})</option>`
+        ).join('');
+        setTimeout(() => {
+          sel.value = this.manualJournalForm[field] || '';
+          if (sel.value && sel.value !== this.manualJournalForm[field]) {
+            this.manualJournalForm[field] = sel.value;
+          }
+        }, 100);
+        if (!sel._nativeBound) {
+          sel._nativeBound = true;
+          sel.addEventListener('change', (e) => {
+            this.manualJournalForm[field] = e.target.value;
+            console.log(`[NATIVE-${role}]`, e.target.value);
+          });
+        }
+      };
+      setup('debit-select', 'debitAccount');
+      setup('kredit-select', 'creditAccount');
+    },
+
     setTab(tab) {
       this.activeTab = tab;
       this.mobileMenuOpen = false;
