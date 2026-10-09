@@ -1605,6 +1605,24 @@
             </div>
           </div>
 
+                    <!-- ✅ RESTORE: Field Jumlah Nominal -->
+          <div>
+            <label class="block text-xs font-bold text-stone-700 uppercase mb-1.5">Jumlah Nominal (Rp)</label>
+            <div class="relative">
+              <span class="absolute left-4 top-3 text-stone-400 font-bold text-sm">Rp</span>
+              <input 
+                type="number" 
+                x-model.number="manualJournalForm.amount" 
+                min="0" 
+                step="1000" 
+                placeholder="0"
+                class="w-full h-12 pl-12 pr-4 rounded-xl border border-stone-300 text-lg font-black font-mono text-stone-900 focus:ring-2 focus:ring-brand-500" 
+              />
+            </div>
+            <p class="text-[11px] text-stone-500 mt-1 font-mono">Terbilang: <span class="font-bold text-stone-700" x-text="formatRupiah(manualJournalForm.amount)"></span></p>
+          </div>
+
+          <!-- Upload Bukti / Dokumen Pendukung -->
           <!-- Upload Bukti / Dokumen Pendukung -->
           <div>
             <label class="block text-xs font-bold text-stone-700 uppercase mb-1.5">Bukti Transaksi (Foto Struk / Nota / Transfer)</label>
