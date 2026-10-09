@@ -490,12 +490,12 @@
   <main id="tab-section" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 max-h-screen overflow-y-auto">
 
     <!-- Tab Buttons -->
-    <div class="flex items-center justify-center mb-8">
+    <div class="flex items-center justify-center mb-8 gap-2.5 sm:gap-3 flex-wrap">
       <div class="inline-flex p-1.5 bg-stone-200/80 rounded-2xl border border-stone-300/80 shadow-inner">
         <button 
           @click="activeTab = 'menu'" 
           :class="activeTab === 'menu' ? 'bg-white text-brand-700 shadow-sm font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'"
-          class="px-6 py-3 rounded-xl text-sm sm:text-base transition-all flex items-center gap-2">
+          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2">
           <i class="fa-solid fa-bowl-rice"></i>
           <span x-text="siteConfig.navMenuText || 'Menu Harian & Ala Carte'"></span>
         </button>
@@ -503,11 +503,32 @@
         <button 
           @click="activeTab = 'catering'" 
           :class="activeTab === 'catering' ? 'bg-white text-brand-700 shadow-sm font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'"
-          class="px-6 py-3 rounded-xl text-sm sm:text-base transition-all flex items-center gap-2">
+          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2">
           <i class="fa-solid fa-box-open"></i>
           <span x-text="siteConfig.navCateringText || 'Paket Catering (Silver/Gold/Plat)'"></span>
         </button>
       </div>
+
+      <!-- Tombol Switch Tampilan Menu (Persis di Samping Kanan Pilihan Menu Harian / Catering) -->
+      <button 
+        type="button" 
+        @click="cycleMenuViewMode()" 
+        class="h-11 w-11 sm:h-12 sm:w-12 rounded-2xl bg-white hover:bg-stone-50 active:scale-95 border border-stone-300/90 shadow-sm flex items-center justify-center text-stone-700 hover:text-brand-600 transition flex-shrink-0"
+        :title="menuViewMode === 'list' ? 'Tampilan Daftar/List (Klik untuk Card Besar)' : (menuViewMode === 'large' ? 'Tampilan Card Besar (Klik untuk Card Kecil)' : 'Tampilan Card Kecil (Klik untuk Daftar/List)')"
+        aria-label="Ubah Tampilan Menu">
+        <!-- 1. Icon Hamburger (Tampilan Menu Daftar / List) -->
+        <span x-show="menuViewMode === 'list'" class="inline-flex items-center justify-center">
+          <i class="fa-solid fa-bars text-base sm:text-lg text-brand-600"></i>
+        </span>
+        <!-- 2. Icon Persegi 1 Kotak (Tampilan Menu Card Besar) -->
+        <span x-show="menuViewMode === 'large'" class="inline-flex items-center justify-center">
+          <i class="fa-regular fa-square text-base sm:text-lg text-stone-700"></i>
+        </span>
+        <!-- 3. Icon Persegi 4 Kotak Kecil (Tampilan Menu Card Kecil) -->
+        <span x-show="menuViewMode === 'compact'" class="inline-flex items-center justify-center">
+          <i class="fa-solid fa-border-all text-base sm:text-lg text-stone-700"></i>
+        </span>
+      </button>
     </div>
 
     <!-- TAB 1: MENU HARIAN & ALA CARTE (Sesuai 6 Screenshot GrabMerchant) -->
@@ -578,8 +599,8 @@
         </div>
       </div>
 
-      <!-- Menu Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <!-- 1. Tampilan Card Besar (Tampilan Default Sekarang) -->
+      <div x-show="menuViewMode === 'large'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <template x-for="item in paginatedMenuItems" :key="item.id">
           <div class="bg-white rounded-2xl border border-stone-200/90 shadow-sm hover:shadow-md transition overflow-hidden flex flex-col justify-between group relative">
             
@@ -658,6 +679,179 @@
                   </button>
                 </div>
               </div>
+            </div>
+
+          </div>
+        </template>
+      </div>
+
+      <!-- 2. Tampilan Card Kecil (2 Menu Berdampingan di Layar HP Portrait) -->
+      <div x-show="menuViewMode === 'compact'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4">
+        <template x-for="item in paginatedMenuItems" :key="'compact_' + item.id">
+          <div class="bg-white rounded-xl sm:rounded-2xl border border-stone-200/90 shadow-2xs hover:shadow-md transition overflow-hidden flex flex-col justify-between group relative">
+            <div class="relative">
+              <img :src="item.image" :alt="item.name" class="w-full h-28 sm:h-36 object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              
+              <!-- Stock Badge Pojok Kiri Atas -->
+              <div x-show="siteConfig.showMenuStockOnMain" class="absolute top-1.5 left-1.5 z-10">
+                <span class="px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shadow-sm border"
+                  :class="getMenuDisplayStock(item) === 0
+                    ? 'bg-red-600 text-white border-red-400'
+                    : (getMenuDisplayStock(item) !== null && getMenuDisplayStock(item) <= 5
+                        ? 'bg-amber-500 text-white border-amber-300'
+                        : 'bg-emerald-600 text-white border-emerald-400')"
+                  x-text="getMenuDisplayStock(item) === null ? '∞' : getMenuDisplayStock(item)">
+                </span>
+              </div>
+
+              <!-- Promo & Hemat Badge -->
+              <div class="absolute top-1.5 right-1.5 flex flex-col gap-0.5 items-end">
+                <span x-show="item.badge" class="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded shadow-xs" :class="item.badgeColor || 'bg-brand-600 text-white'" x-text="item.badge"></span>
+                <span x-show="item.originalPrice && item.originalPrice > item.price" class="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-extrabold uppercase bg-red-600 text-white rounded shadow-xs">
+                  -<span x-text="Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100) + '%'"></span>
+                </span>
+              </div>
+
+              <!-- Category Badge -->
+              <div class="absolute bottom-1.5 left-1.5">
+                <span class="px-1.5 py-0.5 text-[9px] font-bold bg-stone-900/80 text-white rounded backdrop-blur-sm truncate max-w-[85px] sm:max-w-none inline-block" x-text="item.categoryLabel"></span>
+              </div>
+
+              <!-- Stock Indicator Inventory -->
+              <template x-if="siteConfig.showMenuStockOnMain && getInventoryStockForMenu(item)">
+                <div class="absolute top-1.5 left-1.5 z-10">
+                  <span class="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-bold bg-white/95 backdrop-blur-sm text-stone-800 rounded shadow-xs border border-stone-200"
+                        x-text="'Stok: ' + getInventoryStockForMenu(item).stock">
+                  </span>
+                </div>
+              </template>
+
+              <!-- Spicy Icon -->
+              <div x-show="item.isSpicy" class="absolute bottom-1.5 right-1.5 z-10">
+                <div class="flex items-center gap-1 bg-red-600/90 text-white px-1.5 py-0.5 rounded-lg shadow-sm" title="Menu Pedas">
+                  <i class="fa-solid fa-pepper-hot text-amber-300 text-[9px]"></i>
+                  <span class="text-[8px] font-black uppercase hidden sm:inline">Pedas</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-1">
+                  <h4 class="font-bold text-stone-900 text-xs sm:text-sm line-clamp-1 group-hover:text-brand-600 transition" x-text="item.name"></h4>
+                  <button 
+                    x-show="isAdminLoggedIn" 
+                    @click="openEditMenuModal(item)" 
+                    class="text-stone-400 hover:text-brand-600 p-0.5 rounded hover:bg-stone-100 flex-shrink-0" 
+                    title="Edit Menu Ini">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                  </button>
+                </div>
+                <p class="text-[10px] sm:text-xs text-stone-500 mt-0.5 line-clamp-1" x-text="item.description"></p>
+              </div>
+
+              <div class="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between gap-1">
+                <div class="min-w-0">
+                  <div class="font-extrabold text-brand-700 text-xs sm:text-sm truncate" x-text="formatRupiah(item.price)"></div>
+                  <span x-show="item.originalPrice && item.originalPrice > item.price" class="line-through text-stone-400 text-[9px] block truncate" x-text="formatRupiah(item.originalPrice)"></span>
+                </div>
+
+                <button 
+                  @click="addToCart(item)" 
+                  class="bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-[11px] sm:text-xs px-2 sm:px-2.5 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1 flex-shrink-0">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                  <span class="hidden sm:inline">Tambah</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- 3. Tampilan Daftar / List (Thumbnail Kecil dengan Detail) -->
+      <div x-show="menuViewMode === 'list'" class="flex flex-col gap-2.5 sm:gap-3">
+        <template x-for="item in paginatedMenuItems" :key="'list_' + item.id">
+          <div class="bg-white rounded-2xl border border-stone-200/90 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-md transition flex items-center gap-3 sm:gap-4 group relative">
+            
+            <!-- Thumbnail Kecil -->
+            <div class="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden flex-shrink-0 border border-stone-100 bg-stone-100">
+              <img :src="item.image" :alt="item.name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              
+              <!-- Stock Badge Pojok Kiri Atas -->
+              <div x-show="siteConfig.showMenuStockOnMain" class="absolute top-1 left-1 z-10">
+                <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black shadow-xs border"
+                  :class="getMenuDisplayStock(item) === 0
+                    ? 'bg-red-600 text-white border-red-400'
+                    : (getMenuDisplayStock(item) !== null && getMenuDisplayStock(item) <= 5
+                        ? 'bg-amber-500 text-white border-amber-300'
+                        : 'bg-emerald-600 text-white border-emerald-400')"
+                  x-text="getMenuDisplayStock(item) === null ? '∞' : getMenuDisplayStock(item)">
+                </span>
+              </div>
+
+              <!-- Stock Inventory -->
+              <template x-if="siteConfig.showMenuStockOnMain && getInventoryStockForMenu(item)">
+                <div class="absolute top-1 left-1 z-10">
+                  <span class="px-1.5 py-0.5 text-[8px] font-bold bg-white/95 backdrop-blur-sm text-stone-800 rounded shadow-xs border border-stone-200"
+                        x-text="'Stok: ' + getInventoryStockForMenu(item).stock">
+                  </span>
+                </div>
+              </template>
+
+              <!-- Spicy Icon -->
+              <div x-show="item.isSpicy" class="absolute bottom-1 right-1 z-10">
+                <span class="w-5 h-5 rounded-md bg-red-600 text-white flex items-center justify-center shadow-xs" title="Menu Pedas">
+                  <i class="fa-solid fa-pepper-hot text-amber-300 text-[10px]"></i>
+                </span>
+              </div>
+            </div>
+
+            <!-- Detail Menu (Tengah) -->
+            <div class="flex-1 min-w-0 pr-1">
+              <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                <span class="px-2 py-0.5 text-[9px] sm:text-[10px] font-bold bg-stone-100 text-stone-600 rounded" x-text="item.categoryLabel"></span>
+                <span x-show="item.badge" class="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded shadow-2xs" :class="item.badgeColor || 'bg-brand-600 text-white'" x-text="item.badge"></span>
+                <span x-show="item.originalPrice && item.originalPrice > item.price" class="px-1.5 py-0.5 text-[9px] font-extrabold uppercase bg-red-600 text-white rounded">
+                  HEMAT <span x-text="Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100) + '%'"></span>
+                </span>
+              </div>
+
+              <div class="flex items-baseline gap-2">
+                <h4 class="font-bold text-stone-900 text-sm sm:text-base truncate group-hover:text-brand-600 transition" x-text="item.name"></h4>
+                <button 
+                  x-show="isAdminLoggedIn" 
+                  @click="openEditMenuModal(item)" 
+                  class="text-stone-400 hover:text-brand-600 p-0.5 rounded hover:bg-stone-100" 
+                  title="Edit Menu Ini">
+                  <i class="fa-solid fa-pen-to-square text-xs"></i>
+                </button>
+              </div>
+
+              <p class="text-xs text-stone-500 line-clamp-1 sm:line-clamp-2 mt-0.5" x-text="item.description"></p>
+
+              <!-- Harga Mobile (di bawah deskripsi bila mobile) -->
+              <div class="sm:hidden mt-2 flex items-baseline gap-1.5">
+                <span class="font-extrabold text-brand-700 text-sm" x-text="formatRupiah(item.price)"></span>
+                <span x-show="item.originalPrice && item.originalPrice > item.price" class="line-through text-stone-400 text-xs" x-text="formatRupiah(item.originalPrice)"></span>
+              </div>
+            </div>
+
+            <!-- Harga Desktop & Tombol Tambah (Kanan) -->
+            <div class="flex-shrink-0 flex flex-col items-end justify-center sm:justify-between self-stretch gap-2">
+              <div class="hidden sm:flex flex-col items-end">
+                <div class="text-[10px] text-stone-400 font-semibold uppercase">Harga</div>
+                <div class="flex items-baseline gap-1.5">
+                  <span class="font-extrabold text-brand-700 text-base" x-text="formatRupiah(item.price)"></span>
+                  <span x-show="item.originalPrice && item.originalPrice > item.price" class="line-through text-stone-400 text-xs" x-text="formatRupiah(item.originalPrice)"></span>
+                </div>
+              </div>
+
+              <button 
+                @click="addToCart(item)" 
+                class="bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-xs px-3 sm:px-4 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span class="hidden sm:inline">Tambah</span>
+              </button>
             </div>
 
           </div>
@@ -5801,7 +5995,12 @@ git push -u origin main</pre>
 
         // Stok Inventori & Resep Menu (Sinkron dari POS Kasir)
         inventoryList: [],
+        recipesList: [],
         menuRecipes: {},
+
+        // Mode Tampilan Menu Homepage: 'large' (card besar), 'compact' (card kecil), 'list' (daftar thumbnail)
+        menuViewMode: 'large',
+        _menuViewStep: -1,
 
         // Kategori Menu Sesuai POS Kasir & Standar Toko
         menuCategories: [
@@ -6132,6 +6331,7 @@ git push -u origin main</pre>
           }
 
           this.refreshAvailablePlatforms();
+          this.loadRecipes();
 
           // Pastikan brandWords selalu valid dan sinkron
           if (!this.siteConfig.brandWords || !Array.isArray(this.siteConfig.brandWords) || this.siteConfig.brandWords.length === 0) {
@@ -6391,16 +6591,67 @@ git push -u origin main</pre>
           return null;
         },
 
+        async loadRecipes() {
+          try {
+            const fbUrl = 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+            const res = await fetch(`${fbUrl}/recipes.json`);
+            const data = await res.json();
+            if (data && typeof data === 'object') {
+              this.recipesList = Object.values(data).filter(Boolean);
+              console.log('[RECIPES] Loaded:', this.recipesList.length);
+            }
+          } catch (e) { console.warn('[RECIPES] Fetch error:', e); }
+        },
+
         getInventoryStockForMenu(menuItem) {
           if (!menuItem) return null;
-          const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
-          if (!invId || String(invId).trim() === '') return null;
           const invList = Array.isArray(this.inventoryList) ? this.inventoryList : [];
-          const inv = invList.find(i => i && i.id === invId);
-          if (!inv) return null;
-          const stockVal = Number(inv.stock);
-          if (!Number.isFinite(stockVal)) return null;
-          return { stock: stockVal, unit: inv.unit || inv.satuan || '', name: inv.name || '' };
+          const recList = Array.isArray(this.recipesList) ? this.recipesList : [];
+
+          // 1. Prioritas: hitung porsi dari recipe (BOM)
+          const recipe = recList.find(r => r && (r.menuId === menuItem.id || r.id === menuItem.id));
+          if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+            let minPorsi = Infinity;
+            for (const ing of recipe.ingredients) {
+              const inv = invList.find(i => i && i.id === ing.itemId);
+              if (!inv) { minPorsi = 0; break; }
+              const stockVal = Number(inv.stock);
+              const amountPer = Number(ing.amount);
+              if (!Number.isFinite(stockVal) || !Number.isFinite(amountPer) || amountPer <= 0) { minPorsi = 0; break; }
+              const porsi = Math.floor(stockVal / amountPer);
+              if (porsi < minPorsi) minPorsi = porsi;
+            }
+            if (Number.isFinite(minPorsi)) return { stock: minPorsi, unit: '', name: 'porsi' };
+          }
+
+          // 2. Fallback: linkedInventory langsung (hanya kalau tidak ada recipe)
+          const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
+          if (invId && String(invId).trim() !== '') {
+            const inv = invList.find(i => i && i.id === invId);
+            if (inv) {
+              const stockVal = Number(inv.stock);
+              if (Number.isFinite(stockVal)) return { stock: stockVal, unit: '', name: inv.name || '' };
+            }
+          }
+          return null;
+        },
+
+        cycleMenuViewMode() {
+          if (this.activeTab !== 'menu') {
+            this.activeTab = 'menu';
+          }
+          // Siklus looping sesuai skenario:
+          // Klik 1x: icon hamburger (daftar/list)
+          // Klik lagi: icon 1 kotak (card besar)
+          // Klik lagi: icon 4 kotak kecil (card kecil)
+          // Seterusnya (looping)
+          const modes = ['list', 'large', 'compact'];
+          if (typeof this._menuViewStep !== 'number' || this._menuViewStep < 0) {
+            this._menuViewStep = 0;
+          } else {
+            this._menuViewStep = (this._menuViewStep + 1) % modes.length;
+          }
+          this.menuViewMode = modes[this._menuViewStep];
         },
 
         get filteredMenuItems() {
