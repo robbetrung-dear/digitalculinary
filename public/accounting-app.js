@@ -395,9 +395,9 @@ window.accountingApp = function() {
     /**
      * ✅ PIN Supervisor Gate untuk aksi destruktif / edit jurnal (konsisten dengan kasir-app.js)
      */
-    requestSupervisorPin(actionLabel, targetLabel) {
+    requestSupervisorPin(actionLabel, targetLabel, forcePrompt = false) {
       const cached = sessionStorage.getItem('dapur_pin_verified_until');
-      if (cached && Number(cached) > Date.now()) {
+      if (!forcePrompt && cached && Number(cached) > Date.now()) {
         return Promise.resolve(true);
       }
       return new Promise((resolve) => {
@@ -1373,7 +1373,7 @@ this.jurnalList.forEach(j => {
         return;
       }
 
-      const pinOk = await this.requestSupervisorPin('EDIT JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`);
+      const pinOk = await this.requestSupervisorPin('EDIT JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`, true);
       if (!pinOk) return;
 
       let lines = [];
@@ -1495,7 +1495,7 @@ this.jurnalList.forEach(j => {
         return;
       }
 
-      const pinOk = await this.requestSupervisorPin('HAPUS JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`);
+      const pinOk = await this.requestSupervisorPin('HAPUS JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`, true);
       if (!pinOk) return;
 
       this.deletingJournal = jrn;
@@ -2338,7 +2338,7 @@ this.jurnalList.forEach(j => {
         .join('');
     },
 
-      setTab(tab) {
+    setTab(tab) {
       this.activeTab = tab;
       this.mobileMenuOpen = false;
       if (tab === 'dashboard') {

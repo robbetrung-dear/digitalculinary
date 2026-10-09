@@ -3181,12 +3181,33 @@ try {
     console.log(`[REPORT] Fetch range: ${startDate} → ${endDate}`);
 
     // Helper: filter data by date range
+    const normalizeToDateStr = (v) => {
+      if (!v) return '';
+      if (typeof v === 'number') {
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
+      }
+      if (typeof v === 'string') {
+        // Ambil 10 char pertama (YYYY-MM-DD) dari ISO string
+        const trimmed = v.trim();
+        if (trimmed.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+          return trimmed.slice(0, 10);
+        }
+        const d = new Date(trimmed);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      }
+      return '';
+    };
+
     const filterByDate = (list) => {
       if (!Array.isArray(list)) return [];
+      const startNorm = normalizeToDateStr(startDate);
+      const endNorm = normalizeToDateStr(endDate);
       return list.filter(tx => {
-        const d = this.getTxDate(tx);
+        const d = normalizeToDateStr(this.getTxDate(tx));
         if (!d) return false;
-        return d >= startDate && d <= endDate;
+        return d >= startNorm && d <= endNorm;
       });
     };
 
