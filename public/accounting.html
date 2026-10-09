@@ -1584,11 +1584,10 @@
               <label class="block text-xs font-extrabold text-emerald-800 uppercase mb-1.5">Akun Debit (+)</label>
               <select 
                 x-model="manualJournalForm.debitAccount" 
-                @change="console.log('[DEBUG-DEBIT] changed to:', $event.target.value, '| state:', manualJournalForm.debitAccount)"
+                x-html="getCoaOptionsHtml()"
+                x-init="$nextTick(() => { $el.value = manualJournalForm.debitAccount; })"
+                @change="manualJournalForm.debitAccount = $event.target.value"
                 class="w-full h-11 px-3 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-800 focus:ring-2 focus:ring-emerald-500">
-                <template x-for="acc in coaList" :key="'debit-' + acc.code">
-                  <option :value="acc.code" x-text="acc.code + ' - ' + acc.name + ' (' + acc.type + ')'"></option>
-                </template>
               </select>
             </div>
 
@@ -1596,11 +1595,10 @@
               <label class="block text-xs font-extrabold text-rose-800 uppercase mb-1.5">Akun Kredit (-)</label>
               <select 
                 x-model="manualJournalForm.creditAccount" 
-                @change="console.log('[DEBUG-KREDIT] changed to:', $event.target.value, '| state:', manualJournalForm.creditAccount)"
+                x-html="getCoaOptionsHtml()"
+                x-init="$nextTick(() => { $el.value = manualJournalForm.creditAccount; })"
+                @change="manualJournalForm.creditAccount = $event.target.value"
                 class="w-full h-11 px-3 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-800 focus:ring-2 focus:ring-rose-500">
-                <template x-for="acc in coaList" :key="'kredit-' + acc.code">
-                  <option :value="acc.code" x-text="acc.code + ' - ' + acc.name + ' (' + acc.type + ')'"></option>
-                </template>
               </select>
             </div>
           </div>
