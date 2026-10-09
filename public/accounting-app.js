@@ -1111,14 +1111,15 @@ this.jurnalList.forEach(j => {
     if (debitLine) {
       j.debitCode = debitLine.acc;
       j.debitAmount = debitLine.debit;
-      j.debitName = j.debitName || _getAccNameById(debitLine.acc);  // ← FIX
     }
     if (creditLine) {
       j.creditCode = creditLine.acc;
       j.creditAmount = creditLine.credit;
-      j.creditName = j.creditName || _getAccNameById(creditLine.acc);  // ← FIX
     }
   }
+  // ✅ FIX: Always populate names (fallback kalau kosong setelah edit PATCH)
+  if (j.debitCode && !j.debitName) j.debitName = _getAccNameById(j.debitCode);
+  if (j.creditCode && !j.creditName) j.creditName = _getAccNameById(j.creditCode);
 });
 
         // Sort timestamp DESC
