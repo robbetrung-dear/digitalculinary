@@ -826,6 +826,14 @@ window.accountingApp = function() {
       }
     },
 
+    async openEditCoaWithPin(item) {
+      if (!item) return;
+      const pinOk = await this.requestSupervisorPin('EDIT COA', `Akun ${item.code} - ${item.name}`);
+      if (!pinOk) return;
+      this.editingCoa = { ...item };
+      this.modalEditSaldo = true;
+    },
+
     /**
      * Simpan Perubahan Saldo Awal Akun
      * PATCH /accounting/coa/{accCode}/saldoAwal = nilai
@@ -1354,6 +1362,12 @@ this.jurnalList.forEach(j => {
           };
           break;
       }
+      setTimeout(() => {
+        const d = document.querySelector('select[data-role="debit-select"]');
+        const k = document.querySelector('select[data-role="kredit-select"]');
+        if (d) d.value = this.manualJournalForm.debitAccount;
+        if (k) k.value = this.manualJournalForm.creditAccount;
+      }, 50);
       this.showToast(`Template [${type}] dipilih, silakan masukkan nominal`, 'success');
     },
 
