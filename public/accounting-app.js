@@ -2374,8 +2374,14 @@ this.jurnalList.forEach(j => {
             sel.dataset.populated = String(list.length);
           }
           setTimeout(() => {
-            sel.value = self.manualJournalForm[field] || '';
-            console.log(`[NATIVE-${role}] Synced:`, sel.value);
+            let target = String(self.manualJournalForm[field] || '');
+            const hasOption = Array.from(sel.options).some(o => o.value === target);
+            if (!hasOption && target.length === 4) {
+              const map = { '1001':'101','1002':'102','1003':'103','1004':'105','1005':'111','2001':'201','2002':'202','3001':'301','3002':'303','3003':'302','4001':'401','4002':'402','5001':'501','6001':'601','6002':'602','6003':'603','6004':'604','6005':'605','6006':'606' };
+              if (map[target]) target = map[target];
+            }
+            sel.value = target;
+            console.log(`[NATIVE-${role}] Synced:`, target);
           }, 50);
           if (!sel._nativeBound) {
             sel._nativeBound = true;
