@@ -79,7 +79,7 @@ export async function onRequest(context) {
       });
     }
 
-        // 3. GET /pos/transactions/{date} — Daftar transaksi per tanggal (YYYY-MM-DD)
+    // 3. GET /pos/transactions/{date} — Daftar transaksi per tanggal (YYYY-MM-DD)
     //    GET /pos/transactions/month-{YYYY-MM} — Daftar jurnal 1 bulan (dari /accounting/journal)
     if (method === 'GET' && parts[0] === 'transactions' && parts[1]) {
       const key = parts[1];

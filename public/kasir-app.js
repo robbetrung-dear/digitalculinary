@@ -19,6 +19,10 @@ let FB_DB = null;
 let GLOBAL_AUDIO_CTX = null;
 
 window.kasirApp = () => ({
+    _scanBuffer: '',
+    _scanLastTime: 0,
+    _scanListenerBound: false,
+
   // =========================================================================
   // 1. STATE DASAR & NAVIGASI
   // =========================================================================
@@ -847,6 +851,8 @@ try {
     } catch (err) {
       console.warn('[FB-INIT] Firebase init error:', err);
     }
+
+    this.setupBarcodeScanner();
   },
 
   // =========================================================================
@@ -10371,6 +10377,65 @@ try {
       this.showToast(`Gagal generate menu: ${err.message}`, 'error');
     }
   },
+
+    setupBarcodeScanner() {
+      if (this._scanListenerBound) return;
+      this._scanListenerBound = true;
+      document.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        const diff = now - this._scanLastTime;
+        this._scanLastTime = now;
+        if (diff > 100) this._scanBuffer = '';
+        if (e.key === 'Enter' && this._scanBuffer.length >= 4) {
+          const code = this._scanBuffer.trim();
+          this._scanBuffer = '';
+          e.preventDefault();
+          e.stopPropagation();
+          this.handleBarcodeScan(code);
+          return;
+        }
+        if (e.key.length === 1) this._scanBuffer += e.key;
+      });
+      console.log('[SCANNER] HID listener bound');
+    },
+
+    async handleBarcodeScan(code) {
+      const clean = String(code || '').trim().toUpperCase();
+      if (!clean) return;
+      console.log('[SCANNER] Scan:', clean);
+      const list = this.menuList || this.products || this.items || [];
+      const found = list.find(it =>
+        String(it.sku || '').toUpperCase() === clean ||
+        String(it.barcode || '').toUpperCase() === clean ||
+        String(it.barcodeShort || '').toUpperCase() === clean ||
+        String(it.shortCode || '').toUpperCase() === clean ||
+        String(it.id || '').toUpperCase() === clean
+      );
+      if (found) {
+        this.addToCart(found);
+        this.playBeep('success');
+        if (typeof this.showToast === 'function') this.showToast(`✓ ${found.name} ditambahkan`);
+        return;
+      }
+      this.playBeep('error');
+      if (typeof this.showToast === 'function') this.showToast(`SKU "${clean}" tidak ditemukan`);
+    },
+
+    playBeep(type = 'success') {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = type === 'success' ? 1000 : 400;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start();
+        osc.stop(ctx.currentTime + (type === 'error' ? 0.08 : 0.15));
+      } catch (e) {}
+    },
 
   // =========================================================================
   // 🎯 R&D FITUR 6: NOTIFIKASI WHATSAPP OTOMATIS & PROXY GATEWAY
