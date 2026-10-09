@@ -2366,13 +2366,16 @@ this.jurnalList.forEach(j => {
         const setup = (role, field) => {
           const sel = document.querySelector(`select[data-role="${role}"]`);
           if (!sel) return;
-          if (sel.dataset.populated === String(list.length)) return;
-          sel.innerHTML = list.map(a =>
-            `<option value="${a.code}">${a.code} - ${a.name} (${a.type})</option>`
-          ).join('');
-          sel.dataset.populated = String(list.length);
+          const alreadyPopulated = sel.dataset.populated === String(list.length);
+          if (!alreadyPopulated) {
+            sel.innerHTML = list.map(a =>
+              `<option value="${a.code}">${a.code} - ${a.name} (${a.type})</option>`
+            ).join('');
+            sel.dataset.populated = String(list.length);
+          }
           setTimeout(() => {
             sel.value = self.manualJournalForm[field] || '';
+            console.log(`[NATIVE-${role}] Synced:`, sel.value);
           }, 50);
           if (!sel._nativeBound) {
             sel._nativeBound = true;

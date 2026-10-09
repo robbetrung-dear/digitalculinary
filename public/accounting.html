@@ -1585,7 +1585,7 @@
               <select 
                 data-role="debit-select"
                 x-init="$nextTick(() => initDebitKreditSelects())"
-                x-effect="if (coaList && coaList.length) initDebitKreditSelects()"
+                x-effect="if ($data.coaList && $data.coaList.length > 0 && $data.manualJournalForm.debitAccount !== undefined) setTimeout(() => $data.initDebitKreditSelects(), 0)"
                 class="w-full h-11 px-3 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-800 focus:ring-2 focus:ring-emerald-500">
               </select>
             </div>
@@ -1595,7 +1595,7 @@
               <select 
                 data-role="kredit-select"
                 x-init="$nextTick(() => initDebitKreditSelects())"
-                x-effect="if (coaList && coaList.length) initDebitKreditSelects()"
+                x-effect="if ($data.coaList && $data.coaList.length > 0 && $data.manualJournalForm.creditAccount !== undefined) setTimeout(() => $data.initDebitKreditSelects(), 0)"
                 class="w-full h-11 px-3 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-800 focus:ring-2 focus:ring-rose-500">
               </select>
             </div>
