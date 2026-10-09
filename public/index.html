@@ -606,6 +606,15 @@
                 <span class="px-2 py-0.5 text-[10px] font-bold bg-stone-900/80 text-white rounded backdrop-blur-sm" x-text="item.categoryLabel"></span>
               </div>
 
+              <!-- ✅ Stock Indicator (dari inventory) -->
+              <template x-if="siteConfig.showMenuStockOnMain && getInventoryStockForMenu(item)">
+                <div class="absolute top-2 left-2 z-10">
+                  <span class="px-2 py-0.5 text-[10px] font-bold bg-white/95 backdrop-blur-sm text-stone-800 rounded-md shadow-sm border border-stone-200"
+                        x-text="'Stok: ' + getInventoryStockForMenu(item).stock">
+                  </span>
+                </div>
+              </template>
+
               <!-- LOGO ICON CABE CANTIK DI POJOK KANAN BAWAH GAMBAR MENU (HANYA MUNCUL JIKA MENU SPICY) -->
               <div x-show="item.isSpicy" class="absolute bottom-2 right-2 z-10">
                 <div class="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white px-2.5 py-1 rounded-xl shadow-lg border border-red-300/60 backdrop-blur-xs transform group-hover:scale-110 transition duration-200" title="Menu Pedas / Mengandung Cabe">
@@ -5411,27 +5420,15 @@ git push -u origin main</pre>
                 }).filter(Boolean);
               }
 
-              // ✅ DEDUPE: pastikan semua ID unique (avoid Alpine x-for crash)
+              // ✅ FIX: DEDUP by ID — BUANG duplikat, jangan rename
               const seen = new Set();
-              const dupes = [];
-              const arr = rawArr.map((item, idx) => {
-                let uid = item.id || ('auto_' + idx);
-                if (seen.has(uid)) {
-                  // Rename duplicate dengan suffix biar tetap tampil
-                  let suffix = 2;
-                  while (seen.has(uid + '___dup' + suffix)) suffix++;
-                  dupes.push(uid);
-                  uid = uid + '___dup' + suffix;
-                  item.id = uid;
-                }
+              const arr = [];
+              rawArr.forEach((item) => {
+                const uid = item && item.id ? String(item.id) : '';
+                if (!uid || seen.has(uid)) return;
                 seen.add(uid);
-                return item;
+                arr.push(item);
               });
-
-              if (dupes.length > 0) {
-                console.warn('[FB-MENU] ⚠️ Duplicate IDs found & renamed:', [...new Set(dupes)]);
-                console.warn(`[FB-MENU] Total duplicates: ${dupes.length} of ${rawArr.length}`);
-              }
 
               callback(arr);
             } else {
@@ -5466,15 +5463,20 @@ git push -u origin main</pre>
         }
         return () => {};
       },
+      // ✅ FIX: Realtime listener inventory untuk join stock ke menu
       listenInventory: (callback) => {
         if (db) {
           const invRef = ref(db, 'inventory');
           return onValue(invRef, (snapshot) => {
             const val = snapshot.val();
             if (val && typeof val === 'object') {
-              const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val).filter(Boolean);
-              try { localStorage.setItem('pos_inventory', JSON.stringify(arr)); } catch (e) {}
-              callback(arr);
+              const list = Array.isArray(val)
+                ? val.map((item, idx) => item && typeof item === 'object' ? { ...item, id: item.id || ('inv_' + idx) } : null).filter(Boolean)
+                : Object.entries(val).map(([key, item]) => {
+                    if (!item || typeof item !== 'object') return null;
+                    return { ...item, id: item.id || key };
+                  }).filter(Boolean);
+              callback(list);
             } else {
               callback([]);
             }
@@ -6265,6 +6267,7 @@ git push -u origin main</pre>
                 window.FirebaseBridge.listenInventory((liveInv) => {
                   if (Array.isArray(liveInv)) {
                     this.inventoryList = liveInv;
+                    console.log('[INV-LISTENER] Loaded:', liveInv.length, 'items');
                   }
                 });
               }
@@ -6386,6 +6389,18 @@ git push -u origin main</pre>
             if (!isNaN(num)) return num;
           }
           return null;
+        },
+
+        getInventoryStockForMenu(menuItem) {
+          if (!menuItem) return null;
+          const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
+          if (!invId || String(invId).trim() === '') return null;
+          const invList = Array.isArray(this.inventoryList) ? this.inventoryList : [];
+          const inv = invList.find(i => i && i.id === invId);
+          if (!inv) return null;
+          const stockVal = Number(inv.stock);
+          if (!Number.isFinite(stockVal)) return null;
+          return { stock: stockVal, unit: inv.unit || inv.satuan || '', name: inv.name || '' };
         },
 
         get filteredMenuItems() {
