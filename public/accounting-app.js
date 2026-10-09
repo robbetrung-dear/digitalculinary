@@ -2327,7 +2327,18 @@ this.jurnalList.forEach(j => {
     // 10. UI HELPERS & NAVIGATION
     // ------------------------------------------------------------------------
 
-    setTab(tab) {
+    /** ✅ FIX Bug 1: Generate option HTML untuk dropdown COA
+     *  Bypass Alpine quirk <template x-for> di dalam <select>
+     */
+    getCoaOptionsHtml() {
+      if (!Array.isArray(this.coaList)) return '';
+      const escape = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return this.coaList
+        .map(acc => `<option value="${escape(acc.code)}">${escape(acc.code)} - ${escape(acc.name)} (${escape(acc.type)})</option>`)
+        .join('');
+    },
+
+      setTab(tab) {
       this.activeTab = tab;
       this.mobileMenuOpen = false;
       if (tab === 'dashboard') {
