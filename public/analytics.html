@@ -387,7 +387,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-stone-100 text-[11px]">
-            <template x-for="(log, lIdx) in auditLogs" :key="'audit-' + (log.id || lIdx)">
+            <template x-for="(log, lIdx) in paginatedAuditLogs" :key="'audit-' + (log.id || lIdx)">
               <tr class="hover:bg-stone-50">
                 <td class="py-2.5 px-3 text-stone-500 font-mono whitespace-nowrap" x-text="formatDate(log.iso || log.at)"></td>
                 <td class="py-2.5 px-3 whitespace-nowrap">
@@ -429,6 +429,40 @@
             </template>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Controls (20 baris per halaman) -->
+      <div x-show="auditLogTotalPages > 1" class="mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-600">
+        <div>
+          Menampilkan <span class="font-bold text-stone-800" x-text="((auditLogPage - 1) * auditLogPerPage) + 1"></span>–<span class="font-bold text-stone-800" x-text="Math.min(auditLogPage * auditLogPerPage, auditLogs.length)"></span> dari <span class="font-bold text-stone-800" x-text="auditLogs.length"></span> log
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            @click="auditLogPage = Math.max(1, auditLogPage - 1)"
+            :disabled="auditLogPage === 1"
+            class="px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-xs font-bold text-stone-700 disabled:opacity-40 hover:bg-stone-50 transition flex items-center gap-1 cursor-pointer">
+            <i class="fa-solid fa-chevron-left text-[10px]"></i>
+            <span>Sebelumnya</span>
+          </button>
+          <template x-for="p in auditLogTotalPages" :key="'audit-page-' + p">
+            <button
+              type="button"
+              @click="auditLogPage = p"
+              :class="auditLogPage === p ? 'bg-red-600 text-white font-black shadow-xs' : 'bg-white text-stone-700 hover:bg-stone-100 border border-stone-200'"
+              class="w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+              x-text="p">
+            </button>
+          </template>
+          <button
+            type="button"
+            @click="auditLogPage = Math.min(auditLogTotalPages, auditLogPage + 1)"
+            :disabled="auditLogPage === auditLogTotalPages"
+            class="px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-xs font-bold text-stone-700 disabled:opacity-40 hover:bg-stone-50 transition flex items-center gap-1 cursor-pointer">
+            <span>Selanjutnya</span>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Footer note -->
@@ -478,6 +512,8 @@
         menuItems: [],
         transactionLogs: [],
         auditLogs: [],
+        auditLogPage: 1,
+        auditLogPerPage: 20,
         isLoading: false,
         loadError: '',
 
@@ -613,7 +649,7 @@
 
                         // 3b. Load Audit Logs (dari PIN Supervisor actions)
             try {
-              var auditRes = await fetch('/pos/audit_logs?limit=50');
+              var auditRes = await fetch('/pos/audit_logs?limit=200');
               if (auditRes.ok) {
                 var auditJson = await auditRes.json();
                 this.auditLogs = (auditJson && Array.isArray(auditJson.data)) ? auditJson.data : [];
@@ -624,6 +660,7 @@
               console.warn('[ANALYTICS] Audit logs fetch failed:', auditErr);
               this.auditLogs = [];
             }
+            this.auditLogPage = 1;
             
             
 
@@ -652,6 +689,19 @@
         // ============================================================
         // GETTERS
         // ============================================================
+
+        get auditLogTotalPages() {
+          var perPage = Number(this.auditLogPerPage) || 20;
+          return Math.max(1, Math.ceil((this.auditLogs ? this.auditLogs.length : 0) / perPage));
+        },
+
+        get paginatedAuditLogs() {
+          var list = Array.isArray(this.auditLogs) ? this.auditLogs : [];
+          var perPage = Number(this.auditLogPerPage) || 20;
+          var page = Math.min(Math.max(1, Number(this.auditLogPage) || 1), this.auditLogTotalPages);
+          var start = (page - 1) * perPage;
+          return list.slice(start, start + perPage);
+        },
 
         get filteredOrders() {
           if (this.statusFilter === 'all') return this.orders;

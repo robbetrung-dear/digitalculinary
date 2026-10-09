@@ -963,13 +963,32 @@
                     </td>
                     <td class="py-3.5 px-3 font-mono text-[11px] text-stone-500" x-text="jrn.ref || '-'"></td>
                     <td class="py-3.5 px-4 sm:px-6 text-center">
-                      <button 
-                        type="button" 
-                        @click="selectedJurnal = { ...jrn }; modalDetailJurnal = true"
-                        class="h-8 px-2.5 rounded-lg border border-stone-200 bg-stone-50 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 text-stone-700 text-xs font-bold transition cursor-pointer">
-                        <i class="fa-solid fa-circle-info"></i>
-                        <span class="ml-1 hidden sm:inline">Detail</span>
-                      </button>
+                      <div class="flex items-center justify-center gap-1.5">
+                        <button 
+                          type="button" 
+                          @click="selectedJurnal = { ...jrn }; modalDetailJurnal = true"
+                          class="h-8 px-2.5 rounded-lg border border-stone-200 bg-stone-50 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 text-stone-700 text-xs font-bold transition cursor-pointer"
+                          title="Lihat Detail">
+                          <i class="fa-solid fa-circle-info"></i>
+                          <span class="ml-1 hidden xl:inline">Detail</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          @click="openEditJournalModal(jrn)"
+                          class="h-8 px-2.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 text-amber-800 text-xs font-bold transition cursor-pointer"
+                          title="Edit Jurnal">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                          <span class="ml-1 hidden sm:inline">Edit</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          @click="openDeleteJournalModal(jrn)"
+                          class="h-8 px-2.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 text-rose-700 text-xs font-bold transition cursor-pointer"
+                          title="Hapus Jurnal">
+                          <i class="fa-solid fa-trash-can"></i>
+                          <span class="ml-1 hidden sm:inline">Hapus</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </template>
@@ -2279,6 +2298,285 @@
                 :disabled="goLiveConfirmText !== 'GO-LIVE' || goLivePassword1 !== goLivePassword2 || !goLivePassword1 || !goLiveValidation.neracaBalance"
                 class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
           🚀 Go-Live Sekarang
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SUPERVISOR PIN GATE UNTUK AKSI DESTRUKTIF / EDIT JURNAL -->
+  <div
+    x-cloak
+    x-show="showPinModal"
+    @click.away="cancelSupervisorPin()"
+    @keydown.escape.window="showPinModal && cancelSupervisorPin()"
+    class="fixed inset-0 z-[80] overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border-2 border-red-200 relative space-y-5">
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-3xl bg-red-100 text-red-600 mx-auto flex items-center justify-center text-2xl mb-3 shadow-inner">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h3 class="font-black text-stone-900 text-lg tracking-tight">Supervisor PIN Diperlukan</h3>
+        <p class="text-xs font-bold text-red-700 mt-1 uppercase tracking-wide" x-text="pinContext?.actionLabel || 'AKSI DESTRUKTIF'"></p>
+        <p class="text-[11px] text-stone-500 mt-0.5" x-text="pinContext?.targetLabel || ''"></p>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-stone-700 uppercase mb-1.5 text-center">
+          Masukkan 6 Digit PIN
+        </label>
+        <input
+          id="supervisorPinInput"
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="6"
+          x-model="pinInput"
+          @keydown.enter.prevent="submitSupervisorPin()"
+          @input="pinInput = String(pinInput || '').replace(/\D/g, '').slice(0, 6); pinErrorMessage = ''"
+          placeholder="••••••"
+          class="w-full h-16 text-center text-3xl font-black font-mono tracking-[0.6em] rounded-2xl border-2 border-stone-300 focus:border-red-500 focus:ring-4 focus:ring-red-100 focus:outline-none transition"
+        />
+        <p
+          x-show="pinErrorMessage"
+          x-transition
+          class="text-xs text-red-600 font-bold mt-2 text-center"
+          x-text="pinErrorMessage">
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button
+          type="button"
+          @click="cancelSupervisorPin()"
+          class="min-h-[48px] rounded-xl border-2 border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition cursor-pointer">
+          <i class="fa-solid fa-xmark mr-1"></i> Batal
+        </button>
+        <button
+          type="button"
+          @click="submitSupervisorPin()"
+          :disabled="pinInput.length !== 6"
+          :class="pinInput.length !== 6 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700 cursor-pointer'"
+          class="min-h-[48px] rounded-xl bg-red-600 text-white font-black text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-unlock text-xs"></i>
+          <span>KONFIRMASI</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT JURNAL MULTI-LINE -->
+  <div
+    x-cloak
+    x-show="showEditJournalModal"
+    @click.away="showEditJournalModal = false"
+    class="fixed inset-0 z-[75] overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 relative max-h-[92dvh] flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-stone-200 flex-shrink-0">
+        <div>
+          <h3 class="text-base sm:text-lg font-black text-stone-900 flex items-center gap-2">
+            <i class="fa-solid fa-pen-to-square text-amber-600"></i>
+            <span>Edit Entri Jurnal</span>
+            <span class="text-xs font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200" x-text="editJournalForm.noEntry || editJournalForm.id"></span>
+          </h3>
+          <p class="text-xs text-stone-500 mt-0.5">Perubahan jurnal akan menghitung delta saldo dan memperbarui Buku Besar otomatis.</p>
+        </div>
+        <button type="button" @click="showEditJournalModal = false" class="w-8 h-8 rounded-full text-stone-400 hover:text-stone-700 flex items-center justify-center">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Form Body Scrollable -->
+      <form @submit.prevent="submitEditJournal()" class="overflow-y-auto flex-1 py-4 space-y-4">
+        <!-- Grid Header Form -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-stone-700 uppercase mb-1">Tanggal *</label>
+            <input type="date" x-model="editJournalForm.date" required class="w-full p-2.5 rounded-xl border border-stone-300 text-xs font-mono bg-white" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-stone-700 uppercase mb-1">Kategori *</label>
+            <select x-model="editJournalForm.category" required class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white font-bold">
+              <option value="operasional">Operasional</option>
+              <option value="pembelian">Pembelian / HPP</option>
+              <option value="penjualan">Penjualan</option>
+              <option value="modal">Modal</option>
+              <option value="prive">Prive</option>
+              <option value="penyesuaian">Penyesuaian</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-stone-700 uppercase mb-1">No. Referensi</label>
+            <input type="text" x-model="editJournalForm.ref" placeholder="REF / Nota" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs font-mono bg-white" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-stone-700 uppercase mb-1">Deskripsi / Keterangan *</label>
+          <input type="text" x-model="editJournalForm.desc" required placeholder="Keterangan transaksi..." class="w-full p-2.5 rounded-xl border border-stone-300 text-xs font-bold bg-white" />
+        </div>
+
+        <!-- Lines Multi-line Table -->
+        <div class="border border-stone-200 rounded-2xl p-3 bg-stone-50/60 space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black text-stone-800 uppercase tracking-wide">Rincian Akun (Debit & Kredit)</h4>
+            <button 
+              type="button" 
+              @click="addEditJournalLine()" 
+              class="px-2.5 py-1 rounded-lg bg-white border border-stone-300 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 text-stone-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+              <span>Tambah Baris</span>
+            </button>
+          </div>
+
+          <div class="space-y-2">
+            <template x-for="(line, idx) in editJournalForm.lines" :key="idx">
+              <div class="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-xl border border-stone-200 shadow-2xs">
+                <!-- Select Akun -->
+                <div class="col-span-12 sm:col-span-5">
+                  <select x-model="line.acc" class="w-full p-2 rounded-lg border border-stone-200 text-xs font-bold text-stone-800 bg-white">
+                    <template x-for="acc in coaList" :key="acc.code">
+                      <option :value="acc.code" x-text="`${acc.code} - ${acc.name}`"></option>
+                    </template>
+                  </select>
+                </div>
+                <!-- Debit -->
+                <div class="col-span-5 sm:col-span-3">
+                  <div class="relative">
+                    <span class="absolute left-2 top-2 text-[10px] text-stone-400 font-bold">D</span>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="any"
+                      x-model.number="line.debit" 
+                      placeholder="Debit"
+                      class="w-full pl-6 pr-2 py-1.5 rounded-lg border border-stone-200 text-xs font-mono font-bold text-emerald-700 text-right bg-white" />
+                  </div>
+                </div>
+                <!-- Kredit -->
+                <div class="col-span-5 sm:col-span-3">
+                  <div class="relative">
+                    <span class="absolute left-2 top-2 text-[10px] text-stone-400 font-bold">K</span>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="any"
+                      x-model.number="line.credit" 
+                      placeholder="Kredit"
+                      class="w-full pl-6 pr-2 py-1.5 rounded-lg border border-stone-200 text-xs font-mono font-bold text-rose-700 text-right bg-white" />
+                  </div>
+                </div>
+                <!-- Hapus Button -->
+                <div class="col-span-2 sm:col-span-1 text-center">
+                  <button 
+                    type="button" 
+                    @click="removeEditJournalLine(idx)" 
+                    class="w-7 h-7 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition cursor-pointer"
+                    title="Hapus baris">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Total & Balance Status -->
+          <div class="pt-2 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-mono">
+            <div class="flex items-center gap-4">
+              <div>Total Debit: <strong class="text-emerald-700" x-text="formatRupiah(getEditJournalTotalDebit())"></strong></div>
+              <div>Total Kredit: <strong class="text-rose-700" x-text="formatRupiah(getEditJournalTotalCredit())"></strong></div>
+            </div>
+            <div>
+              <span 
+                x-show="isEditJournalBalanced()" 
+                class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1 font-sans">
+                <i class="fa-solid fa-circle-check"></i> Seimbang (Balanced)
+              </span>
+              <span 
+                x-show="!isEditJournalBalanced()" 
+                class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800 flex items-center gap-1 font-sans">
+                <i class="fa-solid fa-triangle-exclamation"></i> Selisih: <span class="font-mono" x-text="formatRupiah(Math.abs(getEditJournalTotalDebit() - getEditJournalTotalCredit()))"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="pt-2 flex items-center justify-end gap-2 flex-shrink-0">
+          <button 
+            type="button" 
+            @click="showEditJournalModal = false" 
+            class="px-4 py-2.5 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition cursor-pointer">
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            :disabled="!isEditJournalBalanced() || loading"
+            :class="!isEditJournalBalanced() || loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-700 cursor-pointer'"
+            class="px-5 py-2.5 rounded-xl bg-amber-600 text-white font-extrabold text-xs shadow-md shadow-amber-600/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Simpan Perubahan</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: KONFIRMASI HAPUS JURNAL DENGAN REVERSAL -->
+  <div
+    x-cloak
+    x-show="showDeleteJournalModal"
+    @click.away="showDeleteJournalModal = false"
+    class="fixed inset-0 z-[75] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-red-200 relative space-y-4">
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-3xl bg-red-100 text-red-600 mx-auto flex items-center justify-center text-2xl mb-2 shadow-inner">
+          <i class="fa-solid fa-trash-can"></i>
+        </div>
+        <h3 class="font-black text-stone-900 text-lg tracking-tight">Hapus Entri Jurnal?</h3>
+        <p class="text-xs text-stone-500 mt-0.5">Tindakan ini akan membalikkan saldo akun di Buku Besar dan menghapus entri jurnal secara permanen.</p>
+      </div>
+
+      <div class="bg-stone-50 rounded-2xl p-3.5 border border-stone-200 text-xs space-y-2">
+        <div class="flex justify-between">
+          <span class="text-stone-500">No. Entry:</span>
+          <span class="font-mono font-bold text-brand-700" x-text="deletingJournal?.noEntry || deletingJournal?.id"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-stone-500">Tanggal:</span>
+          <span class="font-mono font-semibold text-stone-800" x-text="deletingJournal?.date"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-stone-500">Keterangan:</span>
+          <span class="font-bold text-stone-900 text-right max-w-[200px] truncate" x-text="deletingJournal?.desc"></span>
+        </div>
+        <div class="flex justify-between border-t border-stone-200 pt-2">
+          <span class="text-stone-500">Total Nominal:</span>
+          <span class="font-mono font-black text-emerald-700" x-text="formatRupiah(deletingJournal?.debitAmount)"></span>
+        </div>
+      </div>
+
+      <div class="p-3 bg-red-50 rounded-xl border border-red-200 text-[11px] text-red-800 flex items-start gap-2">
+        <i class="fa-solid fa-triangle-exclamation text-red-600 mt-0.5"></i>
+        <div>
+          <strong>Perhatian:</strong> Saldo debit & kredit pada akun terkait akan otomatis dikurangi kembali (reverse balance).
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button
+          type="button"
+          @click="showDeleteJournalModal = false"
+          class="min-h-[44px] rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition cursor-pointer">
+          Batal
+        </button>
+        <button
+          type="button"
+          @click="submitDeleteJournal()"
+          :disabled="loading"
+          class="min-h-[44px] rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs transition shadow-md shadow-red-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-trash-can text-xs"></i>
+          <span>Hapus Permanen</span>
         </button>
       </div>
     </div>

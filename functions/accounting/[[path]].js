@@ -314,6 +314,69 @@ async function updateLedgerAfterApprove(dbUrl, bulan, lines, apiKey, journalId) 
 }
 
 /**
+ * Helper: Apply delta debit/credit ke Buku Besar (Ledger) untuk edit atau reversal jurnal
+ * deltas: { [accCode]: { debit: number, credit: number } }
+ */
+async function applyLedgerDelta(dbUrl, bulan, deltas, apiKey, journalId) {
+  const auth = apiKey ? `?auth=${encodeURIComponent(apiKey)}` : '';
+  const entries = Object.entries(deltas || {});
+
+  for (const [rawAcc, delta] of entries) {
+    const acc = normalizeAcc(rawAcc);
+    if (!acc) continue;
+
+    const deltaDebit = Number(delta.debit) || 0;
+    const deltaCredit = Number(delta.credit) || 0;
+    if (deltaDebit === 0 && deltaCredit === 0) continue;
+
+    try {
+      const ledgerUrl = `${dbUrl}/accounting/ledger/${encodeURIComponent(acc)}/${encodeURIComponent(bulan)}.json${auth}`;
+      const res = await fetchWithRetry(ledgerUrl);
+      let existing = null;
+      if (res.ok) {
+        existing = await res.json();
+      }
+
+      if (!existing || typeof existing !== 'object') {
+        existing = { opening: 0, debit: 0, credit: 0, closing: 0 };
+      }
+
+      existing.debit = Math.max(0, (Number(existing.debit) || 0) + deltaDebit);
+      existing.credit = Math.max(0, (Number(existing.credit) || 0) + deltaCredit);
+
+      // Carry-forward opening balance jika belum ada
+      if (!existing.opening || Number(existing.opening) === 0) {
+        const prevBulan = getPrevMonthKey(bulan);
+        if (prevBulan) {
+          try {
+            const prevData = await fetchLedgerAccount(dbUrl, acc, prevBulan, apiKey);
+            const prevClosing = Number(prevData && prevData.closing) || 0;
+            if (prevClosing !== 0) {
+              existing.opening = prevClosing;
+            }
+          } catch (e) {}
+        }
+      }
+
+      const kN = isKreditNormal(acc);
+      existing.closing = kN
+        ? (Number(existing.opening) || 0) + existing.credit - existing.debit
+        : (Number(existing.opening) || 0) + existing.debit - existing.credit;
+      existing.updatedAt = Date.now();
+
+      await fetchWithRetry(ledgerUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(existing)
+      });
+      console.log(`[LEDGER-DELTA] ✅ acc ${acc} ${bulan}: deltaDebit=${deltaDebit}, deltaCredit=${deltaCredit}, closing=${existing.closing} (journal ${journalId || '-'})`);
+    } catch (err) {
+      console.error(`[LEDGER-DELTA] ❌ Exception acc ${acc} ${bulan}:`, err.message || err);
+    }
+  }
+}
+
+/**
  * Helper: Ambil data akun dari Ledger Firebase
  */
   async function fetchLedgerAccount(dbUrl, accCode, bulan, apiKey) {
@@ -993,7 +1056,7 @@ export async function onRequest(context) {
         }, 201);
       }
 
-      // PATCH /accounting/journal/:bulan/:entryId ATAU /accounting/journal/:entryId/approve
+      // PATCH /accounting/journal/:bulan/:entryId ATAU /accounting/journal/:entryId
       if (method === 'PATCH') {
         const body = await request.json().catch(() => ({}));
         let targetMonth = currentBulan;
@@ -1016,7 +1079,8 @@ export async function onRequest(context) {
           return jsonResponse({ success: false, error: `Jurnal '${identifier}' tidak ditemukan untuk diproses` }, 404);
         }
 
-        const action = body.action || (parts[2] === 'approve' || parts[3] === 'approve' ? 'approve' : 'approve');
+        const isExplicitApproveOrReject = body.action === 'approve' || body.action === 'reject' || parts[2] === 'approve' || parts[3] === 'approve' || parts[1] === 'approve';
+        const action = body.action || (isExplicitApproveOrReject ? (parts[2] === 'reject' ? 'reject' : 'approve') : 'edit');
         const approver = body.approvedBy || body.name || 'Finance / Kasir';
 
         if (action === 'approve') {
@@ -1070,23 +1134,144 @@ export async function onRequest(context) {
             entryId: found.firebaseKey,
             data: updatedData
           }, 200);
+        } else if (action === 'edit' || Array.isArray(body.lines)) {
+          // GUARD: hanya boleh delete/edit jurnal dengan status === 'pending' ATAU date === hari ini.
+          // Jurnal approved dari hari sebelumnya → reject 403
+          const todayUTC = new Date().toISOString().split('T')[0];
+          const todayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0];
+          const oldDate = String(found.data.date || found.data.tgl || '').split('T')[0];
+          const isPending = (found.data.status === 'pending');
+          const isToday = (oldDate === todayUTC || oldDate === todayWIB);
+
+          if (!isPending && !isToday) {
+            return jsonResponse({
+              success: false,
+              error: "Jurnal approved dari hari sebelumnya tidak dapat dihapus. Buat jurnal reversal."
+            }, 403);
+          }
+
+          const newLines = Array.isArray(body.lines) ? body.lines : (found.data.lines || []);
+          let totalDebit = 0, totalCredit = 0;
+          for (const l of newLines) {
+            totalDebit += Math.max(0, Number(l.debit) || 0);
+            totalCredit += Math.max(0, Number(l.credit) || 0);
+          }
+          if (Math.abs(totalDebit - totalCredit) > 0.01) {
+            return jsonResponse({ success: false, error: "Jurnal tidak seimbang: Total debit harus sama dengan total kredit" }, 400);
+          }
+
+          // Hitung delta per akun: deltaDebit = newDebit - oldDebit, deltaCredit = newCredit - oldCredit
+          const oldLines = Array.isArray(found.data.lines) ? found.data.lines : [];
+          const accountDeltas = {};
+          for (const line of oldLines) {
+            const acc = normalizeAcc(line.acc);
+            if (!acc) continue;
+            if (!accountDeltas[acc]) accountDeltas[acc] = { debit: 0, credit: 0 };
+            accountDeltas[acc].debit -= Math.max(0, Number(line.debit) || 0);
+            accountDeltas[acc].credit -= Math.max(0, Number(line.credit) || 0);
+          }
+          for (const line of newLines) {
+            const acc = normalizeAcc(line.acc);
+            if (!acc) continue;
+            if (!accountDeltas[acc]) accountDeltas[acc] = { debit: 0, credit: 0 };
+            accountDeltas[acc].debit += Math.max(0, Number(line.debit) || 0);
+            accountDeltas[acc].credit += Math.max(0, Number(line.credit) || 0);
+          }
+
+          // Apply delta ke ledger jika status approved
+          if (found.data.status === 'approved' || !found.data.status) {
+            await applyLedgerDelta(dbUrl, found.bulan, accountDeltas, apiKey, found.firebaseKey);
+            await updateSummaryAfterApprove(dbUrl, found.bulan, apiKey);
+          }
+
+          // Update jurnal di /accounting/journal/{bulan}/{entryId}
+          const updatedData = {
+            ...found.data,
+            date: body.date || found.data.date,
+            category: body.category || found.data.category || 'operasional',
+            desc: body.desc !== undefined ? String(body.desc).trim() : found.data.desc,
+            ref: body.ref !== undefined ? String(body.ref).trim() : found.data.ref,
+            lines: newLines,
+            updatedAt: Date.now()
+          };
+
+          const debitLine = newLines.find(l => Number(l.debit) > 0);
+          const creditLine = newLines.find(l => Number(l.credit) > 0);
+          if (debitLine) {
+            updatedData.debitCode = debitLine.acc;
+            updatedData.debitAmount = Number(debitLine.debit);
+          }
+          if (creditLine) {
+            updatedData.creditCode = creditLine.acc;
+            updatedData.creditAmount = Number(creditLine.credit);
+          }
+
+          await fetch(`${dbUrl}/accounting/journal/${encodeURIComponent(found.bulan)}/${encodeURIComponent(found.firebaseKey)}.json${authParam}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedData)
+          });
+
+          return jsonResponse({
+            success: true,
+            message: `Jurnal ${found.data.noEntry || found.firebaseKey} berhasil diperbarui`,
+            id: found.firebaseKey,
+            data: updatedData
+          }, 200);
         } else {
           return jsonResponse({ success: false, error: `Action '${action}' tidak valid` }, 400);
         }
       }
 
-      // DELETE /accounting/journal/{identifier}
+      // DELETE /accounting/journal/{identifier} ATAU /accounting/journal/{bulan}/{identifier}
       if (method === 'DELETE' && parts[1]) {
-        const found = await findJournalEntry(dbUrl, targetBulan, parts[1], apiKey);
-        if (!found) {
-          return jsonResponse({ success: false, error: `Jurnal '${parts[1]}' tidak ditemukan untuk dihapus` }, 404);
+        let deleteMonth = targetBulan;
+        let identifier = parts[1];
+        if (parts[1].length === 7 && parts[2]) {
+          deleteMonth = parts[1];
+          identifier = parts[2];
         }
 
+        const found = await findJournalEntry(dbUrl, deleteMonth, identifier, apiKey);
+        if (!found) {
+          return jsonResponse({ success: false, error: `Jurnal '${identifier}' tidak ditemukan untuk dihapus` }, 404);
+        }
+
+        // GUARD: hanya boleh delete/edit jurnal dengan status === 'pending' ATAU date === hari ini.
+        // Jurnal approved dari hari sebelumnya → reject 403
+        const todayUTC = new Date().toISOString().split('T')[0];
+        const todayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0];
+        const oldDate = String(found.data.date || found.data.tgl || '').split('T')[0];
+        const isPending = (found.data.status === 'pending');
+        const isToday = (oldDate === todayUTC || oldDate === todayWIB);
+
+        if (!isPending && !isToday) {
+          return jsonResponse({
+            success: false,
+            error: "Jurnal approved dari hari sebelumnya tidak dapat dihapus. Buat jurnal reversal."
+          }, 403);
+        }
+
+        // Reverse saldo lama: debit -= oldDebit, credit -= oldCredit per akun
+        if ((found.data.status === 'approved' || !found.data.status) && Array.isArray(found.data.lines)) {
+          const reversalDeltas = {};
+          for (const line of found.data.lines) {
+            const acc = normalizeAcc(line.acc);
+            if (!acc) continue;
+            if (!reversalDeltas[acc]) reversalDeltas[acc] = { debit: 0, credit: 0 };
+            reversalDeltas[acc].debit -= Math.max(0, Number(line.debit) || 0);
+            reversalDeltas[acc].credit -= Math.max(0, Number(line.credit) || 0);
+          }
+          await applyLedgerDelta(dbUrl, found.bulan, reversalDeltas, apiKey, found.firebaseKey);
+          await updateSummaryAfterApprove(dbUrl, found.bulan, apiKey);
+        }
+
+        // Hapus entry dari /accounting/journal/{bulan}/{entryId}
         await fetch(`${dbUrl}/accounting/journal/${encodeURIComponent(found.bulan)}/${encodeURIComponent(found.firebaseKey)}.json${authParam}`, {
           method: 'DELETE'
         });
 
-        return jsonResponse({ success: true, message: `Jurnal ${parts[1]} berhasil dihapus` }, 200);
+        return jsonResponse({ success: true, message: `Jurnal ${identifier} berhasil dihapus` }, 200);
       }
     }
 

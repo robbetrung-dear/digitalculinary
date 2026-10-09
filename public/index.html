@@ -585,6 +585,17 @@
             
             <div class="relative">
               <img :src="item.image" :alt="item.name" class="w-full h-44 object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              <!-- Stock Badge Pojok Kiri Atas (Sinkron dari POS Kasir) -->
+              <div x-show="siteConfig.showMenuStockOnMain" class="absolute top-2 left-2 z-10">
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-black shadow-sm border"
+                  :class="getMenuDisplayStock(item) === 0
+                    ? 'bg-red-600 text-white border-red-400'
+                    : (getMenuDisplayStock(item) !== null && getMenuDisplayStock(item) <= 5
+                        ? 'bg-amber-500 text-white border-amber-300'
+                        : 'bg-emerald-600 text-white border-emerald-400')"
+                  x-text="getMenuDisplayStock(item) === null ? '∞' : getMenuDisplayStock(item)">
+                </span>
+              </div>
               <div class="absolute top-2 right-2 flex flex-col gap-1 items-end">
                 <span x-show="item.badge" class="px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-lg shadow-sm" :class="item.badgeColor || 'bg-brand-600 text-white'" x-text="item.badge"></span>
                 <span x-show="item.originalPrice && item.originalPrice > item.price" class="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-red-600 text-white rounded shadow-sm">
@@ -1746,6 +1757,10 @@
         </div>
 
         <div class="p-5 border-t border-stone-200 bg-stone-50 space-y-3">
+          <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-relaxed flex items-start gap-2">
+            <i class="fa-brands fa-whatsapp text-emerald-600 text-sm mt-0.5 flex-shrink-0"></i>
+            <span>Selalu tanyakan stok menu di keranjang belanja ini kepada admin terlebih dahulu melalui tombol whatsapp sebelum Anda memutuskan untuk lanjut checkout.</span>
+          </div>
           <div class="flex justify-between text-xs text-stone-600">
             <span>Subtotal:</span>
             <span class="font-bold text-stone-900" x-text="formatRupiah(cartSubtotal)"></span>
@@ -2211,11 +2226,11 @@
   </div>
 
   <!-- MODAL 2: PANEL PENGATURAN & CMS ADMIN UTAMA (LENGKAP) -->
-  <div x-cloak x-show="isAdminPanelOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-    <div @click.away="isAdminPanelOpen = false" class="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+  <div x-cloak x-show="isAdminPanelOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+    <div @click.away="isAdminPanelOpen = false" class="bg-white rounded-3xl max-w-4xl w-full h-[100dvh] sm:h-[92vh] max-h-[92dvh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
       
       <!-- Modal Header -->
-      <div class="p-4 sm:p-6 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
+      <div class="p-4 sm:p-6 border-b border-stone-200 bg-stone-50 flex items-center justify-between flex-shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center text-lg shadow-sm">
             <i class="fa-solid fa-lock"></i>
@@ -2355,7 +2370,7 @@
       </div>
 
       <!-- Tab Content Area (Scrollable) -->
-      <div class="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+      <div class="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain space-y-6">
 
         <!-- TAB VALIDASI PESANAN ONLINE -->
         <div x-show="adminActiveTab === 'orders'" class="space-y-6">
@@ -2867,6 +2882,25 @@
                 <option :value="0">Tampilkan Semua (Tanpa Paginasi)</option>
               </select>
             </div>
+          </div>
+
+          <!-- Toggle Tampilkan Stok Menu di Halaman Utama (Sinkron POS Kasir) -->
+          <div class="bg-white p-4 rounded-2xl border border-stone-200 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i class="fa-solid fa-boxes-stacked text-sm"></i>
+              </div>
+              <div>
+                <h5 class="font-extrabold text-stone-900 text-xs sm:text-sm">Tampilkan Stok Menu di Halaman Utama (Web Pelanggan)</h5>
+                <p class="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                  Tampilkan Stok Menu di Halaman Utama (Web Pelanggan): Hanya jika anda siap dan memastikan selalu memantau dan update stok menu untuk terlihat secara online. Jika dinonaktifkan, maka jumlah stok menu tidak akan ditampilkan pada semua menu di etalase beranda.
+                </p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+              <input type="checkbox" x-model="siteConfig.showMenuStockOnMain" @change="saveSiteConfig()" class="sr-only peer" />
+              <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
           </div>
 
           <!-- Search & Filter Menu Admin -->
@@ -4366,20 +4400,24 @@ git push -u origin main</pre>
       </div>
 
       <!-- Modal Footer -->
-      <div class="p-4 sm:p-6 border-t border-stone-200 bg-stone-50 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="p-4 sm:p-6 border-t border-stone-200 bg-stone-50 flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0">
         
+        <div class="hidden sm:flex items-center gap-1.5 text-[11px] text-stone-500">
+          <i class="fa-solid fa-circle-info text-brand-500"></i>
+          <span>Klik <strong>Simpan Semua Perubahan</strong> untuk menerapkan setelan ke halaman utama.</span>
+        </div>
 
-        <div class="flex items-center gap-3 w-full sm:w-auto">
+        <div class="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           <button 
             type="button" 
             @click="isAdminPanelOpen = false" 
-            class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 font-bold text-xs transition flex-1 sm:flex-initial">
+            class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 font-bold text-xs transition flex-1 sm:flex-initial cursor-pointer">
             Tutup
           </button>
           <button 
             type="button" 
             @click="saveSiteConfig()" 
-            class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs shadow-md shadow-brand-600/30 transition flex items-center justify-center gap-2 flex-1 sm:flex-initial">
+            class="px-5 sm:px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs shadow-md shadow-brand-600/30 transition flex items-center justify-center gap-2 flex-1 sm:flex-initial cursor-pointer">
             <i class="fa-solid fa-floppy-disk"></i>
             <span>Simpan Semua Perubahan</span>
           </button>
@@ -5415,6 +5453,37 @@ git push -u origin main</pre>
           });
         }
         return () => {};
+      },
+      listenInventory: (callback) => {
+        if (db) {
+          const invRef = ref(db, 'inventory');
+          return onValue(invRef, (snapshot) => {
+            const val = snapshot.val();
+            if (val && typeof val === 'object') {
+              const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val).filter(Boolean);
+              try { localStorage.setItem('pos_inventory', JSON.stringify(arr)); } catch (e) {}
+              callback(arr);
+            } else {
+              callback([]);
+            }
+          });
+        }
+        return () => {};
+      },
+      listenMenuRecipes: (callback) => {
+        if (db) {
+          const recRef = ref(db, 'menu_recipes');
+          return onValue(recRef, (snapshot) => {
+            const val = snapshot.val();
+            if (val && typeof val === 'object') {
+              try { localStorage.setItem('pos_menu_recipes', JSON.stringify(val)); } catch (e) {}
+              callback(val);
+            } else {
+              callback({});
+            }
+          });
+        }
+        return () => {};
       }
     };
     
@@ -5488,6 +5557,7 @@ git push -u origin main</pre>
           menuSectionTitle: 'Menu Harian & Ala Carte',
           menuSectionSubtitle: 'Pilihan hidangan siap santap dengan cita rasa autentik dan porsi mengenyangkan.',
           menuItemsPerPage: 12,
+          showMenuStockOnMain: false,
           cateringBadge: 'Pilihan Box Catering Dapur',
           cateringTitle: 'Paket Catering Harian & Acara Spesial',
           cateringSubtitle: 'Pilihan box catering higienis untuk meeting, arisan, syukuran, dan ulang tahun. Minimum order 15 pax.',
@@ -5714,6 +5784,10 @@ git push -u origin main</pre>
 
         // Keranjang Belanja
         cart: [],
+
+        // Stok Inventori & Resep Menu (Sinkron dari POS Kasir)
+        inventoryList: [],
+        menuRecipes: {},
 
         // Kategori Menu Sesuai POS Kasir & Standar Toko
         menuCategories: [
@@ -6081,6 +6155,40 @@ git push -u origin main</pre>
           // Sinkronisasi otomatis kategori menu antara panel admin dan kasir POS
           this.syncCategoriesWithKasir();
 
+          // 2c. Muat Inventori & Resep Menu POS Kasir dari LocalStorage & API (untuk sinkronisasi stok menu)
+          try {
+            const savedInv = localStorage.getItem("pos_inventory");
+            if (savedInv) {
+              const parsedInv = JSON.parse(savedInv);
+              if (Array.isArray(parsedInv)) this.inventoryList = parsedInv;
+            }
+          } catch (e) {}
+          try {
+            const savedRec = localStorage.getItem("pos_menu_recipes");
+            if (savedRec) {
+              const parsedRec = JSON.parse(savedRec);
+              if (parsedRec && typeof parsedRec === 'object') this.menuRecipes = parsedRec;
+            }
+          } catch (e) {}
+          fetch('/pos/inventory')
+            .then(r => r.json())
+            .then(res => {
+              if (res && res.success && Array.isArray(res.data)) {
+                this.inventoryList = res.data;
+                try { localStorage.setItem("pos_inventory", JSON.stringify(res.data)); } catch (e) {}
+              }
+            })
+            .catch(() => {});
+          fetch('/pos/recipes')
+            .then(r => r.json())
+            .then(res => {
+              if (res && res.success && res.data && typeof res.data === 'object') {
+                this.menuRecipes = res.data;
+                try { localStorage.setItem("pos_menu_recipes", JSON.stringify(res.data)); } catch (e) {}
+              }
+            })
+            .catch(() => {});
+
           // Fetch fallback dari server / Cloudflare Pages API endpoint jika tersedia
           fetch('/menu/categories')
             .then(r => r.json())
@@ -6138,6 +6246,20 @@ git push -u origin main</pre>
                   if (liveCats && Array.isArray(liveCats) && liveCats.length > 0) {
                     this.menuCategories = liveCats;
                     this.syncCategoriesWithKasir();
+                  }
+                });
+              }
+              if (window.FirebaseBridge && window.FirebaseBridge.listenInventory) {
+                window.FirebaseBridge.listenInventory((liveInv) => {
+                  if (Array.isArray(liveInv)) {
+                    this.inventoryList = liveInv;
+                  }
+                });
+              }
+              if (window.FirebaseBridge && window.FirebaseBridge.listenMenuRecipes) {
+                window.FirebaseBridge.listenMenuRecipes((liveRec) => {
+                  if (liveRec && typeof liveRec === 'object') {
+                    this.menuRecipes = liveRec;
                   }
                 });
               }
@@ -6220,6 +6342,38 @@ git push -u origin main</pre>
         normalizeCatId(catId) {
           if (!catId) return '';
           return String(catId).toLowerCase().replace(/[^a-z0-9]/g, '');
+        },
+
+        // Hitung stok menu otomatis dari bahan inventori & resep POS Kasir (sama persis dengan kasir-app.js)
+        getMenuCalculatedStock(item) {
+          if (!item || !item.id) return null;
+          const recipe = this.menuRecipes ? this.menuRecipes[item.id] : null;
+          if (!recipe || !Array.isArray(recipe) || recipe.length === 0) return null;
+          let minPortions = Infinity;
+          for (const ing of recipe) {
+            if (!ing.invId || !ing.qtyPerPortion || ing.qtyPerPortion <= 0) continue;
+            const invItem = (this.inventoryList || []).find(i => i.id === ing.invId);
+            if (!invItem) {
+              return 0;
+            }
+            const availableStock = Number(invItem.stock) || 0;
+            const possiblePortions = Math.floor(availableStock / Number(ing.qtyPerPortion));
+            if (possiblePortions < minPortions) {
+              minPortions = possiblePortions;
+            }
+          }
+          return minPortions === Infinity ? null : Math.max(0, minPortions);
+        },
+
+        getMenuDisplayStock(item) {
+          if (!item) return null;
+          const calcStock = this.getMenuCalculatedStock(item);
+          if (calcStock !== null) return calcStock;
+          if (item.stock !== null && item.stock !== undefined && item.stock !== '') {
+            const num = Number(item.stock);
+            if (!isNaN(num)) return num;
+          }
+          return null;
         },
 
         get filteredMenuItems() {

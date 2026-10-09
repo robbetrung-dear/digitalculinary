@@ -113,6 +113,8 @@ window.kasirApp = () => ({
     // Shift Status & History
   shiftStatus: 'open', // 'open' | 'paused' | 'closed'
   shiftPauseTime: null,
+  _shiftClosedHandled: false,   // ✅ BUG-4: flag anti double-execute auto-logout shift
+  _visibilityListenerBound: false, // ✅ BUG-4: guard agar listener visibilitychange tidak duplikat
   showEditModalBanner: false,   // ✅ banner ubah modal awal
   editModalInput: 0,             // input sementara banner
   autoJournalShiftDiff: false,  // ✅ FITUR-1: toggle auto-jurnal selisih kas close shift (sync dari site_config)
@@ -736,6 +738,10 @@ try {
     // 9b. ✅ FIX: Pastikan ada shift aktif (auto-join / prompt modal awal)
     await this.ensureActiveShift();
 
+    // 9c. ✅ FIX BUG-4: Re-bind listener setelah ensureActiveShift memastikan shiftId, plus pasang visibilitychange untuk tab background
+    this.listenShiftData();
+    this.setupShiftVisibilityGuard();
+
     // 10. Auto-save keranjang tiap 30 detik & Cek Draft saat buka kasir
     this.setupDraftTimer();
     this.checkDraftOnLoad();
@@ -1012,57 +1018,91 @@ try {
 
             // ✅ FIX: Multi-kasir auto-logout saat shift ditutup device lain
             if (val.status === 'closed' && this.kasirInfo?.shiftId) {
-              // Guard anti double-execute (kasir yang close sendiri sudah redirect)
-              if (this._shiftClosedHandled) return;
-              this._shiftClosedHandled = true;
-
-              console.warn('[SHIFT-LISTENER] Shift ditutup dari device lain → force logout');
-              this.playSound('notify');
-
-              // Cleanup intervals
-              try { if (this._clockInterval) clearInterval(this._clockInterval); } catch (e) {}
-              try { if (this._reconcileInterval) clearInterval(this._reconcileInterval); } catch (e) {}
-              try { if (this._dashboardInterval) clearInterval(this._dashboardInterval); } catch (e) {}
-              try { if (this._snapshotInterval) clearInterval(this._snapshotInterval); } catch (e) {}
-
-              // Clear session
-              try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-              try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
-
-              // ✅ FIX BUG-4: Overlay fullscreen (alert diblokir di tab background)
-              // Buat overlay
-              const overlay = document.createElement('div');
-              overlay.id = 'shift-closed-overlay';
-              overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;font-family:"Plus Jakarta Sans",sans-serif;';
-              overlay.innerHTML = `
-                <div style="background:#fff;border-radius:24px;max-width:440px;width:100%;padding:32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);">
-                  <div style="width:64px;height:64px;border-radius:20px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">⚠️</div>
-                  <h3 style="font-size:20px;font-weight:900;color:#1c1917;margin:0 0 8px;letter-spacing:-.02em;">Shift Telah Ditutup</h3>
-                  <p style="font-size:13px;color:#57534e;line-height:1.5;margin:0 0 20px;">Shift <strong>${this.kasirInfo?.shiftId || '-'}</strong> telah ditutup oleh operator lain (kasir utama).<br><br>Sesi kasir Anda akan diakhiri dalam <strong id="shift-closed-countdown">5</strong> detik.</p>
-                  <button onclick="try{sessionStorage.removeItem('dapur_kasir_session');localStorage.removeItem('dapur_kasir_session');}catch(e){};window.location.href='/';" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;height:48px;border-radius:14px;background:#ea580c;color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer;box-shadow:0 8px 20px rgba(234,88,12,.3);">
-                    ← Keluar Sekarang
-                  </button>
-                </div>
-              `;
-              document.body.appendChild(overlay);
-
-              // Countdown 5 detik → redirect paksa
-              let countdown = 5;
-              const cdEl = document.getElementById('shift-closed-countdown');
-              const cdInterval = setInterval(() => {
-                countdown--;
-                if (cdEl) cdEl.textContent = countdown;
-                if (countdown <= 0) {
-                  clearInterval(cdInterval);
-                  window.location.href = '/';
-                }
-              }, 1000);
+              this.forceShiftClosedLogoutOverlay(this.kasirInfo.shiftId);
             }
           }
         });
       } catch (e) {
         console.warn('Shift listener exception:', e);
       }
+    }
+  },
+
+  /**
+   * ✅ FIX BUG-4: Listener visibilitychange — saat tab kasir kembali visible dari background,
+   * re-check status shift langsung ke Firebase agar tidak lolos jika WebSocket throttled di background.
+   */
+  setupShiftVisibilityGuard() {
+    if (this._visibilityListenerBound) return;
+    this._visibilityListenerBound = true;
+
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible') return;
+      const activeShiftId = this.kasirInfo?.shiftId;
+      if (!activeShiftId || this._shiftClosedHandled) return;
+
+      try {
+        const shiftData = await this._fetchShift(activeShiftId);
+        if (shiftData && shiftData.status === 'closed') {
+          console.warn('[VISIBILITY-GUARD] Tab aktif kembali & mendeteksi shift sudah closed:', activeShiftId);
+          this.shiftStatus = 'closed';
+          this.forceShiftClosedLogoutOverlay(activeShiftId);
+        }
+      } catch (err) {
+        console.warn('[VISIBILITY-GUARD] Gagal re-check status shift:', err);
+      }
+    });
+  },
+
+  /**
+   * ✅ FIX BUG-4: Tampilkan full-screen DOM Overlay (bukan alert) saat shift ditutup oleh kasir/tab lain.
+   */
+  forceShiftClosedLogoutOverlay(closedShiftId) {
+    if (this._shiftClosedHandled) return;
+    this._shiftClosedHandled = true;
+    this.shiftStatus = 'closed';
+
+    console.warn('[SHIFT-CLOSED] Shift ditutup oleh kasir lain → tampilkan overlay logout');
+    try { this.playSound('notify'); } catch (e) {}
+
+    // Cleanup intervals
+    try { if (this._clockInterval) clearInterval(this._clockInterval); } catch (e) {}
+    try { if (this._reconcileInterval) clearInterval(this._reconcileInterval); } catch (e) {}
+    try { if (this._dashboardInterval) clearInterval(this._dashboardInterval); } catch (e) {}
+    try { if (this._snapshotInterval) clearInterval(this._snapshotInterval); } catch (e) {}
+
+    // Clear session
+    try { sessionStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+    try { localStorage.removeItem('dapur_kasir_session'); } catch (e) {}
+
+    // Hindari duplikasi elemen overlay jika sudah ada di DOM
+    if (document.getElementById('shift-closed-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'shift-closed-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;font-family:"Plus Jakarta Sans",sans-serif;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:24px;max-width:440px;width:100%;padding:32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+        <div style="width:64px;height:64px;border-radius:20px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">⚠️</div>
+        <h3 style="font-size:20px;font-weight:900;color:#1c1917;margin:0 0 8px;letter-spacing:-.02em;">Shift ditutup oleh kasir lain. Silakan login ulang.</h3>
+        <p style="font-size:13px;color:#57534e;line-height:1.5;margin:0 0 20px;">Shift <strong>${closedShiftId || this.kasirInfo?.shiftId || '-'}</strong> telah ditutup pada tab/perangkat lain.<br><br>Sesi kasir Anda telah diakhiri demi keamanan data transaksi.</p>
+        <button id="btn-shift-relogin" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;height:48px;border-radius:14px;background:#ea580c;color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer;box-shadow:0 8px 20px rgba(234,88,12,.3);">
+          Login Ulang
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const reloginBtn = document.getElementById('btn-shift-relogin');
+    if (reloginBtn) {
+      reloginBtn.addEventListener('click', () => {
+        this._shiftClosedHandled = false;
+        try {
+          sessionStorage.removeItem('dapur_kasir_session');
+          localStorage.removeItem('dapur_kasir_session');
+        } catch (e) {}
+        window.location.href = '/';
+      });
     }
   },
 
@@ -4258,6 +4298,7 @@ try {
     };
 
     this.loadingStates.shift = true;
+    this._shiftClosedHandled = true; // ✅ BUG-4: Tandai tab ini yang menutup shift sendiri
     try {
       // 1. PATCH /pos/shifts/{shiftId}
       await fetch(`/pos/shifts/${encodeURIComponent(shiftId)}`, {

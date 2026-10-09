@@ -168,6 +168,27 @@ window.accountingApp = function() {
     showResetModal: false,
     showGoLiveModal: false,
 
+    // Supervisor PIN gate for destructive/sensitive actions
+    showPinModal: false,
+    pinInput: '',
+    pinErrorMessage: '',
+    pinContext: null,
+
+    // Edit & Hapus Jurnal Modal State
+    showEditJournalModal: false,
+    editJournalForm: {
+      id: '',
+      noEntry: '',
+      date: '',
+      category: 'operasional',
+      desc: '',
+      ref: '',
+      status: 'approved',
+      lines: []
+    },
+    showDeleteJournalModal: false,
+    deletingJournal: null,
+
     // Confirm text & password
     closePeriodConfirmText: '',
     closePeriodPassword: '',
@@ -369,6 +390,58 @@ window.accountingApp = function() {
       this.financePinInput = '';
       this.financePinError = '';
       window.location.href = '/';
+    },
+
+    /**
+     * ✅ PIN Supervisor Gate untuk aksi destruktif / edit jurnal (konsisten dengan kasir-app.js)
+     */
+    requestSupervisorPin(actionLabel, targetLabel) {
+      const cached = sessionStorage.getItem('dapur_pin_verified_until');
+      if (cached && Number(cached) > Date.now()) {
+        return Promise.resolve(true);
+      }
+      return new Promise((resolve) => {
+        this.pinContext = { actionLabel, targetLabel, resolve };
+        this.pinInput = '';
+        this.pinErrorMessage = '';
+        this.showPinModal = true;
+        this.$nextTick(() => {
+          setTimeout(() => {
+            const el = document.getElementById('supervisorPinInput');
+            if (el) el.focus();
+          }, 100);
+        });
+      });
+    },
+
+    submitSupervisorPin() {
+      const pin = String(this.pinInput || '').trim();
+      if (!pin || pin.length !== 6) {
+        this.pinErrorMessage = '⚠️ PIN harus 6 digit angka';
+        return;
+      }
+      const validPin = String(this.supervisorPin || '211211').trim();
+      if (pin === validPin) {
+        try {
+          sessionStorage.setItem('dapur_pin_verified_until', String(Date.now() + 15 * 60 * 1000));
+        } catch (e) {}
+        const ctx = this.pinContext;
+        this.showPinModal = false;
+        this.pinErrorMessage = '';
+        this.pinInput = '';
+        if (ctx && typeof ctx.resolve === 'function') ctx.resolve(true);
+      } else {
+        this.pinErrorMessage = '❌ PIN Supervisor salah';
+        this.pinInput = '';
+      }
+    },
+
+    cancelSupervisorPin() {
+      const ctx = this.pinContext;
+      this.showPinModal = false;
+      this.pinErrorMessage = '';
+      this.pinInput = '';
+      if (ctx && typeof ctx.resolve === 'function') ctx.resolve(false);
     },
 
     async _initApp() {
@@ -1281,6 +1354,185 @@ this.jurnalList.forEach(j => {
           break;
       }
       this.showToast(`Template [${type}] dipilih, silakan masukkan nominal`, 'success');
+    },
+
+    /**
+     * =========================================================================
+     * EDIT & HAPUS JURNAL UMUM DENGAN SUPERVISOR PIN GATE & REALTIME BACKEND SYNC
+     * =========================================================================
+     */
+
+    async openEditJournalModal(jrn) {
+      if (!jrn) return;
+      const today = new Date().toISOString().split('T')[0];
+      const todayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0];
+      const jrnDate = String(jrn.date || jrn.tgl || '').split('T')[0];
+      const isToday = (jrnDate === today || jrnDate === todayWIB);
+      if (jrn.status === 'approved' && !isToday) {
+        alert("⚠️ Jurnal approved dari hari sebelumnya tidak dapat diedit. Buat jurnal reversal.");
+        return;
+      }
+
+      const pinOk = await this.requestSupervisorPin('EDIT JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`);
+      if (!pinOk) return;
+
+      let lines = [];
+      if (Array.isArray(jrn.lines) && jrn.lines.length > 0) {
+        lines = jrn.lines.map(l => ({
+          acc: String(l.acc || '1001'),
+          debit: Number(l.debit) || 0,
+          credit: Number(l.credit) || 0
+        }));
+      } else {
+        lines = [
+          { acc: String(jrn.debitCode || '1001'), debit: Number(jrn.debitAmount) || 0, credit: 0 },
+          { acc: String(jrn.creditCode || '4001'), debit: 0, credit: Number(jrn.creditAmount) || 0 }
+        ];
+      }
+
+      this.editJournalForm = {
+        id: jrn.id,
+        noEntry: jrn.noEntry || '',
+        date: jrn.date || today,
+        category: jrn.category || 'operasional',
+        desc: jrn.desc || '',
+        ref: jrn.ref || '',
+        status: jrn.status || 'approved',
+        lines: lines
+      };
+      this.showEditJournalModal = true;
+    },
+
+    addEditJournalLine() {
+      this.editJournalForm.lines.push({ acc: '1001', debit: 0, credit: 0 });
+    },
+
+    removeEditJournalLine(idx) {
+      if (this.editJournalForm.lines.length <= 2) {
+        this.showToast('Jurnal minimal memiliki 2 baris (Debit & Kredit)', 'error');
+        return;
+      }
+      this.editJournalForm.lines.splice(idx, 1);
+    },
+
+    getEditJournalTotalDebit() {
+      return (this.editJournalForm.lines || []).reduce((sum, l) => sum + (Number(l.debit) || 0), 0);
+    },
+
+    getEditJournalTotalCredit() {
+      return (this.editJournalForm.lines || []).reduce((sum, l) => sum + (Number(l.credit) || 0), 0);
+    },
+
+    isEditJournalBalanced() {
+      const d = this.getEditJournalTotalDebit();
+      const c = this.getEditJournalTotalCredit();
+      return d > 0 && Math.abs(d - c) < 0.01;
+    },
+
+    async submitEditJournal() {
+      if (!this.isEditJournalBalanced()) {
+        this.showToast('Total Debit dan Total Kredit harus sama dan lebih dari 0', 'error');
+        return;
+      }
+      if (!this.editJournalForm.desc || !this.editJournalForm.desc.trim()) {
+        this.showToast('Deskripsi jurnal wajib diisi', 'error');
+        return;
+      }
+
+      this.loading = true;
+      try {
+        const payload = {
+          date: this.editJournalForm.date,
+          category: this.editJournalForm.category,
+          desc: this.editJournalForm.desc.trim(),
+          ref: this.editJournalForm.ref.trim(),
+          lines: this.editJournalForm.lines.map(l => ({
+            acc: String(l.acc),
+            debit: Number(l.debit) || 0,
+            credit: Number(l.credit) || 0
+          }))
+        };
+
+        const res = await fetch(`/accounting/journal/${encodeURIComponent(this.editJournalForm.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          alert(`❌ GAGAL EDIT JURNAL\n\n${data.error || 'Terjadi kesalahan sistem'}`);
+          this.loading = false;
+          return;
+        }
+
+        this.showToast('✅ Jurnal berhasil diperbarui!', 'success');
+        this.showEditJournalModal = false;
+
+        // Refresh journalList & ledger dari server
+        const bulanKey = (this.editJournalForm.date || '').substring(0, 7) || this.bulanAktif;
+        await this.loadJournal(bulanKey);
+        await this.loadLedgerMap(bulanKey);
+        await this.loadCOA();
+        await this.loadSummary(this.bulanAktif);
+        await this.loadDashboard();
+      } catch (err) {
+        console.error('[ACCT-APP] submitEditJournal error:', err);
+        alert(`❌ Error: ${err.message}`);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async openDeleteJournalModal(jrn) {
+      if (!jrn) return;
+      const today = new Date().toISOString().split('T')[0];
+      const todayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split('T')[0];
+      const jrnDate = String(jrn.date || jrn.tgl || '').split('T')[0];
+      const isToday = (jrnDate === today || jrnDate === todayWIB);
+      if (jrn.status === 'approved' && !isToday) {
+        alert("⚠️ Jurnal approved dari hari sebelumnya tidak dapat dihapus. Buat jurnal reversal.");
+        return;
+      }
+
+      const pinOk = await this.requestSupervisorPin('HAPUS JURNAL', `Jurnal ${jrn.noEntry || jrn.id}`);
+      if (!pinOk) return;
+
+      this.deletingJournal = jrn;
+      this.showDeleteJournalModal = true;
+    },
+
+    async submitDeleteJournal() {
+      if (!this.deletingJournal) return;
+      this.loading = true;
+      try {
+        const res = await fetch(`/accounting/journal/${encodeURIComponent(this.deletingJournal.id)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          alert(`❌ GAGAL HAPUS JURNAL\n\n${data.error || 'Terjadi kesalahan sistem'}`);
+          this.loading = false;
+          return;
+        }
+
+        this.showToast('✅ Jurnal berhasil dihapus!', 'success');
+        this.showDeleteJournalModal = false;
+        const bulanKey = (this.deletingJournal.date || '').substring(0, 7) || this.bulanAktif;
+        this.deletingJournal = null;
+
+        // Refresh journalList & ledger dari server
+        await this.loadJournal(bulanKey);
+        await this.loadLedgerMap(bulanKey);
+        await this.loadCOA();
+        await this.loadSummary(this.bulanAktif);
+        await this.loadDashboard();
+      } catch (err) {
+        console.error('[ACCT-APP] submitDeleteJournal error:', err);
+        alert(`❌ Error: ${err.message}`);
+      } finally {
+        this.loading = false;
+      }
     },
 
     // ------------------------------------------------------------------------
