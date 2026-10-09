@@ -79,9 +79,49 @@ export async function onRequest(context) {
       });
     }
 
-    // 3. GET /pos/transactions/{date} — Daftar transaksi per tanggal (YYYY-MM-DD)
+        // 3. GET /pos/transactions/{date} — Daftar transaksi per tanggal (YYYY-MM-DD)
+    //    GET /pos/transactions/month-{YYYY-MM} — Daftar jurnal 1 bulan (dari /accounting/journal)
     if (method === 'GET' && parts[0] === 'transactions' && parts[1]) {
-      const date = parts[1];
+      const key = parts[1];
+
+      // ✅ FIX Bug 2: Handle 'month-YYYY-MM' → baca jurnal dari /accounting/journal/{bulan}
+      // Jurnal POS & auto-jurnal tersimpan di /accounting/journal, bukan /pos/transactions
+      if (key.startsWith('month-')) {
+        const month = key.slice(6);
+        const res = await fetch(`${dbUrl}/accounting/journal/${encodeURIComponent(month)}.json${authParam}`);
+        const data = await res.json();
+        const list = data && typeof data === 'object'
+          ? Object.entries(data).map(([id, val]) => {
+              const v = val || {};
+              const lines = Array.isArray(v.lines) ? v.lines : [];
+              const debitLine = lines.find(l => Number(l.debit) > 0) || {};
+              const creditLine = lines.find(l => Number(l.credit) > 0) || {};
+              const total = Number(v.total) || Number(debitLine.debit) || 0;
+              const ts = v.timestamp || v.createdAt || (v.date ? new Date(v.date).getTime() : 0);
+              return {
+                id,
+                ...v,
+                date: v.date || '',
+                t: ts,
+                timestamp: ts,
+                tot: total,
+                total,
+                pm: v.category || 'journal',
+                debitCode: debitLine.acc || '',
+                creditCode: creditLine.acc || '',
+                debitAmount: Number(debitLine.debit) || 0,
+                creditAmount: Number(creditLine.credit) || 0
+              };
+            })
+          : [];
+        list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return new Response(JSON.stringify({ success: true, date: key, month, data: list }), {
+          headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+
+      // Behavior existing: per tanggal spesifik
+      const date = key;
       const res = await fetch(`${dbUrl}/pos/transactions/${encodeURIComponent(date)}.json${authParam}`);
       const data = await res.json();
       const list = data && typeof data === 'object'
