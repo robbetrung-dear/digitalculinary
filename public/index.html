@@ -6597,8 +6597,12 @@ git push -u origin main</pre>
             const res = await fetch(`${fbUrl}/recipes.json`);
             const data = await res.json();
             if (data && typeof data === 'object') {
-              this.recipesList = Object.values(data).filter(Boolean);
-              console.log('[RECIPES] Loaded:', this.recipesList.length);
+              const list = Object.entries(data || {}).map(([menuId, r]) => ({
+                ...(r || {}),
+                menuId: (r && r.menuId) ? r.menuId : menuId
+              })).filter(r => r && Array.isArray(r.ingredients));
+              this.recipesList = list;
+              console.log('[RECIPES] Loaded:', list.length, list.map(r => r.menuId));
             }
           } catch (e) { console.warn('[RECIPES] Fetch error:', e); }
         },
@@ -6608,28 +6612,37 @@ git push -u origin main</pre>
           const invList = Array.isArray(this.inventoryList) ? this.inventoryList : [];
           const recList = Array.isArray(this.recipesList) ? this.recipesList : [];
 
-          // 1. Prioritas: hitung porsi dari recipe (BOM)
           const recipe = recList.find(r => r && (r.menuId === menuItem.id || r.id === menuItem.id));
           if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
             let minPorsi = Infinity;
             for (const ing of recipe.ingredients) {
               const inv = invList.find(i => i && i.id === ing.itemId);
               if (!inv) { minPorsi = 0; break; }
-              const stockVal = Number(inv.stock);
-              const amountPer = Number(ing.amount);
-              if (!Number.isFinite(stockVal) || !Number.isFinite(amountPer) || amountPer <= 0) { minPorsi = 0; break; }
-              const porsi = Math.floor(stockVal / amountPer);
+              const rawStock = (inv.stock !== undefined && inv.stock !== null) ? inv.stock : (inv.stok || 0);
+              const stockVal = Number(rawStock);
+              const amountPer = Number(ing.amount) || 0;
+              if (!Number.isFinite(stockVal) || amountPer <= 0) { minPorsi = 0; break; }
+              let availableAmount = stockVal;
+              const iu = String(inv.unit || '').toLowerCase();
+              const gu = String(ing.unit || '').toLowerCase();
+              if (iu === 'kg' && gu === 'gram') availableAmount = availableAmount * 1000;
+              else if (iu === 'gram' && gu === 'kg') availableAmount = availableAmount / 1000;
+              else if (iu === 'liter' && gu === 'ml') availableAmount = availableAmount * 1000;
+              else if (iu === 'ml' && gu === 'liter') availableAmount = availableAmount / 1000;
+              const porsi = Math.floor(availableAmount / amountPer);
               if (porsi < minPorsi) minPorsi = porsi;
             }
-            if (Number.isFinite(minPorsi)) return { stock: minPorsi, unit: '', name: 'porsi' };
+            if (Number.isFinite(minPorsi) && minPorsi !== Infinity) {
+              return { stock: Math.max(0, minPorsi), unit: '', name: 'porsi' };
+            }
           }
 
-          // 2. Fallback: linkedInventory langsung (hanya kalau tidak ada recipe)
           const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
           if (invId && String(invId).trim() !== '') {
             const inv = invList.find(i => i && i.id === invId);
             if (inv) {
-              const stockVal = Number(inv.stock);
+              const rawStock = (inv.stock !== undefined && inv.stock !== null) ? inv.stock : (inv.stok || 0);
+              const stockVal = Number(rawStock);
               if (Number.isFinite(stockVal)) return { stock: stockVal, unit: '', name: inv.name || '' };
             }
           }
