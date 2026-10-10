@@ -1289,6 +1289,43 @@ this.jurnalList.forEach(j => {
       reader.readAsDataURL(file);
     },
 
+    prefillReversal(jrn) {
+      if (!jrn) return;
+      const dCode = jrn.debitCode || '';
+      const cCode = jrn.creditCode || '';
+      const dAmt = Number(jrn.debitAmount) || 0;
+      const cAmt = Number(jrn.creditAmount) || 0;
+      const amount = Math.max(dAmt, cAmt);
+      if (amount <= 0) {
+        this.showToast('Jurnal tidak punya nominal valid untuk reversal', 'error');
+        return;
+      }
+      this.manualJournalForm = {
+        date: new Date().toISOString().split('T')[0],
+        desc: `REVERSAL dari ${jrn.noEntry || jrn.id} — ${jrn.desc || ''}`.slice(0, 200),
+        debitAccount: cCode,
+        creditAccount: dCode,
+        amount: amount,
+        ref: `REV-${jrn.noEntry || jrn.id}`,
+        proofImage: ''
+      };
+      this.modalDetailJurnal = false;
+      this.setTab('input');
+      this.$nextTick(() => {
+        const sD = document.querySelector('select[data-role="debit-select"]');
+        const sK = document.querySelector('select[data-role="kredit-select"]');
+        const norm = (c) => {
+          const m = { '1001':'101','1002':'102','1003':'103','1004':'105','1005':'111','2001':'201','2002':'202','3001':'301','3002':'303','3003':'302','4001':'401','4002':'402','5001':'501','6001':'601','6002':'602','6003':'603','6004':'604','6005':'605','6006':'606' };
+          if (!c) return '';
+          if (c.length === 4 && m[c]) return m[c];
+          return c;
+        };
+        if (sD) sD.value = norm(cCode);
+        if (sK) sK.value = norm(dCode);
+      });
+      this.showToast(`Form reversal siap — Debit: ${cCode}, Kredit: ${dCode}. Silakan verifikasi nominal lalu submit.`, 'success');
+    },
+
     /**
      * Preset Transaksi Cepat untuk mempermudah form input manual
      */

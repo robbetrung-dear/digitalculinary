@@ -2134,7 +2134,15 @@
         </template>
       </div>
 
-      <div class="pt-2">
+      <div class="pt-2 space-y-2">
+        <button 
+          type="button"
+          x-show="selectedJurnal && selectedJurnal.status === 'approved'"
+          @click="prefillReversal(selectedJurnal)"
+          class="w-full h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-md">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>BUAT JURNAL REVERSAL (Tukar Debit-Kredit)</span>
+        </button>
         <button 
           type="button" 
           @click="modalDetailJurnal = false" 
