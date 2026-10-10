@@ -22,6 +22,7 @@ window.kasirApp = () => ({
     _scanBuffer: '',
     _scanLastTime: 0,
     _scanListenerBound: false,
+    scannerEnabled: true,
 
   // =========================================================================
   // 1. STATE DASAR & NAVIGASI
@@ -682,6 +683,10 @@ try {
         if (val.autoJournalShiftDiff !== undefined) {
           this.autoJournalShiftDiff = Boolean(val.autoJournalShiftDiff);
           console.log('[KASIR] ✅ Auto-Jurnal Shift Diff:', this.autoJournalShiftDiff);
+        }
+        if (val.scannerEnabled !== undefined) {
+          this.scannerEnabled = Boolean(val.scannerEnabled);
+          console.log('[KASIR] ✅ Scanner HID enabled:', this.scannerEnabled);
         }
         }
       }
@@ -10385,6 +10390,8 @@ try {
       if (this._scanListenerBound) return;
       this._scanListenerBound = true;
       document.addEventListener('keydown', (e) => {
+        // ✅ Cek toggle dari site_config Firebase
+        if (this.scannerEnabled === false) return;
         const now = Date.now();
         const diff = now - this._scanLastTime;
         this._scanLastTime = now;

@@ -490,12 +490,12 @@
   <main id="tab-section" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 max-h-screen overflow-y-auto">
 
     <!-- Tab Buttons -->
-    <div class="flex items-center justify-center mb-8 gap-2.5 sm:gap-3 flex-wrap">
-      <div class="inline-flex p-1.5 bg-stone-200/80 rounded-2xl border border-stone-300/80 shadow-inner">
+    <div class="flex items-center justify-center gap-2 sm:gap-3 mb-8 flex-nowrap">
+      <div class="inline-flex p-1 sm:p-1.5 bg-stone-200/80 rounded-2xl border border-stone-300/80 shadow-inner flex-shrink min-w-0 overflow-hidden">
         <button 
           @click="activeTab = 'menu'" 
           :class="activeTab === 'menu' ? 'bg-white text-brand-700 shadow-sm font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'"
-          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2">
+          class="px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2 whitespace-nowrap">
           <i class="fa-solid fa-bowl-rice"></i>
           <span x-text="siteConfig.navMenuText || 'Menu Harian & Ala Carte'"></span>
         </button>
@@ -503,7 +503,7 @@
         <button 
           @click="activeTab = 'catering'" 
           :class="activeTab === 'catering' ? 'bg-white text-brand-700 shadow-sm font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'"
-          class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2">
+          class="px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-base transition-all flex items-center gap-2 whitespace-nowrap">
           <i class="fa-solid fa-box-open"></i>
           <span x-text="siteConfig.navCateringText || 'Paket Catering (Silver/Gold/Plat)'"></span>
         </button>
@@ -4216,15 +4216,33 @@ git push -u origin main</pre>
           </div>
         </div>
 
-        <div class="p-4 rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 mb-4">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
-              <i class="fa-solid fa-barcode text-base"></i>
+        <div class="p-4 rounded-2xl border-2 transition mb-4"
+             :class="siteConfig.scannerEnabled !== false ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-white'">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition"
+                   :class="siteConfig.scannerEnabled !== false ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-500'">
+                <i class="fa-solid fa-barcode text-base"></i>
+              </div>
+              <div class="min-w-0">
+                <h5 class="text-xs font-black uppercase tracking-wider text-stone-900">Hardware Barcode Scanner (HID)</h5>
+                <p class="text-xs text-stone-500 mt-1 leading-relaxed">
+                  Colok USB scanner / pairing Bluetooth → scan barcode produk → otomatis masuk keranjang kasir.<br>
+                  Support SKU panjang & barcode short 8-digit.
+                </p>
+              </div>
             </div>
-            <div>
-              <h5 class="text-xs font-black uppercase tracking-wider text-stone-900">Hardware Barcode Scanner (HID)</h5>
-              <p class="text-xs text-stone-500 mt-1">Colok USB scanner / pairing Bluetooth → scan barcode produk → otomatis masuk keranjang kasir. Support SKU panjang & barcode short 8-digit.</p>
-            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" x-model="siteConfig.scannerEnabled" class="sr-only peer">
+              <div class="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+          <div class="mt-3 pt-3 border-t border-stone-200/70 flex items-center justify-between">
+            <span class="text-[11px] font-bold" :class="siteConfig.scannerEnabled !== false ? 'text-emerald-700' : 'text-stone-500'">
+              <i :class="siteConfig.scannerEnabled !== false ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+              <span x-text="siteConfig.scannerEnabled !== false ? 'Status: SCANNER AKTIF' : 'Status: SCANNER NONAKTIF'"></span>
+            </span>
+            <span class="text-[10px] text-stone-400 italic">Wajib klik "Simpan Semua Perubahan"</span>
           </div>
         </div>
           <div class="bg-stone-50 p-4 rounded-2xl border border-stone-200">
