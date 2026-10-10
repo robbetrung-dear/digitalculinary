@@ -4771,6 +4771,9 @@ try {
       return t.reconciled !== false;
     });
 
+    // ✅ VOID: sembunyikan transaksi yang sudah di-void
+    list = list.filter(t => t.voided !== true);
+
     if (this.txHistoryPaymentFilter && this.txHistoryPaymentFilter !== 'all') {
   const filterVal = this.txHistoryPaymentFilter.toLowerCase();
   list = list.filter(t => {
@@ -10508,6 +10511,108 @@ try {
       }
       this.activeTab = tab;
       this.mobileMenuOpen = false;
+    },
+
+    async voidTransaksi(tx) {
+      if (!tx) return;
+      const txId = tx.id || tx.orderId;
+      if (!txId) { this.showToast('ID transaksi tidak valid', 'error'); return; }
+      if (tx.voided === true) { this.showToast('Transaksi sudah di-void', 'notify'); return; }
+
+      const pinOk = await this.requestSupervisorPin('VOID TRANSAKSI', `#${txId} — Rp ${this.formatNumber(tx.tot || tx.total || 0)}`);
+      if (!pinOk) { this.showToast('Void dibatalkan', 'notify'); return; }
+
+      const reason = prompt('Alasan void (wajib min 5 karakter):', '');
+      if (!reason || reason.trim().length < 5) { this.showToast('Alasan void wajib diisi', 'error'); return; }
+
+      const dateStr = this.txHistoryDate || new Date().toISOString().slice(0, 10);
+
+      try {
+        // 1. PATCH /pos/transactions/{date}/{txId} — tandai voided
+        const patchRes = await fetch(`/pos/transactions/${encodeURIComponent(dateStr)}/${encodeURIComponent(txId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            voided: true,
+            voidedAt: Date.now(),
+            voidedBy: this.kasirInfo?.username || 'kasir',
+            voidReason: reason.trim()
+          })
+        });
+        const patchJson = await patchRes.json();
+        if (!patchJson.success) throw new Error(patchJson.error || 'PATCH gagal');
+
+        // 2. Reverse inventory via /inventory/deduct (qty negatif)
+        const items = Array.isArray(tx.items) ? tx.items.map(it => {
+          if (Array.isArray(it)) {
+            return { id: it[0], qty: -Math.abs(Number(it[1]) || 1), price: Number(it[2]) || 0 };
+          }
+          return {
+            id: it.id || it.menuId,
+            qty: -Math.abs(Number(it.qty || it.quantity) || 1),
+            price: Number(it.price) || 0
+          };
+        }) : [];
+
+        if (items.length > 0) {
+          try {
+            await fetch('/inventory/deduct', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: `VOID-${txId}`,
+                date: dateStr,
+                kasir: this.kasirInfo?.username || 'kasir',
+                items
+              })
+            });
+          } catch (e) { console.warn('[VOID] Inventory reverse note:', e); }
+        }
+
+        // 3. Auto-jurnal reversal (counter-entry)
+        const total = Number(tx.tot || tx.total || 0);
+        const pm = String(tx.pm || tx.paymentMethod || 'cash').toLowerCase();
+        const isBank = pm.includes('qris') || pm.includes('transfer') || pm.includes('bank') || pm.includes('ewallet') || pm.includes('gopay') || pm.includes('ovo') || pm.includes('dana');
+        const kasAcc = isBank ? '1002' : '1001';
+        const bulan = dateStr.slice(0, 7);
+
+        if (total > 0) {
+          try {
+            await fetch(`/accounting/journal/${bulan}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                category: 'penyesuaian',
+                date: dateStr,
+                desc: `VOID Transaksi ${txId} — ${reason.trim()}`,
+                ref: `VOID-${txId}`,
+                status: 'approved',
+                createdBy: this.kasirInfo?.username || 'kasir',
+                lines: [
+                  { acc: '4001', debit: total, credit: 0 },
+                  { acc: kasAcc, debit: 0, credit: total }
+                ]
+              })
+            });
+          } catch (e) { console.warn('[VOID] Journal reversal note:', e); }
+        }
+
+        // 4. Update state lokal
+        tx.voided = true;
+        tx.voidedAt = Date.now();
+        tx.voidReason = reason.trim();
+        this.txHistoryList = [...this.txHistoryList];
+
+        this.showToast(`✅ Transaksi ${txId} di-void. Stok & jurnal dipulihkan.`, 'success');
+        this.playSound('success');
+
+        // 5. Refresh inventory list
+        try { await this.loadInventory(); } catch (e) {}
+      } catch (err) {
+        console.error('[VOID] Error:', err);
+        this.showToast(`Gagal void: ${err.message}`, 'error');
+        this.playSound('error');
+      }
     },
 
     logoutKasir() {

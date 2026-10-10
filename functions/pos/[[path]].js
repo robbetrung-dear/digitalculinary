@@ -155,6 +155,38 @@ export async function onRequest(context) {
       });
     }
 
+    // 3c. PATCH /pos/transactions/{date}/{txId} — Update transaksi (VOID, edit fields)
+    if ((method === 'PATCH' || method === 'PUT') && parts[0] === 'transactions' && parts[1] && parts[2]) {
+      const date = parts[1];
+      const txId = parts[2];
+      const body = await request.json().catch(() => ({}));
+
+      if (!date || !txId) {
+        return new Response(JSON.stringify({ success: false, error: 'date dan txId wajib' }), {
+          status: 400, headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+
+      const existingRes = await fetch(`${dbUrl}/pos/transactions/${encodeURIComponent(date)}/${encodeURIComponent(txId)}.json${authParam}`);
+      const existing = existingRes.ok ? await existingRes.json() : null;
+      if (!existing) {
+        return new Response(JSON.stringify({ success: false, error: `Transaksi ${txId} tidak ditemukan` }), {
+          status: 404, headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+
+      const merged = { ...existing, ...body };
+      await fetch(`${dbUrl}/pos/transactions/${encodeURIComponent(date)}/${encodeURIComponent(txId)}.json${authParam}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged)
+      });
+
+      return new Response(JSON.stringify({ success: true, txId, date, data: merged }), {
+        headers: { ...cors, "Content-Type": "application/json" }
+      });
+    }
+
     // 4. GET /pos/transactions — Daftar transaksi (dengan filter opsional)
     //    Query params:
     //      ?start=YYYY-MM-DD&end=YYYY-MM-DD  → filter range tanggal

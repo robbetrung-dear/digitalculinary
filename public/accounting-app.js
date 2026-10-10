@@ -1289,8 +1289,13 @@ this.jurnalList.forEach(j => {
       reader.readAsDataURL(file);
     },
 
-    prefillReversal(jrn) {
+    async prefillReversal(jrn) {
       if (!jrn) return;
+      const pinOk = await this.requestSupervisorPin('BUAT JURNAL REVERSAL', `Jurnal ${jrn.noEntry || jrn.id}`);
+      if (!pinOk) {
+        this.showToast('Pembuatan reversal dibatalkan', 'notify');
+        return;
+      }
       const dCode = jrn.debitCode || '';
       const cCode = jrn.creditCode || '';
       const dAmt = Number(jrn.debitAmount) || 0;
@@ -1323,7 +1328,7 @@ this.jurnalList.forEach(j => {
         if (sD) sD.value = norm(cCode);
         if (sK) sK.value = norm(dCode);
       });
-      this.showToast(`Form reversal siap — Debit: ${cCode}, Kredit: ${dCode}. Silakan verifikasi nominal lalu submit.`, 'success');
+      this.showToast(`Form reversal siap — Debit: ${cCode}, Kredit: ${dCode}`, 'success');
     },
 
     /**
