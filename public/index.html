@@ -4217,7 +4217,7 @@ git push -u origin main</pre>
         </div>
 
         <div class="p-4 rounded-2xl border-2 transition mb-4"
-             :class="siteConfig.scannerEnabled !== false ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-white'">
+             :class="siteConfig.scannerEnabled === false ? 'border-stone-200 bg-white' : 'border-emerald-300 bg-emerald-50/40'">
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3 min-w-0">
               <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition"
@@ -4233,7 +4233,10 @@ git push -u origin main</pre>
               </div>
             </div>
             <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input type="checkbox" x-model="siteConfig.scannerEnabled" class="sr-only peer">
+              <input type="checkbox" 
+                     :checked="siteConfig.scannerEnabled !== false"
+                     @change="siteConfig.scannerEnabled = $event.target.checked; console.log('[TOGGLE-HID]', $event.target.checked)"
+                     class="sr-only peer">
               <div class="w-12 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
             </label>
           </div>

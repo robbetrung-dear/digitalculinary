@@ -1174,7 +1174,7 @@ this.jurnalList.forEach(j => {
       const creditAccObj = this.coaList.find(c => c.code === creditAccount) || { name: 'Akun ' + creditAccount };
 
       const entryId = 'J' + Date.now();
-      const noEntry = 'JE-' + String(this.jurnalList.length + 1).padStart(4, '0');
+      const noEntry = 'JE-' + Date.now().toString().slice(-6);
       const txDate = date || new Date().toISOString().split('T')[0];
       const bulanKey = txDate.substring(0, 7);
 
