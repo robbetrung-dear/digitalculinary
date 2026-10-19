@@ -7095,7 +7095,8 @@ git push -u origin main</pre>
               console.warn('[RECIPES] Firebase config tidak tersedia — skip loadRecipes');
               return;
             }
-            const res = await fetch(`${fbUrl.replace(/\\/$/, '')}/recipes.json`);
+            const cleanUrl = fbUrl.endsWith('/') ? fbUrl.slice(0, -1) : fbUrl;
+            const res = await fetch(`${cleanUrl}/recipes.json`);
             const data = await res.json();
             if (data && typeof data === 'object') {
               const list = Object.entries(data || {}).map(([menuId, r]) => ({
