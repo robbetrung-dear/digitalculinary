@@ -160,6 +160,11 @@ window.accountingApp = function() {
     reportSubTab: 'pl',
     mobileMenuOpen: false,
     siteName: 'Dapur Kuliner Viral',  // fallback, akan di-load dari site_config/brandName
+    siteInfo: {
+      brandName: 'Dapur Kuliner Viral',
+      address: '',
+      phone: ''
+    }, // info bisnis dari /site_config — sinkron reaktif dengan kasir
         // ✅ PIN Accounting gate
     supervisorPin: '211211',          // default, overwrite dari Firebase saat init
     showFinancePinModal: false,       // modal PIN aktif
@@ -367,6 +372,7 @@ window.accountingApp = function() {
 
     // Firebase Runtime Config
     _fbConfig: null,
+    _fbDb: null,
 
     // ------------------------------------------------------------------------
     // 1. INITIALIZATION (init)
@@ -378,14 +384,7 @@ window.accountingApp = function() {
       try {
         await this.initFirebaseConfig();
         let fbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
-        if (!fbUrl && typeof window !== 'undefined' && window.location) {
-          const host = window.location.hostname || '';
-          if (host.includes('digitalculinary')) {
-            fbUrl = 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
-          } else if (host.includes('dapurkulinerviral')) {
-            fbUrl = 'https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app';
-          }
-        }
+        // Tidak ada fallback hardcode — hanya gunakan config dari /api/firebase-config
         if (fbUrl) {
           const res = await fetch(`${fbUrl}/site_config/supervisorPin.json`);
           if (res.ok) {
@@ -510,6 +509,8 @@ window.accountingApp = function() {
       // 2. Muat konfigurasi Firebase jika ada
       await this.initFirebaseConfig();
             await this.loadSiteName();
+            await this.initFirebaseSDK();
+            await this.loadSiteConfig();
 
             // 3. Muat Data Real dari Backend (Summary, Ledger, COA, Journal)
       await this.loadSummary(this.bulanAktif);
@@ -590,14 +591,7 @@ window.accountingApp = function() {
         }
         let dbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
         // Fallback: derive dari hostname kalau endpoint gagal
-        if (!dbUrl && typeof window !== 'undefined' && window.location) {
-          const host = window.location.hostname || '';
-          if (host.includes('digitalculinary')) {
-            dbUrl = 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
-          } else if (host.includes('dapurkulinerviral')) {
-            dbUrl = 'https://dapurkulinerviral-default-rtdb.asia-southeast1.firebasedatabase.app';
-          }
-        }
+        // Tidak ada fallback hardcode — hanya gunakan config dari /api/firebase-config
         if (!dbUrl) return;
         const res = await fetch(`${dbUrl}/site_config/brandName.json`);
         if (res.ok) {
@@ -623,6 +617,60 @@ window.accountingApp = function() {
         }
       } catch (e) {
         console.warn('[ACCT-APP] Firebase config fetch note:', e);
+      }
+    },
+
+    /** Inisialisasi Firebase SDK (Compat) untuk listener realtime /site_config */
+    async initFirebaseSDK() {
+      try {
+        if (typeof firebase === 'undefined' || !firebase.database) {
+          console.warn('[ACCT-APP] Firebase compat SDK belum dimuat — cek accounting.html');
+          return;
+        }
+        if (!this._fbConfig || !this._fbConfig.databaseURL) {
+          await this.initFirebaseConfig();
+        }
+        if (!firebase.apps || firebase.apps.length === 0) {
+          firebase.initializeApp(this._fbConfig);
+        }
+        this._fbDb = firebase.database();
+        this._fbRef = (path) => this._fbDb.ref(path);
+        this._fbOnValue = (refObj, callback, errCallback) => {
+          refObj.on('value', (snap) => callback(snap), (err) => {
+            if (errCallback) errCallback(err);
+            else console.warn('[ACCT-APP] FB listener error:', err);
+          });
+        };
+        console.log('[ACCT-APP] Firebase SDK diinisialisasi untuk listener site_config');
+      } catch (e) {
+        console.warn('[ACCT-APP] initFirebaseSDK error:', e);
+      }
+    },
+
+    /** Listener realtime ke /site_config — update brandName, address, phone secara reaktif */
+    async loadSiteConfig() {
+      try {
+        if (!this._fbDb || !this._fbRef) {
+          await this.initFirebaseSDK();
+        }
+        const configRef = this._fbRef('site_config');
+        this._fbOnValue(configRef, (snapshot) => {
+          const val = snapshot.val();
+          if (val) {
+            if (val.brandName) {
+              this.siteName = val.brandName;
+              this.siteInfo.brandName = val.brandName;
+              this.splashAkunSubtitle = this.siteName || 'Digital Culinary';
+              try { localStorage.setItem('dapur_site_name', this.siteName); } catch (e) {}
+              console.log('[ACCT-APP] Brand name updated (realtime):', this.siteName);
+            }
+            if (val.address) this.siteInfo.address = val.address;
+            if (val.phone) this.siteInfo.phone = val.phone;
+          }
+        });
+        console.log('[ACCT-APP] Listener /site_config terpasang');
+      } catch (e) {
+        console.warn('[ACCT-APP] loadSiteConfig error:', e);
       }
     },
 
@@ -796,7 +844,7 @@ window.accountingApp = function() {
 
         // Fallback: fetch langsung Firebase REST
         if (!data) {
-          const fbUrl = (this._fbConfig?.databaseURL || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app').replace(/\/$/, '');
+          const fbUrl = (this._fbConfig?.databaseURL || '').replace(/\/$/, '');
           const rawRes = await fetch(`${fbUrl}/accounting/ledger.json`);
           if (rawRes.ok) {
             const all = await rawRes.json();

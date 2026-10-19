@@ -1321,16 +1321,10 @@ try {
       } catch (e) {}
 
       if (!cfg || !cfg.apiKey) {
-        cfg = {
-          apiKey: "AIzaSyB08og0350ZhwX9LYqxwyFuEppbdKEXAEg",
-          authDomain: "digitalculinary-app.firebaseapp.com",
-          databaseURL: "https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app",
-          projectId: "digitalculinary-app",
-          storageBucket: "digitalculinary-app.firebasestorage.app",
-          messagingSenderId: "650221083781",
-          appId: "1:650221083781:web:e44211db213b81ae19ddec"
-        };
-        console.log('[FB-INIT] Menggunakan fallback config hardcoded');
+        const errMsg = '[FB-INIT] Firebase config tidak tersedia: /api/firebase-config gagal dan tidak ada custom config di localStorage.';
+        console.error(errMsg);
+        this._fbConfigError = errMsg;
+        throw new Error(errMsg);
       }
 
       this._fbConfig = cfg;
@@ -1758,7 +1752,7 @@ try {
   async _fetchShift(shiftId) {
     try {
       const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
       const res = await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts/${encodeURIComponent(shiftId)}.json`);
       if (!res.ok) return null;
       return await res.json();
@@ -1769,7 +1763,7 @@ try {
   async _fetchAllShifts() {
     try {
       const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
       const res = await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts.json`);
       if (!res.ok) return {};
       return await res.json() || {};
@@ -1780,7 +1774,7 @@ try {
   async _patchShift(shiftId, payload) {
     try {
       const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
       await fetch(`${fbUrl.replace(/\/$/, '')}/pos/shifts/${encodeURIComponent(shiftId)}.json`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -4160,7 +4154,7 @@ try {
     try {
       // Ambil data langsung dari Firebase
       const dbUrl = (this._fbConfig && this._fbConfig.databaseURL) 
-        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
       const res = await fetch(`${dbUrl.replace(/\/$/, '')}/orders.json`);
       if (res.ok) {
         const data = await res.json();
@@ -6094,7 +6088,7 @@ try {
     if (!recipesData) {
       try {
         const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-          || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+          
         const res = await fetch(`${fbUrl.replace(/\/$/, '')}/recipes.json`);
         if (res.ok) {
           recipesData = await res.json();
@@ -8489,7 +8483,7 @@ try {
       //    Jadi fetch .json TANPA bulan, dapat semua akun
       // ============================================================
       const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-        || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
       const saldoMap = {};
 
       try {
@@ -10012,7 +10006,7 @@ try {
       const paidSupplierIds = new Set();
       try {
         const fbUrl = (this._fbConfig && this._fbConfig.databaseURL)
-          || 'https://digitalculinary-app-default-rtdb.asia-southeast1.firebasedatabase.app';
+          
         const stlRes = await fetch(`${fbUrl.replace(/\/$/, '')}/settlements.json`);
         if (stlRes.ok) {
           const stls = await stlRes.json() || {};
