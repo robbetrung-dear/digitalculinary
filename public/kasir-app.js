@@ -557,7 +557,10 @@ window.kasirApp = () => ({
     category: 'rice-bowl',
     price: 25000,
     desc: '',
-    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'
+    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+    showOnMain: true,
+    favoriteOrder: 0,
+    isSpicy: false
   },
   get menuItems() {
     return Array.isArray(this.menuList) ? this.menuList : [];
@@ -614,6 +617,32 @@ window.kasirApp = () => ({
    * Inisialisasi Aplikasi Kasir
    */
   async initKasir() {
+        // 0. Bersihkan localStorage dari data dummy/sampah (ghost data) jika ada
+        try {
+          const GHOST_KEYWORDS = ['besi beton', 'cat keramik', 'cat tembok', 'semen portland', '12mm'];
+          const GHOST_KEYS = ['dapur_menu_items', 'dapur_menu_list', 'pos_inventory_list', 'dapur_inventory_list'];
+          let cleaned = false;
+          GHOST_KEYS.forEach(key => {
+            try {
+              const raw = localStorage.getItem(key);
+              if (!raw) return;
+              const arr = JSON.parse(raw);
+              if (Array.isArray(arr) && arr.length > 0) {
+                const hasGhost = arr.some(item => {
+                  const name = String(item && item.name ? item.name : '').toLowerCase();
+                  return GHOST_KEYWORDS.some(kw => name.includes(kw));
+                });
+                if (hasGhost) {
+                  localStorage.removeItem(key);
+                  cleaned = true;
+                  console.log('[GHOST-CLEANUP] Removed ghost data from localStorage:', key);
+                }
+              }
+            } catch (e) {}
+          });
+          if (cleaned) console.log('[GHOST-CLEANUP] LocalStorage ghost data dibersihkan');
+        } catch (e) {}
+
         // 1. Cek sessionStorage "dapur_kasir_session"
     try {
       let rawSession = sessionStorage.getItem('dapur_kasir_session') || localStorage.getItem('dapur_kasir_session');
@@ -1382,10 +1411,11 @@ try {
    */
   listenMenuItems() {
     this.isLoadingMenu = true;
+    this._menuFirebaseReady = false;
 
     // Timeout safety: jangan sampai loading spinner stuck selamanya
     const menuTimeout = setTimeout(() => {
-      if (this.isLoadingMenu) {
+      if (this.isLoadingMenu && !this._menuFirebaseReady) {
         console.warn('Firebase menu listener timeout, menu dikosongkan (tidak ada fallback data)');
         if (!this.menuList || this.menuList.length === 0) {
           this.menuList = [];
@@ -1400,6 +1430,7 @@ try {
         const menuRef = this._fbRef(this._fbDb, 'menu_items');
         this._fbOnValue(menuRef, (snapshot) => {
           clearTimeout(menuTimeout);
+          this._menuFirebaseReady = true;
           const val = snapshot.val();
           console.log('[FB-MENU] Menu listener:', val ? Object.keys(val).length + ' items' : 'kosong');
           if (val) {
@@ -1418,12 +1449,14 @@ try {
   this.menuList = Array.from(seen.values());
   console.log(`[FB-MENU] Loaded ${this.menuList.length} unique items (raw: ${rawList.length})`);
 } else {
+  this._menuFirebaseReady = true;
   this.menuList = [];
 }
 this.syncCategoriesWithMainStore();
 this.isLoadingMenu = false;
 }, (err) => {
   clearTimeout(menuTimeout);
+  this._menuFirebaseReady = true;
   console.warn('Firebase menu listener error:', err);
   if (!this.menuList || this.menuList.length === 0) {
     this.menuList = [];
@@ -1454,10 +1487,12 @@ this.isLoadingMenu = false;
     // Fallback load lokal — HANYA jika Firebase belum memberikan data
     setTimeout(() => {
       clearTimeout(menuTimeout);
-      if (!this.menuList || this.menuList.length === 0) {
-        this.menuList = [];
+      if (!this._menuFirebaseReady) {
+        if (!this.menuList || this.menuList.length === 0) {
+          this.menuList = [];
+        }
+        this.isLoadingMenu = false;
       }
-      this.isLoadingMenu = false;
     }, 200);
   },
 
