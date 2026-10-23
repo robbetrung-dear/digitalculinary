@@ -5071,6 +5071,13 @@ git push -u origin main</pre>
           </label>
         </div>
 
+        <!-- URUTAN FAVORIT (1-20) -->
+        <div>
+          <label class="block text-xs font-bold text-stone-700 uppercase mb-1">Urutan Favorit (1-20)</label>
+          <input type="number" x-model.number="menuForm.favoriteOrder" min="0" max="20" placeholder="0 = biasa" class="w-full p-2.5 rounded-xl border border-stone-300 text-xs bg-white" />
+          <p class="text-[10px] text-stone-500 mt-0.5">Angka 1 = tampil paling atas di beranda. Kosong/0 = tidak prioritas, ditampilkan di bawah menu favorit.</p>
+        </div>
+
         <div class="pt-2 flex items-center justify-end gap-2">
           <button type="button" @click="isMenuFormOpen = false" class="px-4 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 rounded-xl">Batal</button>
           <button type="submit" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow transition">Simpan Menu</button>
@@ -6235,7 +6242,8 @@ git push -u origin main</pre>
           image: '',
           description: '',
           isSpicy: false,
-          showOnMain: true
+          showOnMain: true,
+          favoriteOrder: 0
         },
 
         // Form Tambah / Edit Kategori Menu & Simbol Icon (Admin)
@@ -7183,9 +7191,20 @@ git push -u origin main</pre>
 
         get filteredMenuItems() {
           const visible = this.menuItems.filter(item => item.showOnMain !== false);
-          if (this.selectedCategory === 'all' || this.selectedCategory === 'semua') return visible;
+          
+          // Urutan Favorit: menu dengan favoriteOrder > 0 tampil di atas (1 = paling atas)
+          const sorted = [...visible].sort((a, b) => {
+            const fa = Number(a.favoriteOrder) || 0;
+            const fb = Number(b.favoriteOrder) || 0;
+            if (fa > 0 && fb > 0) return fa - fb;           // keduanya favorit: urut menurut angka
+            if (fa > 0) return -1;                          // hanya a favorit: a di atas
+            if (fb > 0) return 1;                           // hanya b favorit: b di atas
+            return (a.name || '').localeCompare(b.name || ''); // keduanya tidak favorit: urut nama (stabil)
+          });
+          
+          if (this.selectedCategory === 'all' || this.selectedCategory === 'semua') return sorted;
           const selNorm = this.normalizeCatId(this.selectedCategory);
-          return visible.filter(item => {
+          return sorted.filter(item => {
             if (item.category === this.selectedCategory) return true;
             return this.normalizeCatId(item.category) === selNorm || this.normalizeCatId(item.categoryLabel) === selNorm;
           });
@@ -9053,7 +9072,8 @@ git push -u origin main</pre>
             image: '',
             description: '',
             isSpicy: false,
-            showOnMain: true
+            showOnMain: true,
+            favoriteOrder: 0
           };
           this.isMenuFormOpen = true;
         },
@@ -9087,7 +9107,8 @@ git push -u origin main</pre>
             image: item.image || '',
             description: item.description || '',
             isSpicy: Boolean(item.isSpicy),
-            showOnMain: item.showOnMain !== false
+            showOnMain: item.showOnMain !== false,
+            favoriteOrder: item.favoriteOrder || 0
           };
           this.isMenuFormOpen = true;
         },
