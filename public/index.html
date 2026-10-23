@@ -6001,7 +6001,7 @@ git push -u origin main</pre>
       // ==== /RTO ====
       listenMenuRecipes: (callback) => {
         if (db) {
-          const recRef = ref(db, 'menu_recipes');
+          const recRef = ref(db, 'recipes');
           return onValue(recRef, (snapshot) => {
             const val = snapshot.val();
             if (val && typeof val === 'object') {
@@ -7132,9 +7132,11 @@ git push -u origin main</pre>
         getInventoryStockForMenu(menuItem) {
           if (!menuItem) return null;
           const invList = Array.isArray(this.inventoryList) ? this.inventoryList : [];
-          const recList = Array.isArray(this.recipesList) ? this.recipesList : [];
 
-          const recipe = recList.find(r => r && (r.menuId === menuItem.id || r.id === menuItem.id));
+          // ✅ Baca resep dari this.menuRecipes (object keyed by menuId, sinkron dengan Kasir POS via Firebase /recipes)
+          const recipe = this.menuRecipes && this.menuRecipes[menuItem.id]
+            ? this.menuRecipes[menuItem.id]
+            : null;
           if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
             let minPorsi = Infinity;
             for (const ing of recipe.ingredients) {

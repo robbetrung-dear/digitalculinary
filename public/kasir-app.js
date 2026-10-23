@@ -1383,26 +1383,12 @@ try {
   listenMenuItems() {
     this.isLoadingMenu = true;
 
-    // Fallback menu standar jika database belum terisi / offline / timeout
-    const fallbackMenu = [
-      { id: 'm1', name: 'Rice Bowl Chicken Katsu Curry', category: 'rice-bowl', price: 28000, desc: 'Nasi pulen + katsu crispy saus kari gurih', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400' },
-      { id: 'm2', name: 'Rice Bowl Beef Teriyaki', category: 'rice-bowl', price: 35000, desc: 'Daging sapi iris bumbu teriyaki jepang', image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400' },
-      { id: 'm3', name: 'Spicy Honey Chicken Wings (6 pcs)', category: 'chicken', price: 32000, desc: 'Sayap ayam krispi madu pedas lezat', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=400' },
-      { id: 'm4', name: 'Chicken Egg Roll Bento Komplit', category: 'chicken', price: 30000, desc: 'Egg roll ayam + salad + nasi + saus', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=400' },
-      { id: 'm5', name: 'Mie Pedas Viral Level 3', category: 'mie-bakso', price: 22000, desc: 'Mie kenyal gurih cabe rawit pedas nagih', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400' },
-      { id: 'm6', name: 'Bakso Cuanki Kuah Pedas Daun Jeruk', category: 'mie-bakso', price: 25000, desc: 'Bakso aci, tahu, siomay kering renyah', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400' },
-      { id: 'm7', name: 'Dimsum Mentai Mozzarella (4 pcs)', category: 'dimsum', price: 24000, desc: 'Dimsum ayam topping saus mentai bakar', image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400' },
-      { id: 'm8', name: 'Siomay Udang Ayam Kukus', category: 'dimsum', price: 20000, desc: 'Siomay lembut dengan potongan udang asli', image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400' },
-      { id: 'm9', name: 'Es Lemon Tea Segar', category: 'minuman', price: 8000, desc: 'Teh melati wangi dengan perasan lemon asli', image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400' },
-      { id: 'm10', name: 'Es Cincau Gula Aren Susu', category: 'minuman', price: 12000, desc: 'Cincau hitam kenyal dengan susu aren legit', image: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=400' }
-    ];
-
-    // Timeout safety 5 detik: jangan sampai loading spinner stuck selamanya
+    // Timeout safety: jangan sampai loading spinner stuck selamanya
     const menuTimeout = setTimeout(() => {
       if (this.isLoadingMenu) {
-        console.warn('Firebase menu listener timeout 5s, using fallback menu');
+        console.warn('Firebase menu listener timeout, menu dikosongkan (tidak ada fallback data)');
         if (!this.menuList || this.menuList.length === 0) {
-          this.menuList = fallbackMenu;
+          this.menuList = [];
         }
         this.syncCategoriesWithMainStore();
         this.isLoadingMenu = false;
@@ -1432,19 +1418,17 @@ try {
   this.menuList = Array.from(seen.values());
   console.log(`[FB-MENU] Loaded ${this.menuList.length} unique items (raw: ${rawList.length})`);
 } else {
-            this.menuList = fallbackMenu;
-          }
-          this.syncCategoriesWithMainStore();
-          this.isLoadingMenu = false;
-        }, (err) => {
-          clearTimeout(menuTimeout);
-          console.warn('Firebase menu listener error:', err);
-          if (!this.menuList || this.menuList.length === 0) {
-            this.menuList = fallbackMenu;
-          }
-          this.syncCategoriesWithMainStore();
-          this.isLoadingMenu = false;
-        });
+  this.menuList = [];
+}
+this.syncCategoriesWithMainStore();
+this.isLoadingMenu = false;
+}, (err) => {
+  clearTimeout(menuTimeout);
+  console.warn('Firebase menu listener error:', err);
+  if (!this.menuList || this.menuList.length === 0) {
+    this.menuList = [];
+  }
+});
 
         // Realtime Listener Kategori Menu Toko Utama
         const catRef = this._fbRef(this._fbDb, 'menu_categories');
@@ -1462,15 +1446,17 @@ try {
       } catch (e) {
         clearTimeout(menuTimeout);
         console.warn('Menu listener setup exception:', e);
-        this.menuList = fallbackMenu;
+        this.menuList = [];
         this.isLoadingMenu = false;
       }
     }
 
-    // Fallback load lokal
+    // Fallback load lokal — HANYA jika Firebase belum memberikan data
     setTimeout(() => {
       clearTimeout(menuTimeout);
-      this.menuList = fallbackMenu;
+      if (!this.menuList || this.menuList.length === 0) {
+        this.menuList = [];
+      }
       this.isLoadingMenu = false;
     }, 200);
   },
@@ -5148,12 +5134,7 @@ try {
 
       // Default fallback dataset jika masih kosong
       if (!this.inventoryList || this.inventoryList.length === 0) {
-        this.inventoryList = [
-          { id: 'inv1', name: 'Filet Dada Ayam Segar', category: 'Bahan Baku', stock: 18, minStock: 5, unit: 'kg', purchasePrice: 38000, isCountable: true },
-          { id: 'inv2', name: 'Tepung Roti Panko Katsu', category: 'Bahan Kering', stock: 4, minStock: 6, unit: 'kg', purchasePrice: 22000, isCountable: true },
-          { id: 'inv3', name: 'Beras Pulen Premium', category: 'Sembako', stock: 45, minStock: 20, unit: 'kg', purchasePrice: 14000, isCountable: true },
-          { id: 'inv4', name: 'Kulit Pangsit Dimsum', category: 'Bahan Baku', stock: 2, minStock: 5, unit: 'pack', purchasePrice: 15000, isCountable: true }
-        ];
+        this.inventoryList = [];
       }
 
       // ❌ REMOVED: auto-save Firestore — ini bikin race condition & timpa data retur
@@ -6615,6 +6596,7 @@ try {
       desc: desc || 'Menu lezat & higienis',
       image,
       showOnMain,
+      favoriteOrder: 0,
       fromKasir: true,
       createdAt: Date.now()
     };
