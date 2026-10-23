@@ -6875,14 +6875,14 @@ git push -u origin main</pre>
 
                 if (window.FirebaseBridge && window.FirebaseBridge.listenMenu) {
                 window.FirebaseBridge.listenMenu((liveMenu) => {
-                  // ✅ OPTIMASI: Jangan override kalau Firebase kirim kosong DAN lokal sudah ada data
-                  // Ini cegah flicker + menu ready instan dari cache localStorage
-                  const hasLocalData = Array.isArray(this.menuItems) && this.menuItems.length > 0;
+                  // Firebase mengembalikan null/array kosong → tampilkan array kosong, tidak ada dummy/fallback
                   const firebaseEmpty = !Array.isArray(liveMenu) || liveMenu.length === 0;
 
-                  if (firebaseEmpty && hasLocalData) {
-                    // Firebase belum ready atau kosong, pakai cache lokal
-                    console.log('[ADMIN-MENU] Firebase empty, keep local cache:', this.menuItems.length, 'items');
+                  if (firebaseEmpty) {
+                    // Firebase mengembalikan null/array kosong → tampilkan array kosong, JANGAN simpan cache lokal
+                    // yang mungkin masih berisi data sampah dari uji coba sebelumnya.
+                    this.menuItems = [];
+                    console.log('[ADMIN-MENU] Firebase empty — menuItems dikosongkan ([]), tidak ada dummy/fallback data');
                     this.syncCategoriesWithKasir();
                     attachNonCriticalListeners();
                     return;
@@ -7190,7 +7190,19 @@ git push -u origin main</pre>
         },
 
         get filteredMenuItems() {
-          const visible = this.menuItems.filter(item => item.showOnMain !== false);
+          // ✅ Safety filter: blokir kategori barang bangunan & bahan baku dari landing page pelanggan
+          const BLOCKED_CATEGORIES = ['bahan_baku', 'bahan-baku', 'bahanbaku', 'packaging', 'bahan_bahan_baku'];
+          const BLOCKED_KEYWORDS = ['besi', 'cat', 'beton', 'keramik', 'tembok'];
+
+          const isBlocked = (item) => {
+            const cat = String(item.category || '').toLowerCase();
+            const catLabel = String(item.categoryLabel || '').toLowerCase();
+            const name = String(item.name || '').toLowerCase();
+            if (BLOCKED_CATEGORIES.some(bc => cat === bc || catLabel === bc)) return true;
+            return BLOCKED_KEYWORDS.some(kw => name.includes(kw) || cat.includes(kw) || catLabel.includes(kw));
+          };
+
+          const visible = this.menuItems.filter(item => item.showOnMain !== false && !isBlocked(item));
           
           // Urutan Favorit: menu dengan favoriteOrder > 0 tampil di atas (1 = paling atas)
           const sorted = [...visible].sort((a, b) => {
