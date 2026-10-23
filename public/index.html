@@ -7189,17 +7189,17 @@ git push -u origin main</pre>
             }
           }
 
-          const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
-          if (invId && String(invId).trim() !== '') {
-            const inv = invList.find(i => i && i.id === invId);
-            if (inv) {
-              const rawStock = (inv.stock !== undefined && inv.stock !== null) ? inv.stock : (inv.stok || 0);
-              const stockVal = Number(rawStock);
-              if (Number.isFinite(stockVal)) return { stock: stockVal, unit: '', name: inv.name || '' };
-            }
-          }
-          return null;
-        },
+              const invId = menuItem.linkedInventory || menuItem.inventoryId || menuItem.bahanId;
+              if (invId && String(invId).trim() !== '') {
+                const inv = invList.find(i => i && i.id === invId);
+                if (inv) {
+                  const rawStock = (inv.stock !== undefined && inv.stock !== null) ? inv.stock : (inv.stok || 0);
+                  const stockVal = Number(rawStock);
+                  if (Number.isFinite(stockVal)) return { stock: stockVal, unit: '', name: inv.name || '' };
+                }
+              }
+              return { stock: 0, unit: '', name: 'porsi' };
+              },
 
         cycleMenuViewMode() {
           if (this.activeTab !== 'menu') {

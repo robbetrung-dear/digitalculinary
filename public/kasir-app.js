@@ -53,20 +53,9 @@ window.kasirApp = () => ({
   customKasirTitle: 'Kasir Pintar',
   customKasirSubtitle: 'Dapur Kuliner Viral',
 
-  // Katalog Menu & Keranjang
+  // Katalog Menu & Keranjang (diisi dari Firebase /menu_items — TIDAK ada hardcode dummy)
   cart: [],
-  menuList: [
-    { id: 'm1', name: 'Rice Bowl Chicken Katsu Curry', category: 'rice-bowl', price: 28000, desc: 'Nasi pulen + katsu crispy saus kari gurih', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400' },
-    { id: 'm2', name: 'Rice Bowl Beef Teriyaki', category: 'rice-bowl', price: 35000, desc: 'Daging sapi iris bumbu teriyaki jepang', image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400' },
-    { id: 'm3', name: 'Spicy Honey Chicken Wings (6 pcs)', category: 'chicken', price: 32000, desc: 'Sayap ayam krispi madu pedas lezat', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=400' },
-    { id: 'm4', name: 'Chicken Egg Roll Bento Komplit', category: 'chicken', price: 30000, desc: 'Egg roll ayam + salad + nasi + saus', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=400' },
-    { id: 'm5', name: 'Mie Pedas Viral Level 3', category: 'mie-bakso', price: 22000, desc: 'Mie kenyal gurih cabe rawit pedas nagih', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400' },
-    { id: 'm6', name: 'Bakso Cuanki Kuah Pedas Daun Jeruk', category: 'mie-bakso', price: 25000, desc: 'Bakso aci, tahu, siomay kering renyah', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400' },
-    { id: 'm7', name: 'Dimsum Mentai Mozzarella (4 pcs)', category: 'dimsum', price: 24000, desc: 'Dimsum ayam topping saus mentai bakar', image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400' },
-    { id: 'm8', name: 'Siomay Udang Ayam Kukus', category: 'dimsum', price: 20000, desc: 'Siomay lembut dengan potongan udang asli', image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400' },
-    { id: 'm9', name: 'Es Lemon Tea Segar', category: 'minuman', price: 8000, desc: 'Teh melati wangi dengan perasan lemon asli', image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400' },
-    { id: 'm10', name: 'Es Cincau Gula Aren Susu', category: 'minuman', price: 12000, desc: 'Cincau hitam kenyal dengan susu aren legit', image: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=400' }
-  ],
+  menuList: [],
   categories: [
     { id: 'semua', name: 'Semua' },
     { id: 'rice_bowl', name: 'Bento & Rice Bowl' },
@@ -1447,6 +1436,12 @@ try {
     }
   });
   this.menuList = Array.from(seen.values());
+  // 🛡️ Safety filter: buang data sampah/ghost (Besi Beton, Cat, dll) dari state kasir
+  const GHOST_KEYWORDS = ['besi beton', 'cat keramik', 'cat tembok', 'semen portland', '12mm'];
+  this.menuList = this.menuList.filter(m => {
+    const name = String(m && m.name ? m.name : '').toLowerCase();
+    return !GHOST_KEYWORDS.some(kw => name.includes(kw));
+  });
   console.log(`[FB-MENU] Loaded ${this.menuList.length} unique items (raw: ${rawList.length})`);
 } else {
   this._menuFirebaseReady = true;
@@ -6317,7 +6312,7 @@ this.isLoadingMenu = false;
     let minPossiblePortions = Infinity;
 
     for (const ing of recipe.ingredients) {
-      const invItem = this.inventoryList.find(i => i.id === ing.itemId);
+      const invItem = (this.inventoryList || []).find(i => i.id === ing.itemId);
       if (!invItem) return 0;
       if (invItem.isCountable === false) continue;
 
@@ -6357,7 +6352,7 @@ this.isLoadingMenu = false;
     }
 
     for (const ing of recipe.ingredients) {
-      const invItem = this.inventoryList.find(i => i.id === ing.itemId);
+      const invItem = (this.inventoryList || []).find(i => i.id === ing.itemId);
       if (!invItem) return { name: 'Item Belum Terdaftar' };
       if (invItem.isCountable === false) continue;
 
